@@ -23,7 +23,13 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { storage } from '@/services/firebase';
-import { updateUserProfile } from '@/services/firestoreService';
+import { updateUserProfile, Gender } from '@/services/firestoreService';
+
+const GENDER_OPTIONS: { label: string; value: Gender }[] = [
+  { label: 'Masculino', value: 'masculino' },
+  { label: 'Feminino', value: 'feminino' },
+  { label: 'Outro', value: 'outro' },
+];
 
 const INTERESTS = [
   'Investimentos',
@@ -47,6 +53,7 @@ export default function ProfileScreen() {
   const [age, setAge] = useState(String(profile?.age ?? ''));
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
+  const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -62,6 +69,10 @@ export default function ProfileScreen() {
 
   const handleSave = async () => {
     if (!user) return;
+    if (!gender) {
+      Alert.alert('Gênero obrigatório', 'Selecione uma opção de gênero antes de salvar.');
+      return;
+    }
     setSaving(true);
     try {
       await updateUserProfile(user.uid, {
@@ -69,6 +80,7 @@ export default function ProfileScreen() {
         age: Number(age),
         bio,
         interests,
+        gender,
       });
       await refreshProfile();
       setEditing(false);
@@ -234,6 +246,24 @@ export default function ProfileScreen() {
             <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
             <Field label="Bio" value={bio} onChange={setBio} multiline />
 
+            <Text style={styles.fieldLabel}>Gênero</Text>
+            <View style={styles.genderRow}>
+              {GENDER_OPTIONS.map((option) => {
+                const active = gender === option.value;
+                return (
+                  <AnimatedPressable
+                    key={option.value}
+                    style={[styles.genderOption, active && styles.genderOptionActive]}
+                    onPress={() => setGender(option.value)}
+                  >
+                    <Text style={[styles.genderText, active && styles.genderTextActive]}>
+                      {option.label}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+
             <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
             <View style={styles.tags}>
               {INTERESTS.map((item) => {
@@ -250,7 +280,11 @@ export default function ProfileScreen() {
               })}
             </View>
 
-            <AnimatedPressable style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+            <AnimatedPressable
+              style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
+              onPress={handleSave}
+              disabled={saving || !gender}
+            >
               {saving ? (
                 <ActivityIndicator color={theme.colors.onSecondary} />
               ) : (
@@ -453,6 +487,26 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
 
+  genderRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: 8,
+  },
+  genderOption: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  genderOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  genderText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
+  genderTextActive: { color: theme.colors.onPrimary },
+
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   tag: {
     borderWidth: 1.5,
@@ -477,6 +531,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: theme.spacing.lg,
   },
+  saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.onSecondary },
 
   logoutBtn: {
