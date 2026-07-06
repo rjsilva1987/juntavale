@@ -281,7 +281,7 @@ export default function SwipeScreen() {
 
             {/* Current card (swipeable) */}
             <GestureDetector gesture={gesture}>
-              <Animated.View style={[styles.card, cardStyle]}>
+              <Animated.View collapsable={false} style={[styles.card, cardStyle]}>
                 <ProfileCard profile={currentProfile} pagerNativeGesture={pagerNativeGesture} />
 
                 {/* LIKE stamp */}
@@ -388,7 +388,11 @@ function ProfileCard({ profile, pagerNativeGesture }: ProfileCardProps) {
   return (
     <View style={pcStyles.container}>
       {pagerNativeGesture ? (
-        <GestureDetector gesture={pagerNativeGesture}>{carousel}</GestureDetector>
+        <GestureDetector gesture={pagerNativeGesture}>
+          <View collapsable={false} style={{ flex: 1 }}>
+            {carousel}
+          </View>
+        </GestureDetector>
       ) : (
         carousel
       )}
