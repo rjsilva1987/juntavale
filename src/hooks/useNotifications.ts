@@ -4,8 +4,11 @@ import { useEffect, useRef } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { navigationRef } from '@/navigation/navigationRef';
-import { isExpoGo, registerForPushNotifications } from '@/services/notifications';
-import { PushNotificationData } from '@/services/sendPushNotification';
+import {
+  isExpoGo,
+  PushNotificationData,
+  registerForPushNotifications,
+} from '@/services/notifications';
 
 export function useNotifications() {
   const { user } = useAuth();

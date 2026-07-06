@@ -33,8 +33,7 @@ service cloud.firestore {
         && data.interests is list && data.interests.size() <= 15
         && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
-        && (!('filters' in data) || data.filters is map)
-        && (!('pushToken' in data) || data.pushToken == null || data.pushToken is string);
+        && (!('filters' in data) || data.filters is map);
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -49,16 +48,12 @@ service cloud.firestore {
 
     // ───────────────────────── users ─────────────────────────
     //
-    // LIMITAÇÃO CONHECIDA: Firestore Rules não faz redação por campo em leitura.
-    // Se `allow read` libera o documento, libera TODOS os campos, inclusive
-    // `pushToken` — mesmo que o app normalmente só use esse campo internamente.
-    // Hoje o app precisa ler pushToken de OUTRO usuário no client
-    // (sendPushNotification.ts → notifyNewMatch/notifyNewMessage manda o push
-    // direto da API do Expo, sem backend). Não dá pra esconder esse campo sem
-    // mudar a arquitetura: mover pushToken para uma subcoleção privada
-    // (ex: users/{uid}/private/push) só legível pelo dono, e enviar o push via
-    // Cloud Function (Admin SDK ignora as regras). Ficou fora do escopo desta
-    // sessão (S18) — registrar como item futuro.
+    // O token de push mora em users/{uid}/private/push (ver subregra abaixo),
+    // não mais em users/{uid}.pushToken — Firestore Rules não faz redação por
+    // campo em leitura, então qualquer campo no doc principal fica visível a
+    // todo usuário autenticado (allow read abaixo é intencionalmente amplo,
+    // para permitir o Swipe/Discover). O envio de push é feito por Cloud
+    // Function (Admin SDK, ignora estas regras) — ver functions/src/index.ts.
     match /users/{userId} {
       allow read: if isSignedIn();
 
@@ -67,7 +62,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'location', 'filters', 'pushToken', 'createdAt'])
+              'gender', 'location', 'filters', 'createdAt'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -75,10 +70,17 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'location', 'filters', 'pushToken'])
+              'gender', 'location', 'filters'])
         && isValidProfile(request.resource.data);
 
       allow delete: if isOwner(userId);
+
+      // ─────────────── users/{userId}/private ───────────────
+      // Dados que só o dono do perfil pode ler ou escrever (hoje só o push
+      // token, em users/{userId}/private/push). Nunca exposto a outros users.
+      match /private/{document=**} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // ───────────────────────── swipes ─────────────────────────

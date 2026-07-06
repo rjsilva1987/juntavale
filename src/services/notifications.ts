@@ -2,9 +2,21 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import type * as NotificationsType from 'expo-notifications';
+import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 
-import { updateUserProfile } from '@/services/firestoreService';
+import { db } from '@/services/firebase';
+
+// Payload enviado no campo `data` dos pushes disparados pelas Cloud Functions
+// (functions/src/index.ts) — usado no client só pra rotear o deep-link ao
+// tocar na notificação (ver useNotifications.ts).
+export type PushNotificationData = {
+  type: 'match' | 'message';
+  matchId: string;
+  otherUid: string;
+  otherName: string;
+  otherPhoto?: string;
+};
 
 // expo-notifications não tem módulo nativo no Expo Go (SDK 53+); qualquer
 // chamada nele derruba o app com "Cannot assign to read-only property 'NONE'".
@@ -67,11 +79,14 @@ if (isExpoGo) {
 }
 
 export async function savePushToken(uid: string, token: string): Promise<void> {
-  await updateUserProfile(uid, { pushToken: token });
+  await setDoc(doc(db, 'users', uid, 'private', 'push'), {
+    token,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function removePushToken(uid: string): Promise<void> {
-  await updateUserProfile(uid, { pushToken: null });
+  await deleteDoc(doc(db, 'users', uid, 'private', 'push'));
 }
 
 export async function registerForPushNotifications(uid: string): Promise<string | null> {
