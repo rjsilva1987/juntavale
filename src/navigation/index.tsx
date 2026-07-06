@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
@@ -33,6 +34,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -43,9 +46,9 @@ function MainTabs() {
           backgroundColor: theme.colors.white,
           borderTopColor: theme.colors.border,
           borderTopWidth: 0.5,
-          paddingBottom: 6,
+          paddingBottom: 6 + insets.bottom,
           paddingTop: 6,
-          height: 62,
+          height: 62 + insets.bottom,
         },
         tabBarLabelStyle: { fontSize: theme.fontSize.xs, fontWeight: '600' },
         tabBarIcon: ({ color, size, focused }) => {

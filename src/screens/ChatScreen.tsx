@@ -14,7 +14,6 @@ import {
   Platform,
   FlatList,
   TextInput,
-  SafeAreaView,
   Modal,
   Alert,
   ActivityIndicator,
@@ -22,6 +21,7 @@ import {
   Linking,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
