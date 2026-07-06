@@ -1,0 +1,19 @@
+
+Oops! Something went wrong! :(
+
+ESLint: 9.39.4
+
+Error: Key "rules": Key "import/order":
+	Value {"groups":["builtin","external","internal","parent","sibling","index"],"newlines-between":"always","alphabeticalOrder":true,"caseInsensitive":true,"distinctGroup":true,"sortTypesGroup":false,"named":false,"warnOnUnassignedImports":false} should NOT have additional properties.
+		Unexpected property "alphabeticalOrder". Expected properties: "groups", "pathGroupsExcludedImportTypes", "distinctGroup", "pathGroups", "newlines-between", "newlines-between-types", "consolidateIslands", "sortTypesGroup", "named", "alphabetize", "warnOnUnassignedImports".
+
+    at Config.validateRulesConfig (D:\vscode\juntavale\node_modules\eslint\lib\config\config.js:612:12)
+    at new Config (D:\vscode\juntavale\node_modules\eslint\lib\config\config.js:484:9)
+    at [finalizeConfig] (D:\vscode\juntavale\node_modules\eslint\lib\config\flat-config-array.js:212:10)
+    at FlatConfigArray.getConfigWithStatus (D:\vscode\juntavale\node_modules\@eslint\config-array\dist\cjs\index.cjs:1409:55)
+    at FlatConfigArray.getConfig (D:\vscode\juntavale\node_modules\@eslint\config-array\dist\cjs\index.cjs:1427:15)
+    at entryFilter (D:\vscode\juntavale\node_modules\eslint\lib\eslint\eslint-helpers.js:323:27)
+    at async NodeHfs.<anonymous> (file:///D:/vscode/juntavale/node_modules/@humanfs/core/src/hfs.js:574:24)
+    at async NodeHfs.<anonymous> (file:///D:/vscode/juntavale/node_modules/@humanfs/core/src/hfs.js:604:6)
+    at async NodeHfs.walk (file:///D:/vscode/juntavale/node_modules/@humanfs/core/src/hfs.js:614:3)
+    at async globSearch (D:\vscode\juntavale\node_modules\eslint\lib\eslint\eslint-helpers.js:364:20)
