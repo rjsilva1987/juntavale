@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
@@ -53,7 +54,7 @@ export default function LikesScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
         <View style={styles.header}>
           <Text style={styles.title}>Quem curtiu você</Text>
         </View>
@@ -67,12 +68,12 @@ export default function LikesScreen() {
             />
           ))}
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <View style={styles.header}>
         <Text style={styles.title}>Quem curtiu você</Text>
         <View style={styles.badge}>
@@ -94,7 +95,7 @@ export default function LikesScreen() {
           contentContainerStyle={styles.grid}
           columnWrapperStyle={{ gap: 12 }}
           renderItem={({ item }) => (
-            <View style={styles.likerCard}>
+            <Animated.View style={styles.likerCard} entering={FadeInDown}>
               {item.photoURL ? (
                 <Image
                   source={{ uri: item.photoURL }}
@@ -117,11 +118,11 @@ export default function LikesScreen() {
               <View style={styles.heartBadge}>
                 <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
               </View>
-            </View>
+            </Animated.View>
           )}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

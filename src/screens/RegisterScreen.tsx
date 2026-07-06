@@ -5,7 +5,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +12,9 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -69,154 +70,156 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          {step > 1 && (
-            <TouchableOpacity onPress={() => setStep(step - 1)}>
-              <Text style={styles.back}>← Voltar</Text>
-            </TouchableOpacity>
-          )}
-          <View style={styles.steps}>
-            {[1, 2, 3].map((s) => (
-              <View key={s} style={[styles.stepDot, step >= s && styles.stepDotActive]} />
-            ))}
-          </View>
-        </View>
-
-        {/* Step 1 — Dados básicos */}
-        {step === 1 && (
-          <View style={styles.card}>
-            <Text style={styles.title}>Criar conta</Text>
-            <Text style={styles.subtitle}>Vamos começar com seus dados</Text>
-
-            <Text style={styles.label}>Nome completo</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="João Silva"
-              placeholderTextColor={theme.colors.textLight}
-              value={name}
-              onChangeText={setName}
-            />
-
-            <Text style={styles.label}>E-mail</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="joao@email.com"
-              placeholderTextColor={theme.colors.textLight}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-
-            <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor={theme.colors.textLight}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <TouchableOpacity
-              style={styles.btnPrimary}
-              onPress={() => {
-                if (!name || !email || !password)
-                  return Alert.alert('Atenção', 'Preencha todos os campos.');
-                if (password.length < 6)
-                  return Alert.alert('Atenção', 'Senha deve ter ao menos 6 caracteres.');
-                setStep(2);
-              }}
-            >
-              <Text style={styles.btnPrimaryText}>Continuar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.linkText}>Já tenho conta</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Step 2 — Perfil */}
-        {step === 2 && (
-          <View style={styles.card}>
-            <Text style={styles.title}>Seu perfil</Text>
-            <Text style={styles.subtitle}>Conte um pouco sobre você</Text>
-
-            <Text style={styles.label}>Idade</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="25"
-              placeholderTextColor={theme.colors.textLight}
-              value={age}
-              onChangeText={setAge}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-
-            <Text style={styles.label}>Bio</Text>
-            <TextInput
-              style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
-              placeholder="Fale algo sobre você…"
-              placeholderTextColor={theme.colors.textLight}
-              value={bio}
-              onChangeText={setBio}
-              multiline
-              maxLength={160}
-            />
-            <Text style={styles.charCount}>{bio.length}/160</Text>
-
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setStep(3)}>
-              <Text style={styles.btnPrimaryText}>Continuar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Step 3 — Interesses */}
-        {step === 3 && (
-          <View style={styles.card}>
-            <Text style={styles.title}>Seus interesses</Text>
-            <Text style={styles.subtitle}>Escolha até 5 que te representam</Text>
-
-            <View style={styles.tags}>
-              {INTERESTS.map((item) => {
-                const active = selectedInterests.includes(item);
-                return (
-                  <TouchableOpacity
-                    key={item}
-                    style={[styles.tag, active && styles.tagActive]}
-                    onPress={() => {
-                      if (!active && selectedInterests.length >= 5) return;
-                      toggleInterest(item);
-                    }}
-                  >
-                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Top bar */}
+          <View style={styles.topBar}>
+            {step > 1 && (
+              <AnimatedPressable onPress={() => setStep(step - 1)}>
+                <Text style={styles.back}>← Voltar</Text>
+              </AnimatedPressable>
+            )}
+            <View style={styles.steps}>
+              {[1, 2, 3].map((s) => (
+                <View key={s} style={[styles.stepDot, step >= s && styles.stepDotActive]} />
+              ))}
             </View>
-
-            <TouchableOpacity
-              style={[styles.btnPrimary, loading && { opacity: 0.7 }]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.colors.onSecondary} />
-              ) : (
-                <Text style={styles.btnPrimaryText}>Criar conta 🎉</Text>
-              )}
-            </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          {/* Step 1 — Dados básicos */}
+          {step === 1 && (
+            <View style={styles.card}>
+              <Text style={styles.title}>Criar conta</Text>
+              <Text style={styles.subtitle}>Vamos começar com seus dados</Text>
+
+              <Text style={styles.label}>Nome completo</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="João Silva"
+                placeholderTextColor={theme.colors.textLight}
+                value={name}
+                onChangeText={setName}
+              />
+
+              <Text style={styles.label}>E-mail</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="joao@email.com"
+                placeholderTextColor={theme.colors.textLight}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              <Text style={styles.label}>Senha</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Mínimo 6 caracteres"
+                placeholderTextColor={theme.colors.textLight}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <AnimatedPressable
+                style={styles.btnPrimary}
+                onPress={() => {
+                  if (!name || !email || !password)
+                    return Alert.alert('Atenção', 'Preencha todos os campos.');
+                  if (password.length < 6)
+                    return Alert.alert('Atenção', 'Senha deve ter ao menos 6 caracteres.');
+                  setStep(2);
+                }}
+              >
+                <Text style={styles.btnPrimaryText}>Continuar</Text>
+              </AnimatedPressable>
+
+              <AnimatedPressable onPress={() => navigation.goBack()}>
+                <Text style={styles.linkText}>Já tenho conta</Text>
+              </AnimatedPressable>
+            </View>
+          )}
+
+          {/* Step 2 — Perfil */}
+          {step === 2 && (
+            <View style={styles.card}>
+              <Text style={styles.title}>Seu perfil</Text>
+              <Text style={styles.subtitle}>Conte um pouco sobre você</Text>
+
+              <Text style={styles.label}>Idade</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="25"
+                placeholderTextColor={theme.colors.textLight}
+                value={age}
+                onChangeText={setAge}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+
+              <Text style={styles.label}>Bio</Text>
+              <TextInput
+                style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
+                placeholder="Fale algo sobre você…"
+                placeholderTextColor={theme.colors.textLight}
+                value={bio}
+                onChangeText={setBio}
+                multiline
+                maxLength={160}
+              />
+              <Text style={styles.charCount}>{bio.length}/160</Text>
+
+              <AnimatedPressable style={styles.btnPrimary} onPress={() => setStep(3)}>
+                <Text style={styles.btnPrimaryText}>Continuar</Text>
+              </AnimatedPressable>
+            </View>
+          )}
+
+          {/* Step 3 — Interesses */}
+          {step === 3 && (
+            <View style={styles.card}>
+              <Text style={styles.title}>Seus interesses</Text>
+              <Text style={styles.subtitle}>Escolha até 5 que te representam</Text>
+
+              <View style={styles.tags}>
+                {INTERESTS.map((item) => {
+                  const active = selectedInterests.includes(item);
+                  return (
+                    <AnimatedPressable
+                      key={item}
+                      style={[styles.tag, active && styles.tagActive]}
+                      onPress={() => {
+                        if (!active && selectedInterests.length >= 5) return;
+                        toggleInterest(item);
+                      }}
+                    >
+                      <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
+              <AnimatedPressable
+                style={[styles.btnPrimary, loading && { opacity: 0.7 }]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={theme.colors.onSecondary} />
+                ) : (
+                  <Text style={styles.btnPrimaryText}>Criar conta 🎉</Text>
+                )}
+              </AnimatedPressable>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 

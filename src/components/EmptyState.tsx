@@ -1,7 +1,8 @@
 // src/components/EmptyState.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 
 interface EmptyStateProps {
@@ -27,9 +28,9 @@ export function EmptyState({
       <Text style={styles.title}>{title}</Text>
       {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       {buttonLabel && onButtonPress && (
-        <TouchableOpacity style={styles.button} onPress={onButtonPress}>
+        <AnimatedPressable style={styles.button} onPress={onButtonPress}>
           <Text style={styles.buttonText}>{buttonLabel}</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       )}
     </View>
   );

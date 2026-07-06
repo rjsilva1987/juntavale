@@ -6,7 +6,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -14,7 +13,9 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -44,59 +45,61 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <Ionicons name="flame" size={34} color={theme.colors.secondary} />
-            <Text style={styles.appName}>JuntaVale</Text>
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoRow}>
+              <Ionicons name="flame" size={34} color={theme.colors.secondary} />
+              <Text style={styles.appName}>JuntaVale</Text>
+            </View>
+            <Text style={styles.tagline}>Conecte-se com quem tem a ver com você</Text>
           </View>
-          <Text style={styles.tagline}>Conecte-se com quem tem a ver com você</Text>
-        </View>
 
-        {/* Card */}
-        <View style={styles.card}>
-          <Text style={styles.label}>E-mail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="seu@email.com"
-            placeholderTextColor={theme.colors.textLight}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+          {/* Card */}
+          <View style={styles.card}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="seu@email.com"
+              placeholderTextColor={theme.colors.textLight}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
 
-          <Text style={styles.label}>Senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={theme.colors.textLight}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={theme.colors.textLight}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-          <TouchableOpacity style={styles.btnPrimary} onPress={handleLogin} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color={theme.colors.onSecondary} />
-            ) : (
-              <Text style={styles.btnPrimaryText}>Entrar</Text>
-            )}
-          </TouchableOpacity>
+            <AnimatedPressable style={styles.btnPrimary} onPress={handleLogin} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={theme.colors.onSecondary} />
+              ) : (
+                <Text style={styles.btnPrimaryText}>Entrar</Text>
+              )}
+            </AnimatedPressable>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.linkText}>
-              Ainda não tem conta? <Text style={styles.linkBold}>Cadastre-se</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <AnimatedPressable onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.linkText}>
+                Ainda não tem conta? <Text style={styles.linkBold}>Cadastre-se</Text>
+              </Text>
+            </AnimatedPressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 

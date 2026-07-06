@@ -4,8 +4,10 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
@@ -53,7 +55,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
         <View style={styles.header}>
           <Text style={styles.title}>Conversas</Text>
         </View>
@@ -73,12 +75,12 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
             </View>
           ))}
         </View>
-      </View>
+      </Animated.View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <View style={styles.header}>
         <Text style={styles.title}>Conversas</Text>
       </View>
@@ -95,8 +97,9 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}
           renderItem={({ item }) => (
-            <TouchableOpacity
+            <AnimatedPressable
               style={styles.matchCard}
+              entering={FadeInDown}
               onPress={() =>
                 navigation.navigate('Chat', {
                   matchId: item.id,
@@ -135,11 +138,11 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               {item.lastMessageAt && (
                 <Text style={styles.time}>{dayjs(item.lastMessageAt.toDate()).fromNow(true)}</Text>
               )}
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

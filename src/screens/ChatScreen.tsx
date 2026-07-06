@@ -8,14 +8,15 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   FlatList,
   TextInput,
   SafeAreaView,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
@@ -86,109 +87,111 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          {otherPhoto ? (
-            <Image
-              source={{ uri: otherPhoto }}
-              style={styles.headerAvatar}
-              contentFit="cover"
-              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-              transition={200}
-            />
-          ) : (
-            <View
-              style={[
-                styles.headerAvatar,
-                {
-                  backgroundColor: theme.colors.secondary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 18 }}>😊</Text>
-            </View>
-          )}
-          <View>
-            <Text style={styles.headerName}>{otherName}</Text>
-            <Text style={styles.headerStatus}>Online agora</Text>
-          </View>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Messages */}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        {loading ? (
-          <View style={styles.messagesList}>
-            {SKELETON_PATTERN.map((isMe, i) => (
-              <View key={i} style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-                {!isMe && <SkeletonPlaceholder width={30} height={30} borderRadius={15} />}
-                <SkeletonPlaceholder
-                  width={isMe ? 160 : 200}
-                  height={40}
-                  borderRadius={theme.borderRadius.lg}
-                />
-              </View>
-            ))}
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.messagesList}
-            renderItem={renderMessage}
-            ListEmptyComponent={
-              <EmptyState
-                icon="chatbubble-ellipses-outline"
-                title="Comece uma conversa!"
-                subtitle={`Vocês fizeram match! Diga olá para ${otherName}`}
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
+          </AnimatedPressable>
+          <View style={styles.headerInfo}>
+            {otherPhoto ? (
+              <Image
+                source={{ uri: otherPhoto }}
+                style={styles.headerAvatar}
+                contentFit="cover"
+                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                transition={200}
               />
-            }
-          />
-        )}
-
-        {/* Input */}
-        <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.inputIcon}>
-            <Ionicons name="happy-outline" size={24} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            placeholder={`Mensagem para ${otherName}…`}
-            placeholderTextColor={theme.colors.textLight}
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!text.trim()}
-          >
-            <Ionicons
-              name="send"
-              size={18}
-              color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
-            />
-          </TouchableOpacity>
+            ) : (
+              <View
+                style={[
+                  styles.headerAvatar,
+                  {
+                    backgroundColor: theme.colors.secondary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
+              >
+                <Text style={{ fontSize: 18 }}>😊</Text>
+              </View>
+            )}
+            <View>
+              <Text style={styles.headerName}>{otherName}</Text>
+              <Text style={styles.headerStatus}>Online agora</Text>
+            </View>
+          </View>
+          <AnimatedPressable>
+            <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.text} />
+          </AnimatedPressable>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+        {/* Messages */}
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
+          {loading ? (
+            <View style={styles.messagesList}>
+              {SKELETON_PATTERN.map((isMe, i) => (
+                <View key={i} style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+                  {!isMe && <SkeletonPlaceholder width={30} height={30} borderRadius={15} />}
+                  <SkeletonPlaceholder
+                    width={isMe ? 160 : 200}
+                    height={40}
+                    borderRadius={theme.borderRadius.lg}
+                  />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.messagesList}
+              renderItem={renderMessage}
+              ListEmptyComponent={
+                <EmptyState
+                  icon="chatbubble-ellipses-outline"
+                  title="Comece uma conversa!"
+                  subtitle={`Vocês fizeram match! Diga olá para ${otherName}`}
+                />
+              }
+            />
+          )}
+
+          {/* Input */}
+          <View style={styles.inputRow}>
+            <AnimatedPressable style={styles.inputIcon}>
+              <Ionicons name="happy-outline" size={24} color={theme.colors.textSecondary} />
+            </AnimatedPressable>
+            <TextInput
+              style={styles.input}
+              placeholder={`Mensagem para ${otherName}…`}
+              placeholderTextColor={theme.colors.textLight}
+              value={text}
+              onChangeText={setText}
+              multiline
+              maxLength={500}
+            />
+            <AnimatedPressable
+              style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!text.trim()}
+            >
+              <Ionicons
+                name="send"
+                size={18}
+                color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+              />
+            </AnimatedPressable>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 

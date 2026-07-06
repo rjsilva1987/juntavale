@@ -1,6 +1,7 @@
 // src/screens/SwipeScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -82,13 +83,22 @@ export default function SwipeScreen() {
     setCurrentIndex((i) => i + 1);
     if (!user || !target) return;
 
+    if (dir === 'left') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
     recordSwipe(
       user.uid,
       target.uid,
       dir === 'right' ? 'like' : dir === 'super' ? 'superlike' : 'nope',
     )
       .then((isMatch) => {
-        if (isMatch) setMatchedProfile(target);
+        if (isMatch) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setMatchedProfile(target);
+        }
       })
       .catch(() => {});
   };
@@ -106,6 +116,9 @@ export default function SwipeScreen() {
 
   const gesture = Gesture.Pan()
     .simultaneousWithExternalGesture(pagerNativeGesture)
+    .onBegin(() => {
+      runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
+    })
     .onUpdate((e) => {
       translateX.value = e.translationX;
       translateY.value = e.translationY;
@@ -348,10 +361,15 @@ interface ActionButtonProps {
 }
 
 function ActionButton({ icon, color, size, onPress, iconColor }: ActionButtonProps) {
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onPress();
+  };
+
   return (
     <TouchableOpacity
       style={[styles.actionBtn, { width: size, height: size, borderColor: color }]}
-      onPress={onPress}
+      onPress={handlePress}
     >
       <Ionicons name={icon} size={size * 0.45} color={iconColor || color} />
     </TouchableOpacity>

@@ -9,13 +9,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   ActivityIndicator,
   type TextInputProps,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
@@ -155,135 +156,137 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Meu Perfil</Text>
-        <TouchableOpacity onPress={() => setEditing(!editing)}>
-          <Ionicons
-            name={editing ? 'close' : 'create-outline'}
-            size={24}
-            color={theme.colors.primary}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Avatar */}
-      <View style={styles.avatarSection}>
-        <TouchableOpacity
-          onPress={handlePickPhoto}
-          style={styles.avatarWrap}
-          disabled={uploadingPhoto}
-        >
-          {profile?.photoURL ? (
-            <Image
-              source={{ uri: profile.photoURL }}
-              style={styles.avatar}
-              contentFit="cover"
-              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-              transition={200}
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Meu Perfil</Text>
+          <AnimatedPressable onPress={() => setEditing(!editing)}>
+            <Ionicons
+              name={editing ? 'close' : 'create-outline'}
+              size={24}
+              color={theme.colors.primary}
             />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarEmoji}>😊</Text>
-            </View>
-          )}
-          <View style={styles.cameraBtn}>
-            {uploadingPhoto ? (
-              <ActivityIndicator size="small" color={theme.colors.onSecondary} />
+          </AnimatedPressable>
+        </View>
+
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <AnimatedPressable
+            onPress={handlePickPhoto}
+            style={styles.avatarWrap}
+            disabled={uploadingPhoto}
+          >
+            {profile?.photoURL ? (
+              <Image
+                source={{ uri: profile.photoURL }}
+                style={styles.avatar}
+                contentFit="cover"
+                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                transition={200}
+              />
             ) : (
-              <Ionicons name="camera" size={16} color={theme.colors.onSecondary} />
-            )}
-          </View>
-        </TouchableOpacity>
-        {!editing && (
-          <>
-            <Text style={styles.profileName}>{profile?.name}</Text>
-            <Text style={styles.profileAge}>{profile?.age} anos</Text>
-          </>
-        )}
-      </View>
-
-      {/* Stats */}
-      {!editing && (
-        <View style={styles.statsRow}>
-          <StatCard label="Curtidas" value="0" icon="heart" />
-          <StatCard label="Matches" value="0" icon="people" />
-          <StatCard label="Mensagens" value="0" icon="chatbubble" />
-        </View>
-      )}
-
-      {/* Photos */}
-      {!editing && (
-        <View style={styles.photosCard}>
-          <PhotoCarousel
-            photos={
-              profile.photos?.length ? profile.photos : profile.photoURL ? [profile.photoURL] : []
-            }
-            style={styles.photosCarousel}
-          />
-        </View>
-      )}
-
-      {/* Edit form */}
-      {editing ? (
-        <View style={styles.card}>
-          <Field label="Nome" value={name} onChange={setName} />
-          <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
-          <Field label="Bio" value={bio} onChange={setBio} multiline />
-
-          <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
-          <View style={styles.tags}>
-            {INTERESTS.map((item) => {
-              const active = interests.includes(item);
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[styles.tag, active && styles.tagActive]}
-                  onPress={() => toggleInterest(item)}
-                >
-                  <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-            {saving ? (
-              <ActivityIndicator color={theme.colors.onSecondary} />
-            ) : (
-              <Text style={styles.saveBtnText}>Salvar alterações</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Sobre mim</Text>
-          <Text style={styles.bioText}>
-            {profile?.bio || 'Nenhuma bio ainda. Toque em editar!'}
-          </Text>
-
-          {(profile?.interests?.length ?? 0) > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Interesses</Text>
-              <View style={styles.tags}>
-                {profile?.interests?.map((item) => (
-                  <View key={item} style={styles.tagActive}>
-                    <Text style={styles.tagTextActive}>{item}</Text>
-                  </View>
-                ))}
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarEmoji}>😊</Text>
               </View>
+            )}
+            <View style={styles.cameraBtn}>
+              {uploadingPhoto ? (
+                <ActivityIndicator size="small" color={theme.colors.onSecondary} />
+              ) : (
+                <Ionicons name="camera" size={16} color={theme.colors.onSecondary} />
+              )}
+            </View>
+          </AnimatedPressable>
+          {!editing && (
+            <>
+              <Text style={styles.profileName}>{profile?.name}</Text>
+              <Text style={styles.profileAge}>{profile?.age} anos</Text>
             </>
           )}
         </View>
-      )}
 
-      {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-        <Ionicons name="log-out-outline" size={20} color={theme.colors.nope} />
-        <Text style={styles.logoutText}>Sair da conta</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Stats */}
+        {!editing && (
+          <View style={styles.statsRow}>
+            <StatCard label="Curtidas" value="0" icon="heart" />
+            <StatCard label="Matches" value="0" icon="people" />
+            <StatCard label="Mensagens" value="0" icon="chatbubble" />
+          </View>
+        )}
+
+        {/* Photos */}
+        {!editing && (
+          <View style={styles.photosCard}>
+            <PhotoCarousel
+              photos={
+                profile.photos?.length ? profile.photos : profile.photoURL ? [profile.photoURL] : []
+              }
+              style={styles.photosCarousel}
+            />
+          </View>
+        )}
+
+        {/* Edit form */}
+        {editing ? (
+          <View style={styles.card}>
+            <Field label="Nome" value={name} onChange={setName} />
+            <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
+            <Field label="Bio" value={bio} onChange={setBio} multiline />
+
+            <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
+            <View style={styles.tags}>
+              {INTERESTS.map((item) => {
+                const active = interests.includes(item);
+                return (
+                  <AnimatedPressable
+                    key={item}
+                    style={[styles.tag, active && styles.tagActive]}
+                    onPress={() => toggleInterest(item)}
+                  >
+                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+
+            <AnimatedPressable style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color={theme.colors.onSecondary} />
+              ) : (
+                <Text style={styles.saveBtnText}>Salvar alterações</Text>
+              )}
+            </AnimatedPressable>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Sobre mim</Text>
+            <Text style={styles.bioText}>
+              {profile?.bio || 'Nenhuma bio ainda. Toque em editar!'}
+            </Text>
+
+            {(profile?.interests?.length ?? 0) > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Interesses</Text>
+                <View style={styles.tags}>
+                  {profile?.interests?.map((item) => (
+                    <View key={item} style={styles.tagActive}>
+                      <Text style={styles.tagTextActive}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Logout */}
+        <AnimatedPressable style={styles.logoutBtn} onPress={logout}>
+          <Ionicons name="log-out-outline" size={20} color={theme.colors.nope} />
+          <Text style={styles.logoutText}>Sair da conta</Text>
+        </AnimatedPressable>
+      </ScrollView>
+    </Animated.View>
   );
 }
 

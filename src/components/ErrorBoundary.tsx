@@ -1,8 +1,9 @@
 // src/components/ErrorBoundary.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Component, type ErrorInfo, type PropsWithChildren, type ReactNode } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 
 interface ErrorBoundaryProps extends PropsWithChildren {
@@ -39,9 +40,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <Text style={styles.subtitle}>
               Encontramos um problema inesperado. Tente novamente.
             </Text>
-            <TouchableOpacity style={styles.button} onPress={this.resetError}>
+            <AnimatedPressable style={styles.button} onPress={this.resetError}>
               <Text style={styles.buttonText}>Tentar novamente</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
         )
       );
