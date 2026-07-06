@@ -1,11 +1,11 @@
 // src/screens/SwipeScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -18,11 +18,12 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/EmptyState';
+import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
-import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { RootStackParamList } from '@/navigation';
 import { getDiscoverProfiles, recordSwipe, UserProfile } from '@/services/firestoreService';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -30,7 +31,8 @@ const CARD_W = SCREEN_W - 32;
 const SWIPE_THRESHOLD = SCREEN_W * 0.25;
 
 export default function SwipeScreen() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -268,44 +270,24 @@ export default function SwipeScreen() {
       )}
 
       {/* Match Modal */}
-      <Modal visible={!!matchedProfile} transparent animationType="fade">
-        <LinearGradient
-          colors={[theme.colors.primary, theme.colors.secondary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.matchOverlay}
-        >
-          <View style={styles.matchTitleRow}>
-            <Ionicons name="heart" size={32} color={theme.colors.white} />
-            <Text style={styles.matchTitle}>É um Match!</Text>
-          </View>
-          <Text style={styles.matchSub}>Você e {matchedProfile?.name} curtiram um ao outro!</Text>
-          <View style={styles.matchAvatars}>
-            <View style={[styles.matchAvatar, { backgroundColor: theme.colors.white }]}>
-              <Text style={{ fontSize: 32 }}>👤</Text>
-            </View>
-            {matchedProfile?.photoURL ? (
-              <Image
-                source={{ uri: matchedProfile.photoURL }}
-                style={styles.matchAvatar}
-                contentFit="cover"
-                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                transition={200}
-              />
-            ) : (
-              <View style={[styles.matchAvatar, { backgroundColor: theme.colors.white }]}>
-                <Text style={{ fontSize: 32 }}>😊</Text>
-              </View>
-            )}
-          </View>
-          <TouchableOpacity style={styles.matchBtn} onPress={() => setMatchedProfile(null)}>
-            <Text style={styles.matchBtnText}>Enviar mensagem</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setMatchedProfile(null)}>
-            <Text style={styles.matchSkip}>Continuar explorando</Text>
-          </TouchableOpacity>
-        </LinearGradient>
-      </Modal>
+      <MatchModal
+        visible={!!matchedProfile}
+        currentUserPhoto={profile?.photoURL}
+        matchedUserPhoto={matchedProfile?.photoURL}
+        matchedUserName={matchedProfile?.name ?? ''}
+        onSendMessage={() => {
+          if (user && matchedProfile) {
+            const matchId = [user.uid, matchedProfile.uid].sort().join('_');
+            setMatchedProfile(null);
+            navigation.navigate('Chat', {
+              matchId,
+              otherName: matchedProfile.name,
+              otherPhoto: matchedProfile.photoURL,
+            });
+          }
+        }}
+        onContinue={() => setMatchedProfile(null)}
+      />
     </View>
   );
 }
@@ -448,44 +430,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.colors.white,
   },
-
-  // Match modal
-  matchOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.lg,
-  },
-  matchTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  matchTitle: { fontSize: theme.fontSize.xxl, fontWeight: '800', color: theme.colors.white },
-  matchSub: {
-    fontSize: theme.fontSize.md,
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  matchAvatars: { flexDirection: 'row', gap: 20, marginBottom: 36 },
-  matchAvatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: theme.colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchBtn: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: 48,
-    paddingVertical: 15,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 12,
-    ...theme.shadows.medium,
-  },
-  matchBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.primary },
-  matchSkip: { color: 'rgba(255,255,255,0.85)', fontSize: theme.fontSize.sm },
 });
 
 const pcStyles = StyleSheet.create({
