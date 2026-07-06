@@ -29,10 +29,12 @@
       "package": "com.juntavale.app",
       "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "ACCESS_FINE_LOCATION"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -40,12 +42,20 @@
     },
     "plugins": [
       "expo-image-picker",
-      "expo-location"
+      "expo-location",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FD3A69"
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "bbmatch-9ede5"
+        "projectId": "177f208a-5816-40e5-9953-6511ba25a716"
       }
-    }
+    },
+    "owner": "rjsilva1987"
   }
 }
