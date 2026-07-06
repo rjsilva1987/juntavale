@@ -36,6 +36,7 @@ export interface Match {
   users: string[];
   lastMessage?: string;
   lastMessageAt?: Timestamp;
+  typing?: Record<string, boolean>;
 }
 
 export interface Message {
@@ -148,5 +149,23 @@ export const listenMessages = (matchId: string, callback: (messages: Message[]) 
   return onSnapshot(q, (snap) => {
     const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Message);
     callback(messages);
+  });
+};
+
+// ─── Typing indicator ──────────────────────────────────────
+
+export const setTypingStatus = async (matchId: string, uid: string, isTyping: boolean) => {
+  await updateDoc(doc(db, 'matches', matchId), { [`typing.${uid}`]: isTyping });
+};
+
+export const listenTypingStatus = (
+  matchId: string,
+  currentUid: string,
+  callback: (isTyping: boolean) => void,
+) => {
+  return onSnapshot(doc(db, 'matches', matchId), (snap) => {
+    const data = snap.data() as Match | undefined;
+    const otherUid = data?.users?.find((u) => u !== currentUid);
+    callback(Boolean(otherUid && data?.typing?.[otherUid]));
   });
 };

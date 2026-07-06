@@ -22,6 +22,7 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
 import { listenMessages, sendMessage, Message } from '@/services/firestoreService';
 
@@ -36,6 +37,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const flatListRef = React.useRef<FlatList>(null);
+  const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
 
   useEffect(() => {
     const unsub = listenMessages(matchId, (msgs) => {
@@ -53,6 +55,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     try {
       await sendMessage(matchId, user.uid, trimmed);
     } catch (_) {}
+  };
+
+  const handleChangeText = (value: string) => {
+    setText(value);
+    handleTyping();
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -119,7 +126,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             )}
             <View>
               <Text style={styles.headerName}>{otherName}</Text>
-              <Text style={styles.headerStatus}>Online agora</Text>
+              <Text style={styles.headerStatus}>
+                {isOtherTyping ? 'digitando...' : 'Online agora'}
+              </Text>
             </View>
           </View>
           <AnimatedPressable>
@@ -173,7 +182,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               placeholder={`Mensagem para ${otherName}…`}
               placeholderTextColor={theme.colors.textLight}
               value={text}
-              onChangeText={setText}
+              onChangeText={handleChangeText}
               multiline
               maxLength={500}
             />
