@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -13,6 +14,10 @@ import {
   FlatList,
   TextInput,
   SafeAreaView,
+  Modal,
+  Alert,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -24,7 +29,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
-import { listenMessages, sendMessage, Message } from '@/services/firestoreService';
+import { listenMessages, sendMessage, uploadChatImage, Message } from '@/services/firestoreService';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
 
@@ -36,6 +41,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [attachSheetVisible, setAttachSheetVisible] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [viewerImage, setViewerImage] = useState<string | null>(null);
   const flatListRef = React.useRef<FlatList>(null);
   const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
 
@@ -62,8 +70,49 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     handleTyping();
   };
 
+  const handleSendImage = async (uri: string) => {
+    if (!user) return;
+    setUploadProgress(0);
+    try {
+      const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
+      await sendMessage(matchId, user.uid, '', imageUrl);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível enviar a imagem.');
+    } finally {
+      setUploadProgress(null);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setAttachSheetVisible(false);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à câmera nas configurações.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (result.canceled || !result.assets[0]) return;
+    handleSendImage(result.assets[0].uri);
+  };
+
+  const handlePickFromLibrary = async () => {
+    setAttachSheetVisible(false);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à galeria nas configurações.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    handleSendImage(result.assets[0].uri);
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.senderId === user?.uid;
+    const imageUrl = item.imageUrl;
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
@@ -83,9 +132,32 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             )}
           </View>
         )}
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
-          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+        <View
+          style={[
+            imageUrl ? styles.bubbleImageWrap : styles.bubble,
+            isMe ? styles.bubbleMe : styles.bubbleOther,
+          ]}
+        >
+          {imageUrl ? (
+            <Pressable onPress={() => setViewerImage(imageUrl)}>
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.bubbleImage}
+                contentFit="cover"
+                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                transition={200}
+              />
+            </Pressable>
+          ) : (
+            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+          )}
+          <Text
+            style={[
+              styles.bubbleTime,
+              isMe && styles.bubbleTimeMe,
+              imageUrl && styles.bubbleTimeImage,
+            ]}
+          >
             {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
           </Text>
         </View>
@@ -172,10 +244,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             />
           )}
 
+          {/* Upload progress */}
+          {uploadProgress !== null && (
+            <View style={styles.progressRow}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <View style={styles.progressTrack}>
+                <View
+                  style={[styles.progressFill, { width: `${Math.round(uploadProgress * 100)}%` }]}
+                />
+              </View>
+              <Text style={styles.progressText}>{Math.round(uploadProgress * 100)}%</Text>
+            </View>
+          )}
+
           {/* Input */}
           <View style={styles.inputRow}>
-            <AnimatedPressable style={styles.inputIcon}>
-              <Ionicons name="happy-outline" size={24} color={theme.colors.textSecondary} />
+            <AnimatedPressable style={styles.inputIcon} onPress={() => setAttachSheetVisible(true)}>
+              <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
             </AnimatedPressable>
             <TextInput
               style={styles.input}
@@ -200,6 +285,49 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Attachment action sheet */}
+      <Modal
+        visible={attachSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAttachSheetVisible(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setAttachSheetVisible(false)}>
+          <View style={styles.sheet}>
+            <AnimatedPressable style={styles.sheetOption} onPress={handleTakePhoto}>
+              <Ionicons name="camera" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Tirar foto</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable style={styles.sheetOption} onPress={handlePickFromLibrary}>
+              <Ionicons name="images" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Escolher da galeria</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetGap} />
+            <AnimatedPressable
+              style={styles.sheetCancel}
+              onPress={() => setAttachSheetVisible(false)}
+            >
+              <Text style={styles.sheetCancelText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Full-screen image viewer */}
+      <Modal
+        visible={!!viewerImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewerImage(null)}
+      >
+        <Pressable style={styles.viewerBackdrop} onPress={() => setViewerImage(null)}>
+          {viewerImage && (
+            <Image source={{ uri: viewerImage }} style={styles.viewerImage} contentFit="contain" />
+          )}
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
 }
@@ -272,6 +400,69 @@ const styles = StyleSheet.create({
   bubbleTextMe: { color: theme.colors.white },
   bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
+  bubbleTimeImage: { position: 'absolute', bottom: 6, right: 10, color: theme.colors.white },
+
+  bubbleImageWrap: {
+    maxWidth: '75%',
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+  },
+  bubbleImage: { width: 200, height: 200, borderRadius: theme.borderRadius.lg },
+
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    backgroundColor: theme.colors.white,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.surface,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', backgroundColor: theme.colors.primary },
+  progressText: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, width: 36 },
+
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    paddingBottom: 32,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+  },
+  sheetOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  sheetDivider: { height: 0.5, backgroundColor: theme.colors.border },
+  sheetGap: { height: 8 },
+  sheetCancel: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  sheetCancelText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.nope },
+
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: { width: '100%', height: '80%' },
 
   inputRow: {
     flexDirection: 'row',

@@ -14,8 +14,9 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-import { db } from '@/services/firebase';
+import { db, storage } from '@/services/firebase';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export interface Message {
   text: string;
   senderId: string;
   createdAt: Timestamp;
+  imageUrl?: string;
 }
 
 // ─── User ─────────────────────────────────────────────────
@@ -131,17 +133,45 @@ export const getMatches = (uid: string, callback: (matches: Match[]) => void) =>
 
 // ─── Messages ─────────────────────────────────────────────
 
-export const sendMessage = async (matchId: string, senderId: string, text: string) => {
+export const sendMessage = async (
+  matchId: string,
+  senderId: string,
+  text: string,
+  imageUrl?: string,
+) => {
   const msgRef = collection(db, 'matches', matchId, 'messages');
   await addDoc(msgRef, {
     text,
     senderId,
     createdAt: serverTimestamp(),
+    ...(imageUrl ? { imageUrl } : {}),
   });
   await updateDoc(doc(db, 'matches', matchId), {
-    lastMessage: text,
+    lastMessage: imageUrl ? '📷 Foto' : text,
     lastMessageAt: serverTimestamp(),
   });
+};
+
+export const uploadChatImage = async (
+  matchId: string,
+  localUri: string,
+  onProgress: (percent: number) => void,
+): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `images/chats/${matchId}/${Date.now()}.jpg`);
+  const task = uploadBytesResumable(storageRef, blob);
+
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(snapshot.bytesTransferred / snapshot.totalBytes),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  return getDownloadURL(storageRef);
 };
 
 export const listenMessages = (matchId: string, callback: (messages: Message[]) => void) => {
