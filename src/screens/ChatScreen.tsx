@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -18,6 +19,7 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
+  Linking,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -110,9 +112,51 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     handleSendImage(result.assets[0].uri);
   };
 
+  const handleShareLocation = async () => {
+    setAttachSheetVisible(false);
+    if (!user) return;
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permissão necessária',
+        'Permita o acesso à localização para compartilhá-la no chat.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+    try {
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      await sendMessage(matchId, user.uid, '', undefined, {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    } catch {
+      Alert.alert('Erro', 'Não foi possível obter sua localização.');
+    }
+  };
+
+  const handleOpenLocation = (location: { latitude: number; longitude: number }) => {
+    const url = Platform.select({
+      ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
+      android: `geo:0,0?q=${location.latitude},${location.longitude}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`,
+    });
+    Linking.openURL(url as string).catch(() => {
+      Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`,
+      );
+    });
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.senderId === user?.uid;
     const imageUrl = item.imageUrl;
+    const location = item.location;
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
@@ -147,6 +191,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
                 transition={200}
               />
+            </Pressable>
+          ) : location ? (
+            <Pressable style={styles.locationCard} onPress={() => handleOpenLocation(location)}>
+              <Ionicons
+                name="location"
+                size={20}
+                color={isMe ? theme.colors.white : theme.colors.primary}
+              />
+              <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
+                Localização compartilhada
+              </Text>
             </Pressable>
           ) : (
             <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
@@ -304,6 +359,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <Ionicons name="images" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Escolher da galeria</Text>
             </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable style={styles.sheetOption} onPress={handleShareLocation}>
+              <Ionicons name="location" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Enviar localização</Text>
+            </AnimatedPressable>
             <View style={styles.sheetGap} />
             <AnimatedPressable
               style={styles.sheetCancel}
@@ -408,6 +468,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bubbleImage: { width: 200, height: 200, borderRadius: theme.borderRadius.lg },
+
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locationText: { fontSize: theme.fontSize.md, color: theme.colors.text },
 
   progressRow: {
     flexDirection: 'row',

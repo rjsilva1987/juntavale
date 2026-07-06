@@ -46,6 +46,7 @@ export interface Message {
   senderId: string;
   createdAt: Timestamp;
   imageUrl?: string;
+  location?: { latitude: number; longitude: number };
 }
 
 // ─── User ─────────────────────────────────────────────────
@@ -138,6 +139,7 @@ export const sendMessage = async (
   senderId: string,
   text: string,
   imageUrl?: string,
+  location?: { latitude: number; longitude: number },
 ) => {
   const msgRef = collection(db, 'matches', matchId, 'messages');
   await addDoc(msgRef, {
@@ -145,9 +147,10 @@ export const sendMessage = async (
     senderId,
     createdAt: serverTimestamp(),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(location ? { location } : {}),
   });
   await updateDoc(doc(db, 'matches', matchId), {
-    lastMessage: imageUrl ? '📷 Foto' : text,
+    lastMessage: imageUrl ? '📷 Foto' : location ? '📍 Localização' : text,
     lastMessageAt: serverTimestamp(),
   });
 };
