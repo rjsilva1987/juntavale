@@ -11,6 +11,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import { auth } from '@/services/firebase';
 import { createUserProfile, getUserProfile, UserProfile } from '@/services/firestoreService';
+import { removePushToken } from '@/services/notifications';
 
 interface AuthContextType {
   user: User | null;
@@ -67,6 +68,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (user) {
+      await removePushToken(user.uid).catch(() => {});
+    }
     await signOut(auth);
     setProfile(null);
   };

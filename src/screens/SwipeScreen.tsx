@@ -33,6 +33,7 @@ import {
   undoSwipe,
   UserProfile,
 } from '@/services/firestoreService';
+import { notifyNewMatch } from '@/services/sendPushNotification';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -135,6 +136,13 @@ export default function SwipeScreen() {
           setLastSwipedProfile((prev) =>
             prev && prev.profile.uid === target.uid ? { ...prev, isMatch: true } : prev,
           );
+          notifyNewMatch({
+            toUid: target.uid,
+            matchId: [user.uid, target.uid].sort().join('_'),
+            otherUid: user.uid,
+            otherName: profile?.name ?? 'Alguém',
+            otherPhoto: profile?.photoURL,
+          }).catch(() => {});
         }
       })
       .catch(() => {});
@@ -335,6 +343,7 @@ export default function SwipeScreen() {
             setMatchedProfile(null);
             navigation.navigate('Chat', {
               matchId,
+              otherUid: matchedProfile.uid,
               otherName: matchedProfile.name,
               otherPhoto: matchedProfile.photoURL,
             });

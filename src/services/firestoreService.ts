@@ -43,6 +43,7 @@ export interface UserProfile {
   location?: { lat: number; lng: number };
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
+  pushToken?: string | null;
 }
 
 export interface Match {

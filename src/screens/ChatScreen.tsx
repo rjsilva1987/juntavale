@@ -32,14 +32,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
 import { listenMessages, sendMessage, uploadChatImage, Message } from '@/services/firestoreService';
+import { notifyNewMessage } from '@/services/sendPushNotification';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
-  const { matchId, otherName, otherPhoto } = route.params;
-  const { user } = useAuth();
+  const { matchId, otherUid, otherName, otherPhoto } = route.params;
+  const { user, profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -58,12 +59,25 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return unsub;
   }, [matchId]);
 
+  const notifyRecipient = (preview: string) => {
+    if (!user || !otherUid) return;
+    notifyNewMessage({
+      toUid: otherUid,
+      matchId,
+      senderUid: user.uid,
+      senderName: profile?.name ?? 'Alguém',
+      senderPhoto: profile?.photoURL,
+      preview,
+    }).catch(() => {});
+  };
+
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || !user) return;
     setText('');
     try {
       await sendMessage(matchId, user.uid, trimmed);
+      notifyRecipient(trimmed);
     } catch (_) {}
   };
 
@@ -78,6 +92,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     try {
       const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
       await sendMessage(matchId, user.uid, '', imageUrl);
+      notifyRecipient('📷 Foto');
     } catch {
       Alert.alert('Erro', 'Não foi possível enviar a imagem.');
     } finally {
@@ -135,6 +150,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
       });
+      notifyRecipient('📍 Localização');
     } catch {
       Alert.alert('Erro', 'Não foi possível obter sua localização.');
     }

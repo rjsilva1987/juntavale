@@ -9,6 +9,8 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/hooks/useNotifications';
+import { navigationRef } from '@/navigation/navigationRef';
 import ChatScreen from '@/screens/ChatScreen';
 import LikesScreen from '@/screens/LikesScreen';
 import LoginScreen from '@/screens/LoginScreen';
@@ -21,8 +23,8 @@ import SwipeScreen from '@/screens/SwipeScreen';
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Main: undefined;
-  Chat: { matchId: string; otherName: string; otherPhoto?: string };
+  Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
+  Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -113,6 +115,7 @@ function AppStack() {
 
 export default function Navigation() {
   const { user, loading } = useAuth();
+  useNotifications();
 
   if (loading) {
     return (
@@ -122,7 +125,11 @@ export default function Navigation() {
     );
   }
 
-  return <NavigationContainer>{user ? <AppStack /> : <AuthStack />}</NavigationContainer>;
+  return (
+    <NavigationContainer ref={navigationRef}>
+      {user ? <AppStack /> : <AuthStack />}
+    </NavigationContainer>
+  );
 }
 
 const styles = StyleSheet.create({

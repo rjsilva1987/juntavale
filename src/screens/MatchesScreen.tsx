@@ -103,6 +103,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               onPress={() =>
                 navigation.navigate('Chat', {
                   matchId: item.id,
+                  otherUid: item.otherProfile?.uid ?? '',
                   otherName: item.otherProfile?.name ?? 'Usuário',
                   otherPhoto: item.otherProfile?.photoURL ?? '',
                 })
