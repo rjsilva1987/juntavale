@@ -2,6 +2,7 @@
 import {
   collection,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   setDoc,
@@ -120,6 +121,18 @@ export const recordSwipe = async (
     return true; // it's a match!
   }
   return false;
+};
+
+export const undoSwipe = async (
+  fromUid: string,
+  toUid: string,
+  isMatch: boolean,
+): Promise<void> => {
+  await deleteDoc(doc(db, 'swipes', `${fromUid}_${toUid}`));
+  if (isMatch) {
+    const matchId = [fromUid, toUid].sort().join('_');
+    await deleteDoc(doc(db, 'matches', matchId));
+  }
 };
 
 // ─── Matches ──────────────────────────────────────────────

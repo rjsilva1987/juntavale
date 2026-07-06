@@ -24,11 +24,22 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { getDiscoverProfiles, recordSwipe, UserProfile } from '@/services/firestoreService';
+import {
+  getDiscoverProfiles,
+  recordSwipe,
+  undoSwipe,
+  UserProfile,
+} from '@/services/firestoreService';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
 const SWIPE_THRESHOLD = SCREEN_W * 0.25;
+
+interface LastSwipedProfile {
+  profile: UserProfile;
+  index: number;
+  isMatch: boolean;
+}
 
 export default function SwipeScreen() {
   const { user, profile } = useAuth();
@@ -37,6 +48,7 @@ export default function SwipeScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [matchedProfile, setMatchedProfile] = useState<UserProfile | null>(null);
+  const [lastSwipedProfile, setLastSwipedProfile] = useState<LastSwipedProfile | null>(null);
 
   // Refs mirroring state so the JS-thread callback fired from a worklet
   // (via runOnJS) always reads the latest profile, not a stale closure.
@@ -63,6 +75,7 @@ export default function SwipeScreen() {
       const data = await getDiscoverProfiles(user.uid);
       setProfiles(data);
       setCurrentIndex(0);
+      setLastSwipedProfile(null);
       translateX.value = 0;
       translateY.value = 0;
     } catch (_) {
@@ -80,6 +93,7 @@ export default function SwipeScreen() {
 
   const completeSwipe = (dir: 'left' | 'right' | 'super') => {
     const target = profilesRef.current[currentIndexRef.current];
+    const swipedIndex = currentIndexRef.current;
     translateX.value = 0;
     translateY.value = 0;
     setCurrentIndex((i) => i + 1);
@@ -91,6 +105,8 @@ export default function SwipeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
+    setLastSwipedProfile({ profile: target, index: swipedIndex, isMatch: false });
+
     recordSwipe(
       user.uid,
       target.uid,
@@ -100,9 +116,24 @@ export default function SwipeScreen() {
         if (isMatch) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setMatchedProfile(target);
+          setLastSwipedProfile((prev) =>
+            prev && prev.profile.uid === target.uid ? { ...prev, isMatch: true } : prev,
+          );
         }
       })
       .catch(() => {});
+  };
+
+  const handleUndo = async () => {
+    if (!user || !lastSwipedProfile) return;
+    const { profile: target, index, isMatch } = lastSwipedProfile;
+    setCurrentIndex(index);
+    setLastSwipedProfile(null);
+    try {
+      await undoSwipe(user.uid, target.uid, isMatch);
+    } catch (_) {
+      Alert.alert('Erro', 'Não foi possível desfazer o swipe.');
+    }
   };
 
   const swipeCard = (dir: 'left' | 'right' | 'super') => {
@@ -248,6 +279,13 @@ export default function SwipeScreen() {
       {currentIndex < profiles.length && (
         <View style={styles.actions}>
           <ActionButton
+            icon="arrow-undo"
+            color={theme.colors.textSecondary}
+            size={44}
+            onPress={handleUndo}
+            disabled={!lastSwipedProfile}
+          />
+          <ActionButton
             icon="close"
             color={theme.colors.nope}
             size={56}
@@ -340,9 +378,10 @@ interface ActionButtonProps {
   size: number;
   onPress: () => void;
   iconColor?: string;
+  disabled?: boolean;
 }
 
-function ActionButton({ icon, color, size, onPress, iconColor }: ActionButtonProps) {
+function ActionButton({ icon, color, size, onPress, iconColor, disabled }: ActionButtonProps) {
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onPress();
@@ -350,8 +389,13 @@ function ActionButton({ icon, color, size, onPress, iconColor }: ActionButtonPro
 
   return (
     <TouchableOpacity
-      style={[styles.actionBtn, { width: size, height: size, borderColor: color }]}
+      style={[
+        styles.actionBtn,
+        { width: size, height: size, borderColor: color },
+        disabled && styles.actionBtnDisabled,
+      ]}
       onPress={handlePress}
+      disabled={disabled}
     >
       <Ionicons name={icon} size={size * 0.45} color={iconColor || color} />
     </TouchableOpacity>
@@ -429,6 +473,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.white,
+  },
+  actionBtnDisabled: {
+    opacity: 0.35,
   },
 });
 
