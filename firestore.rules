@@ -1,36 +1,188 @@
 // firestore.rules
-// Cole essas regras no Firebase Console → Firestore → Regras
+// Regras de PRODUÇÃO — deny by default: toda collection sem regra explícita é bloqueada
+// (ver o "catch-all" no final do arquivo).
+//
+// Como aplicar (só quando estiver pronto pra testar — ver instruções completas no chat):
+//   1) Console: Firebase Console → Firestore Database → Regras → colar este arquivo → Publicar
+//   2) CLI: firebase deploy --only firestore:rules
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Usuários: lê público (para discovery), escreve só o próprio
+    // ───────────────────────── Helpers ─────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Campos que o dono do perfil pode criar/editar. Qualquer campo fora desta
+    // lista (ex: um futuro "isAdmin" ou "verified") NUNCA pode ser escrito pelo
+    // client, mesmo que alguém adicione o campo no app no futuro e esqueça de
+    // atualizar as regras — hasOnly() bloqueia por padrão.
+    function isValidProfile(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 60
+        && data.age is number && data.age >= 18 && data.age <= 100
+        && data.bio is string && data.bio.size() <= 500
+        && data.photoURL is string
+        && data.photos is list && data.photos.size() <= 6
+        && data.interests is list && data.interests.size() <= 15
+        && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
+        && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
+        && (!('filters' in data) || data.filters is map)
+        && (!('pushToken' in data) || data.pushToken == null || data.pushToken is string);
+    }
+
+    // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
+    // na outra. Recalcula a condição no servidor via get() — nunca confia no
+    // client dizer "isMatch: true", porque o client pode mentir.
+    function mutualLikeExists(users) {
+      return exists(/databases/$(database)/documents/swipes/$(users[0] + '_' + users[1]))
+        && exists(/databases/$(database)/documents/swipes/$(users[1] + '_' + users[0]))
+        && get(/databases/$(database)/documents/swipes/$(users[0] + '_' + users[1])).data.direction != 'nope'
+        && get(/databases/$(database)/documents/swipes/$(users[1] + '_' + users[0])).data.direction != 'nope';
+    }
+
+    // ───────────────────────── users ─────────────────────────
+    //
+    // LIMITAÇÃO CONHECIDA: Firestore Rules não faz redação por campo em leitura.
+    // Se `allow read` libera o documento, libera TODOS os campos, inclusive
+    // `pushToken` — mesmo que o app normalmente só use esse campo internamente.
+    // Hoje o app precisa ler pushToken de OUTRO usuário no client
+    // (sendPushNotification.ts → notifyNewMatch/notifyNewMessage manda o push
+    // direto da API do Expo, sem backend). Não dá pra esconder esse campo sem
+    // mudar a arquitetura: mover pushToken para uma subcoleção privada
+    // (ex: users/{uid}/private/push) só legível pelo dono, e enviar o push via
+    // Cloud Function (Admin SDK ignora as regras). Ficou fora do escopo desta
+    // sessão (S18) — registrar como item futuro.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isSignedIn();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly(
+             ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
+              'gender', 'location', 'filters', 'pushToken', 'createdAt'])
+        && isValidProfile(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
+              'gender', 'location', 'filters', 'pushToken'])
+        && isValidProfile(request.resource.data);
+
+      allow delete: if isOwner(userId);
     }
 
-    // Swipes: cria e lê o próprio
+    // ───────────────────────── swipes ─────────────────────────
+    //
+    // Leitura liberada para from==me OU to==me (decisão consciente: a tela
+    // "Quem curtiu você" depende de ler swipes onde to==me, antes do match).
+    // Ninguém lê swipes de terceiros nem consegue "vasculhar" quem curtiu quem.
     match /swipes/{swipeId} {
-      allow read: if request.auth != null &&
-        (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
-      allow create: if request.auth != null && request.resource.data.from == request.auth.uid;
+      allow read: if isSignedIn()
+        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string
+        && request.resource.data.to != request.auth.uid
+        && swipeId == request.resource.data.from + '_' + request.resource.data.to
+        && request.resource.data.direction in ['like', 'nope', 'superlike']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt']);
+
+      allow update: if false; // swipe é imutável — nunca se reescreve, só se cria/apaga
+
+      allow delete: if isSignedIn() && resource.data.from == request.auth.uid; // usado por undoSwipe()
     }
 
-    // Matches: lê e escreve apenas participantes
+    // ───────────────────────── matches ─────────────────────────
     match /matches/{matchId} {
-      allow read, write: if request.auth != null &&
-        request.auth.uid in resource.data.users;
+      allow read: if isSignedIn() && request.auth.uid in resource.data.users;
 
-      // Mensagens dentro do match
+      allow create: if isSignedIn()
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.users[0] != request.resource.data.users[1]
+        && request.auth.uid in request.resource.data.users
+        && (matchId == request.resource.data.users[0] + '_' + request.resource.data.users[1]
+            || matchId == request.resource.data.users[1] + '_' + request.resource.data.users[0])
+        && mutualLikeExists(request.resource.data.users)
+        && request.resource.data.createdAt == request.time
+        && (!('typing' in request.resource.data) || request.resource.data.typing == {})
+        && request.resource.data.keys().hasOnly(['users', 'createdAt', 'lastMessage', 'lastMessageAt', 'typing']);
+
+      // Ninguém pode trocar os participantes depois de criado. Só lastMessage,
+      // lastMessageAt e typing podem mudar — e dentro de "typing", cada um só
+      // altera a própria chave (não dá pra forjar "a outra pessoa está digitando").
+      allow update: if isSignedIn() && request.auth.uid in resource.data.users
+        && request.resource.data.users == resource.data.users
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastMessage', 'lastMessageAt', 'typing'])
+        && (!('lastMessage' in request.resource.data) || request.resource.data.lastMessage is string)
+        && (!('lastMessageAt' in request.resource.data) || request.resource.data.lastMessageAt is timestamp)
+        && resource.data.get('typing', {}).diff(request.resource.data.get('typing', {}))
+             .affectedKeys().hasOnly([request.auth.uid]);
+
+      // Decisão: qualquer participante pode apagar o match a qualquer momento
+      // (usado hoje só por undoSwipe(), mas também funciona como "desfazer
+      // match"/unmatch geral). Débito técnico: mensagens da subcoleção ficam
+      // órfãs (inacessíveis, mas não deletadas) — limpeza real exigiria uma
+      // Cloud Function.
+      allow delete: if isSignedIn() && request.auth.uid in resource.data.users;
+
+      // ─────────────── matches/{matchId}/messages ───────────────
       match /messages/{messageId} {
-        allow read: if request.auth != null &&
-          request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users;
-        allow create: if request.auth != null &&
-          request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users &&
-          request.resource.data.senderId == request.auth.uid;
+        allow read: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users;
+
+        allow create: if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && (!('imageUrl' in request.resource.data) || request.resource.data.imageUrl is string)
+          && (!('location' in request.resource.data) ||
+              (request.resource.data.location.latitude is number
+               && request.resource.data.location.longitude is number))
+          // mensagem precisa ter algum conteúdo: texto OU foto OU localização
+          && (request.resource.data.text.size() > 0
+              || 'imageUrl' in request.resource.data
+              || 'location' in request.resource.data)
+          && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl', 'location']);
+
+        // O app não tem função de editar/apagar mensagem hoje — deny by
+        // default. Se um dia existir "apagar minha mensagem", trocar por:
+        // allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
       }
+    }
+
+    // ───────────────────────── reports / blocks (S19) ─────────────────────────
+    // Placeholder: quando a feature de denúncia/bloqueio entrar (roadmap S19),
+    // as regras entram aqui, por exemplo:
+    //   match /reports/{reportId} {
+    //     allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+    //     allow read, update, delete: if false; // só um admin via Cloud Function/Console deve ler denúncias
+    //   }
+    //   match /blocks/{blockId} {
+    //     allow read, create, delete: if isSignedIn() && blockId matches request.auth.uid + '_.*';
+    //   }
+
+    // ───────────────────────── deny by default ─────────────────────────
+    // Qualquer collection não listada acima (inclusive erros de digitação no
+    // nome de uma collection) é bloqueada por padrão.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
