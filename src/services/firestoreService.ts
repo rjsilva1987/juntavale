@@ -18,8 +18,18 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 import { db, storage } from '@/services/firebase';
+import { haversineDistanceKm } from '@/utils/geo';
 
 // ─── Types ───────────────────────────────────────────────
+
+export type Gender = 'masculino' | 'feminino' | 'outro';
+
+export interface DiscoverFilters {
+  ageMin: number;
+  ageMax: number;
+  maxDistance: number;
+  gender: Gender | 'all';
+}
 
 export interface UserProfile {
   uid: string;
@@ -29,7 +39,9 @@ export interface UserProfile {
   photoURL: string;
   photos: string[];
   interests: string[];
+  gender?: Gender;
   location?: { lat: number; lng: number };
+  filters?: DiscoverFilters;
   createdAt?: Timestamp;
 }
 
@@ -71,7 +83,11 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 
 // ─── Discovery ────────────────────────────────────────────
 
-export const getDiscoverProfiles = async (currentUid: string): Promise<UserProfile[]> => {
+export const getDiscoverProfiles = async (
+  currentUid: string,
+  filters?: DiscoverFilters,
+  currentLocation?: { lat: number; lng: number },
+): Promise<UserProfile[]> => {
   // Get already-swiped user IDs
   const swipesSnap = await getDocs(
     query(collection(db, 'swipes'), where('from', '==', currentUid)),
@@ -80,13 +96,25 @@ export const getDiscoverProfiles = async (currentUid: string): Promise<UserProfi
   swipedIds.push(currentUid);
 
   // Fetch all users not yet swiped (Firestore doesn't support NOT IN > 10 easily,
-  // so for production use a Cloud Function or pagination)
+  // so for production use a Cloud Function or pagination). Age/gender/distance
+  // filters are applied client-side here for the same reason — Firestore's
+  // client SDK has no geo-query support, so distance can't be pushed server-side.
   const usersSnap = await getDocs(collection(db, 'users'));
   const profiles: UserProfile[] = [];
   usersSnap.forEach((d) => {
-    if (!swipedIds.includes(d.id)) {
-      profiles.push(d.data() as UserProfile);
+    if (swipedIds.includes(d.id)) return;
+    const candidate = d.data() as UserProfile;
+
+    if (filters) {
+      if (candidate.age < filters.ageMin || candidate.age > filters.ageMax) return;
+      if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
+      if (currentLocation && candidate.location) {
+        const distance = haversineDistanceKm(currentLocation, candidate.location);
+        if (distance > filters.maxDistance) return;
+      }
     }
+
+    profiles.push(candidate);
   });
   return profiles;
 };

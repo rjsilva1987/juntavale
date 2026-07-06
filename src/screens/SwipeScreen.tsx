@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -18,11 +19,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { EmptyState } from '@/components/EmptyState';
+import { FilterModal } from '@/components/FilterModal';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
 import { RootStackParamList } from '@/navigation';
 import {
   getDiscoverProfiles,
@@ -44,11 +47,13 @@ interface LastSwipedProfile {
 export default function SwipeScreen() {
   const { user, profile } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { filters, saveFilters, clearFilters } = useFilters();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [matchedProfile, setMatchedProfile] = useState<UserProfile | null>(null);
   const [lastSwipedProfile, setLastSwipedProfile] = useState<LastSwipedProfile | null>(null);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   // Refs mirroring state so the JS-thread callback fired from a worklet
   // (via runOnJS) always reads the latest profile, not a stale closure.
@@ -72,7 +77,18 @@ export default function SwipeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await getDiscoverProfiles(user.uid);
+      let currentLocation = profile?.location;
+      if (!currentLocation) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const position = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+        }
+      }
+
+      const data = await getDiscoverProfiles(user.uid, filters, currentLocation);
       setProfiles(data);
       setCurrentIndex(0);
       setLastSwipedProfile(null);
@@ -83,7 +99,7 @@ export default function SwipeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, translateX, translateY]);
+  }, [user, profile?.location, filters, translateX, translateY]);
 
   useFocusEffect(
     useCallback(() => {
@@ -231,7 +247,7 @@ export default function SwipeScreen() {
           <Ionicons name="flame" size={26} color={theme.colors.secondary} />
           <Text style={styles.appTitle}>JuntaVale</Text>
         </View>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
           <Ionicons name="options-outline" size={26} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
@@ -325,6 +341,22 @@ export default function SwipeScreen() {
           }
         }}
         onContinue={() => setMatchedProfile(null)}
+      />
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={filterModalVisible}
+        filters={filters}
+        defaultFilters={DEFAULT_FILTERS}
+        onApply={(next) => {
+          setFilterModalVisible(false);
+          saveFilters(next);
+        }}
+        onClear={() => {
+          setFilterModalVisible(false);
+          clearFilters();
+        }}
+        onClose={() => setFilterModalVisible(false)}
       />
     </View>
   );
