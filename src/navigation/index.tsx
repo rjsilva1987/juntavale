@@ -1,9 +1,10 @@
 // src/navigation/index.tsx
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackScreenProps } from '@react-navigation/native-stack';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,10 +21,13 @@ import LikesScreen from '@/screens/LikesScreen';
 import LoginScreen from '@/screens/LoginScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
+import OnboardingScreen from '@/screens/OnboardingScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
 import VerificationScreen from '@/screens/VerificationScreen';
+
+const ONBOARDING_SEEN_KEY = '@juntavale:onboarding_seen';
 
 // Navigation Types
 export type RootStackParamList = {
@@ -135,12 +139,33 @@ export default function Navigation() {
   const { user, loading } = useAuth();
   useNotifications();
 
-  if (loading) {
+  // Resolvido em paralelo com o Auth (AsyncStorage não depende do Firebase) —
+  // null enquanto ainda não sabemos, true/false depois do getItem no mount.
+  const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_SEEN_KEY).then((value) => {
+      setOnboardingSeen(value === 'true');
+    });
+  }, []);
+
+  const handleOnboardingDone = () => {
+    AsyncStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+    setOnboardingSeen(true);
+  };
+
+  if (loading || onboardingSeen === null) {
     return (
       <View style={styles.splash}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
+  }
+
+  // Onboarding tem prioridade sobre o gate de auth: um usuário já logado
+  // numa reinstalação sem a flag também vê as telas de introdução.
+  if (!onboardingSeen) {
+    return <OnboardingScreen onDone={handleOnboardingDone} />;
   }
 
   return (
