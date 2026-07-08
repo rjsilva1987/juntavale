@@ -1,5 +1,17 @@
 // src/services/verificationService.ts
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  Timestamp,
+  where,
+} from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { db, storage } from '@/services/firebase';
@@ -12,6 +24,10 @@ export interface Verification {
   createdAt: Timestamp;
   reviewedAt?: Timestamp;
   reviewedBy?: string;
+}
+
+export interface PendingVerification extends Verification {
+  uid: string;
 }
 
 export const submitVerification = async (uid: string, imageUri: string): Promise<void> => {
@@ -36,4 +52,33 @@ export const submitVerification = async (uid: string, imageUri: string): Promise
 export const getVerificationStatus = async (uid: string): Promise<Verification | null> => {
   const snap = await getDoc(doc(db, 'verifications', uid));
   return snap.exists() ? (snap.data() as Verification) : null;
+};
+
+// Admin-only na prática: firestore.rules só permite este list() pra quem
+// bate com isAdmin() (validado no Firestore Emulator com o rules-unit-testing
+// antes desta função existir) — qualquer outro uid recebe permission-denied.
+export const getPendingVerifications = async (): Promise<PendingVerification[]> => {
+  const q = query(
+    collection(db, 'verifications'),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'asc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Verification) }));
+};
+
+// Só o admin consegue de fato escrever isso (firestore.rules exige
+// affectedKeys hasOnly(['status','reviewedAt','reviewedBy']) + uid == admin).
+// A Cloud Function onVerificationReviewed reage a esta mudança e sincroniza
+// users/{uid}.verified — não duplicar essa lógica aqui.
+export const reviewVerification = async (
+  uid: string,
+  status: 'approved' | 'rejected',
+  reviewerUid: string,
+): Promise<void> => {
+  await updateDoc(doc(db, 'verifications', uid), {
+    status,
+    reviewedAt: serverTimestamp(),
+    reviewedBy: reviewerUid,
+  });
 };

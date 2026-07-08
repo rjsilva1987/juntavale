@@ -22,6 +22,7 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { ADMIN_UID } from '@/config/admin';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -345,6 +346,17 @@ export default function ProfileScreen() {
           <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
           <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
         </AnimatedPressable>
+
+        {/* Painel Admin — só visível pra ADMIN_UID */}
+        {user?.uid === ADMIN_UID && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('AdminVerifications')}
+          >
+            <Ionicons name="briefcase-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Painel Admin</Text>
+          </AnimatedPressable>
+        )}
 
         {/* Logout */}
         <AnimatedPressable style={styles.logoutBtn} onPress={logout}>

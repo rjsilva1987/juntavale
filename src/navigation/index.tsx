@@ -12,6 +12,8 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { navigationRef } from '@/navigation/navigationRef';
+import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScreen';
+import AdminVerificationsScreen from '@/screens/AdminVerificationsScreen';
 import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
 import LikesScreen from '@/screens/LikesScreen';
@@ -32,6 +34,8 @@ export type RootStackParamList = {
   MatchProfile: { uid: string; matchId: string; name: string; photoURL?: string };
   BlockedUsers: undefined;
   Verification: undefined;
+  AdminVerifications: undefined;
+  AdminVerificationDetail: { uid: string };
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -121,6 +125,8 @@ function AppStack() {
       <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="Verification" component={VerificationScreen} />
+      <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
+      <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
     </Stack.Navigator>
   );
 }
