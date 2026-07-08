@@ -1,4 +1,4 @@
-# JuntaVale 💙💛
+# JuntaVale 💛❤️
 > App estilo Tinder, com cards de swipe, matches e chat em tempo real
 > React Native (Expo) + Firebase — **projeto: bbmatch-9ede5**
 
@@ -29,26 +29,60 @@ Seu projeto Firebase está conectado:
 ## 🗂 Estrutura do projeto
 
 ```
-bbmatch/
-├── App.tsx                        # Raiz do app
-├── app.json                       # Config Expo
-├── eas.json                       # Config build (lojas)
-├── firestore.rules                # Regras de segurança
+juntavale/
+├── App.tsx                          # Raiz do app
+├── app.json                         # Config Expo
+├── app.config.js                    # Wrapper de config (injeta GOOGLE_SERVICES_JSON via env)
+├── eas.json                         # Config build/submit (EAS)
+├── firestore.rules                  # Regras de segurança do Firestore
+├── functions/                       # Cloud Functions (Firebase)
 ├── src/
-│   ├── theme/index.ts             # Paleta de cores
-│   ├── contexts/AuthContext.tsx   # Auth global
+│   ├── constants/
+│   │   ├── theme.ts                 # Paleta de cores, spacing, tipografia
+│   │   ├── globalStyles.ts
+│   │   └── media.ts
+│   ├── contexts/
+│   │   └── AuthContext.tsx          # Auth global
 │   ├── services/
-│   │   ├── firebase.ts            # ✅ Firebase configurado
-│   │   └── firestoreService.ts    # Usuários, swipes, matches, chat
-│   ├── navigation/index.tsx       # Rotas
+│   │   ├── firebase.ts              # ✅ Firebase configurado
+│   │   ├── firestoreService.ts      # Usuários, swipes, matches, chat
+│   │   ├── notifications.ts
+│   │   ├── blockService.ts
+│   │   └── verificationService.ts
+│   ├── hooks/
+│   │   ├── useFilters.ts
+│   │   ├── useNotifications.ts
+│   │   └── useTypingIndicator.ts
+│   ├── components/
+│   │   ├── PhotoCarousel.tsx
+│   │   ├── MatchModal.tsx
+│   │   ├── FilterModal.tsx
+│   │   ├── ReportModal.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── EmptyState.tsx
+│   │   ├── SkeletonPlaceholder.tsx
+│   │   ├── AnimatedPressable.tsx
+│   │   └── VerifiedBadge.tsx
+│   ├── navigation/
+│   │   ├── index.tsx                # Rotas
+│   │   ├── navigationRef.ts
+│   │   └── useChatDeepLink.ts
+│   ├── utils/geo.ts
+│   ├── config/admin.ts
 │   └── screens/
+│       ├── OnboardingScreen.tsx
 │       ├── LoginScreen.tsx
 │       ├── RegisterScreen.tsx
-│       ├── SwipeScreen.tsx        # Swipe com gestos (gesture-handler + reanimated)
+│       ├── SwipeScreen.tsx          # Swipe com gestos (gesture-handler + reanimated)
 │       ├── LikesScreen.tsx
 │       ├── MatchesScreen.tsx
-│       ├── ChatScreen.tsx         # Chat em tempo real
-│       └── ProfileScreen.tsx
+│       ├── MatchProfileScreen.tsx
+│       ├── ChatScreen.tsx           # Chat em tempo real
+│       ├── ProfileScreen.tsx
+│       ├── VerificationScreen.tsx
+│       ├── BlockedUsersScreen.tsx
+│       ├── AdminVerificationsScreen.tsx
+│       └── AdminVerificationDetailScreen.tsx
 ```
 
 ---
@@ -68,12 +102,15 @@ npx expo start
 
 ---
 
-## 📦 Publicar nas lojas
+## 🌎 Ambientes EAS (development / preview / production)
 
-### Pré-requisitos
-- Conta no Expo: https://expo.dev (grátis)
-- Conta Google Play Developer: $25 (única vez)
-- Conta Apple Developer: $99/ano
+O projeto usa 3 profiles de build no `eas.json`, cada um vinculado a um ambiente de variáveis do EAS (`environment`):
+
+| Profile | Distribution | Environment | Uso |
+|---|---|---|---|
+| `development` | internal | development | Dev client, testes locais em device |
+| `preview` | internal (APK) | preview | Builds de teste interno, QA |
+| `production` | store (AAB / IPA) | production | Build final para as lojas |
 
 ### Comandos
 
@@ -84,44 +121,57 @@ npm install -g eas-cli
 # Faça login no Expo
 eas login
 
-# Configure o projeto
-eas init
+# Build de desenvolvimento (dev client)
+eas build --platform android --profile development
 
-# Build Android (Google Play)
+# Build de preview (APK, distribuição interna)
+eas build --platform android --profile preview
+
+# Build de produção — Android (App Bundle)
 eas build --platform android --profile production
 
-# Build iOS (App Store)
+# Build de produção — iOS
 eas build --platform ios --profile production
 
 # Enviar para o Google Play
-eas submit --platform android
+eas submit --platform android --profile production
 
 # Enviar para a App Store
-eas submit --platform ios
+eas submit --platform ios --profile production
 ```
+
+> ⚠️ O bloco `submit.production` do `eas.json` ainda tem placeholders (`appleId`, `ascAppId`, `appleTeamId`) — precisam ser preenchidos com os dados reais antes de rodar `eas submit --platform ios`.
 
 ---
 
 ## 🎨 Paleta de cores
 
+Paleta atual definida em [`src/constants/theme.ts`](src/constants/theme.ts) — tons coral/quentes:
+
 | Token | Hex | Uso |
 |-------|-----|-----|
-| `primary` | `#2F6FED` | Links, seleção, tags ativas, bolha de mensagem própria |
-| `primaryLight` | `#EAF1FF` | Fundos sutis, placeholders |
-| `accent` | `#FFC93C` | Botões de ação (CTA), super like, destaques |
-| `like` | `#4CD964` | Curtir / status online |
-| `nope` | `#FF5864` | Dispensar |
+| `primary` | `#FD3A69` | Cor principal, botões, destaques |
+| `primaryDark` | `#D81E52` | Variação escura do primary |
+| `primaryLight` | `#FFE3EA` | Fundos sutis, placeholders |
+| `secondary` | `#FF7A5C` | Cor secundária, CTAs |
+| `secondaryDark` | `#E85A3C` | Variação escura do secondary |
+| `like` | `#3DAA6B` | Curtir / status online |
+| `nope` | `#E5484D` | Dispensar |
+| `superLike` | `#3B82F6` | Super like |
+
+O splash screen e o ícone adaptativo (Android) usam `#D84545` (coral) como `backgroundColor`, definido no `app.json`.
 
 ---
 
 ## 📋 Checklist final antes de publicar
 
 - [x] Firebase configurado (`bbmatch-9ede5`)
+- [x] Ícones e splash definitivos em `assets/`
 - [ ] Ativar Authentication (e-mail/senha)
 - [ ] Criar Firestore em `southamerica-east1`
 - [ ] Criar Storage em `southamerica-east1`
 - [ ] Publicar `firestore.rules`
-- [ ] Substituir os ícones/splash em `assets/` pela identidade visual do JuntaVale (1024×1024px para `icon.png`, 1242×2436px para `splash.png`)
+- [ ] Preencher `submit.production` no `eas.json` (Apple ID / ASC App ID / Team ID)
 - [ ] Testar em dispositivo físico (Android e iOS)
 - [ ] Criar contas nas lojas (Google Play / Apple)
 - [ ] Rodar `eas build` e `eas submit`

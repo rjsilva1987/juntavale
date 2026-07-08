@@ -46,6 +46,6 @@ yarn-error.*
 
 google-services.json
 *-firebase-adminsdk-*.json
-
-google-services.json
-*-firebase-adminsdk-*.json
+google-play-key.json
+*-key.json
+serviceAccountKey.json
