@@ -1,0 +1,90 @@
+// storage.rules
+// Regras de PRODUÇÃO — deny by default: todo caminho sem regra explícita é
+// bloqueado (ver o catch-all no final do arquivo).
+//
+// Como aplicar (só quando estiver pronto pra testar):
+//   1) Console: Firebase Console → Storage → Regras → colar este arquivo → Publicar
+//   2) CLI: firebase deploy --only storage:rules
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ───────────────────────── Helpers ─────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Limite de 10MB + exige content-type image/* em todo upload de foto.
+    // Só se aplica em write (request.resource não existe em read).
+    function isValidImage() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // ───────────────────────── avatars ─────────────────────────
+    //
+    // Nome do arquivo é sempre "{uid}.jpg" (ver ProfileScreen.tsx
+    // handlePickPhoto), então dá pra confirmar dono comparando o nome do
+    // arquivo com o uid autenticado, sem precisar de subpath novo.
+    //
+    // ANTES: "allow read, write: if request.auth != null" — qualquer usuário
+    // logado conseguia SOBRESCREVER o avatar de qualquer outro (bastava saber
+    // o uid alheio, que já é público via users/{uid}). Corrigido abaixo: write
+    // exige que o nome do arquivo bata com o próprio uid.
+    //
+    // read continua amplo de propósito: Descobrir/Swipe mostra a foto de
+    // qualquer perfil pra qualquer usuário autenticado.
+    match /avatars/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && fileName == request.auth.uid + '.jpg'
+        && isValidImage();
+    }
+
+    // ───────────────────────── chat images ─────────────────────────
+    //
+    // Corrige o bug "Não foi possível enviar a imagem": uploadChatImage()
+    // (src/services/firestoreService.ts) sobe em images/chats/{matchId}/{ts}.jpg,
+    // caminho que não batia com NENHUMA regra existente (só avatars/ tinha
+    // regra) e caía no deny-by-default do Storage — todo upload de foto no
+    // chat retornava storage/unauthorized.
+    //
+    // Restrito aos dois participantes do match, checado via firestore.get()
+    // (cross-service rules — sintaxe própria do Storage Rules v2, diferente
+    // do get()/exists() do Firestore Rules: aqui é sempre firestore.get(path)
+    // com o path completo /databases/(default)/documents/...). Espelha o
+    // mesmo check de participante que já existe em firestore.rules pra
+    // matches/{matchId}/messages.
+    match /images/chats/{matchId}/{fileName} {
+      function isParticipant() {
+        return isSignedIn()
+          && request.auth.uid in
+             firestore.get(/databases/(default)/documents/matches/$(matchId)).data.users;
+      }
+
+      allow read: if isParticipant();
+      allow write: if isParticipant() && isValidImage();
+    }
+
+    // ───────────────────────── verifications (S20) ─────────────────────────
+    //
+    // Selfie de verificação de perfil. NUNCA pública: só o dono sobe, só o
+    // dono ou o admin leem. Uid do admin hardcoded de propósito — Storage
+    // Rules não importa src/config/admin.ts, então este valor precisa ficar
+    // em sincronia manual com ADMIN_UID no app e com o mesmo literal em
+    // firestore.rules.
+    match /verifications/{uid}/{fileName} {
+      allow read: if isSignedIn()
+        && (request.auth.uid == uid || request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3');
+      allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
+    }
+
+    // ───────────────────────── deny by default ─────────────────────────
+    // Qualquer caminho não listado acima é bloqueado por padrão.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

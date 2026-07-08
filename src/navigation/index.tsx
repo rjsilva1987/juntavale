@@ -21,6 +21,7 @@ import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
+import VerificationScreen from '@/screens/VerificationScreen';
 
 // Navigation Types
 export type RootStackParamList = {
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
   MatchProfile: { uid: string; matchId: string; name: string; photoURL?: string };
   BlockedUsers: undefined;
+  Verification: undefined;
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -118,6 +120,7 @@ function AppStack() {
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+      <Stack.Screen name="Verification" component={VerificationScreen} />
     </Stack.Navigator>
   );
 }

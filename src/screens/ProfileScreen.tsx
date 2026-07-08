@@ -21,6 +21,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -216,7 +217,10 @@ export default function ProfileScreen() {
           </AnimatedPressable>
           {!editing && (
             <>
-              <Text style={styles.profileName}>{profile?.name}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.profileName}>{profile?.name}</Text>
+                {profile?.verified && <VerifiedBadge size={18} />}
+              </View>
               <Text style={styles.profileAge}>{profile?.age} anos</Text>
             </>
           )}
@@ -317,6 +321,21 @@ export default function ProfileScreen() {
             )}
           </View>
         )}
+
+        {/* Verificação de perfil */}
+        <AnimatedPressable
+          style={styles.blockedUsersBtn}
+          onPress={() => navigation.navigate('Verification')}
+        >
+          <Ionicons
+            name={profile?.verified ? 'shield-checkmark' : 'shield-checkmark-outline'}
+            size={20}
+            color={theme.colors.textSecondary}
+          />
+          <Text style={styles.blockedUsersText}>
+            {profile?.verified ? 'Perfil verificado' : 'Verificar perfil'}
+          </Text>
+        </AnimatedPressable>
 
         {/* Usuários bloqueados */}
         <AnimatedPressable
@@ -429,6 +448,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.colors.white,
   },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   profileName: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   profileAge: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 2 },
 

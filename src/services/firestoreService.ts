@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
+import { ADMIN_UID } from '@/config/admin';
 import { db, storage } from '@/services/firebase';
 import { haversineDistanceKm } from '@/utils/geo';
 
@@ -44,6 +45,7 @@ export interface UserProfile {
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
   blockedUsers?: string[];
+  verified?: boolean;
 }
 
 export interface Match {
@@ -96,7 +98,8 @@ export const getDiscoverProfiles = async (
     query(collection(db, 'swipes'), where('from', '==', currentUid)),
   );
   const swipedIds = swipesSnap.docs.map((d) => d.data().to as string);
-  swipedIds.push(currentUid, ...(blockedUsers ?? []));
+  // ADMIN_UID nunca aparece no Descobrir, mesmo sem bloqueio/swipe prévio.
+  swipedIds.push(currentUid, ADMIN_UID, ...(blockedUsers ?? []));
 
   // Fetch all users not yet swiped (Firestore doesn't support NOT IN > 10 easily,
   // so for production use a Cloud Function or pagination). Age/gender/distance

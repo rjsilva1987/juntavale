@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -81,10 +82,13 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
             </View>
 
             <View style={styles.infoCard}>
-              <Text style={styles.name}>
-                {profile?.name ?? name}
-                {profile?.age ? `, ${profile.age}` : ''}
-              </Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.name}>
+                  {profile?.name ?? name}
+                  {profile?.age ? `, ${profile.age}` : ''}
+                </Text>
+                {profile?.verified && <VerifiedBadge size={18} />}
+              </View>
 
               {!!profile?.bio && (
                 <>
@@ -166,6 +170,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     ...theme.shadows.medium,
   },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   sectionTitle: {
     fontSize: theme.fontSize.sm,

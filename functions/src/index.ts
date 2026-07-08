@@ -1,7 +1,11 @@
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { onDocumentCreated, onDocumentDeleted } from 'firebase-functions/v2/firestore';
+import {
+  onDocumentCreated,
+  onDocumentDeleted,
+  onDocumentUpdated,
+} from 'firebase-functions/v2/firestore';
 
 initializeApp();
 
@@ -179,5 +183,27 @@ export const onBlockDeleted = onDocumentDeleted(
         .filter((_, i) => matchSnaps[i].exists)
         .map((ref) => ref.update({ blockedBy: FieldValue.arrayRemove(blocker) })),
     ]);
+  },
+);
+
+// verified (S20) é escrito só por aqui (Admin SDK) — o client nunca consegue
+// setá-lo, ver firestore.rules (users/{userId} não tem 'verified' na
+// hasOnly() de create/update). O client só consegue mudar o status do pedido
+// pra 'pending'; só o admin consegue mudar pra 'approved'/'rejected' (ver
+// firestore.rules, match /verifications/{uid}) — esta function reage a essa
+// mudança e sincroniza o booleano no perfil.
+export const onVerificationReviewed = onDocumentUpdated(
+  { document: 'verifications/{uid}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return;
+
+    if (after.status === 'approved') {
+      await db.doc(`users/${event.params.uid}`).update({ verified: true });
+    } else if (after.status === 'rejected') {
+      await db.doc(`users/${event.params.uid}`).update({ verified: false });
+    }
   },
 );

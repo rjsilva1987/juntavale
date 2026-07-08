@@ -23,6 +23,7 @@ import { FilterModal } from '@/components/FilterModal';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
@@ -390,9 +391,12 @@ function ProfileCard({ profile, pagerNativeGesture }: ProfileCardProps) {
       )}
       <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={pcStyles.gradient} />
       <View style={pcStyles.info}>
-        <Text style={pcStyles.name}>
-          {profile.name}, {profile.age}
-        </Text>
+        <View style={pcStyles.nameRow}>
+          <Text style={pcStyles.name}>
+            {profile.name}, {profile.age}
+          </Text>
+          {profile.verified && <VerifiedBadge size={18} />}
+        </View>
         <Text style={pcStyles.bio} numberOfLines={2}>
           {profile.bio || 'Sem bio ainda…'}
         </Text>
@@ -532,11 +536,11 @@ const pcStyles = StyleSheet.create({
     right: 0,
     padding: 20,
   },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   name: {
     fontSize: theme.fontSize.xl,
     fontWeight: '700',
     color: theme.colors.white,
-    marginBottom: 4,
   },
   bio: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

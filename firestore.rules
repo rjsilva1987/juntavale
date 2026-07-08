@@ -122,11 +122,15 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if isSignedIn() && request.auth.uid in resource.data.users;
 
+      // Uid da conta admin, hardcoded de propósito: Rules não importa
+      // src/config/admin.ts, então este valor precisa ser mantido em sincronia
+      // manual com ADMIN_UID no app. Ninguém dá match com o admin, nem via API.
       allow create: if isSignedIn()
         && request.resource.data.users is list
         && request.resource.data.users.size() == 2
         && request.resource.data.users[0] != request.resource.data.users[1]
         && request.auth.uid in request.resource.data.users
+        && !('Gd0pJi8WjYS60JHOnhIx9R6vktJ3' in request.resource.data.users)
         && (matchId == request.resource.data.users[0] + '_' + request.resource.data.users[1]
             || matchId == request.resource.data.users[1] + '_' + request.resource.data.users[0])
         && mutualLikeExists(request.resource.data.users)
@@ -231,6 +235,51 @@ service cloud.firestore {
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt']);
 
       allow read, update, delete: if false;
+    }
+
+    // ───────────────────────── verifications (S20) ─────────────────────────
+    //
+    // Pedido de verificação de perfil (selfie). Doc id == uid do usuário — 1
+    // pedido por pessoa, reenviar sobrescreve o documento inteiro (por isso o
+    // client precisa usar setDoc sem merge: um updateDoc parcial deixaria
+    // reviewedAt/reviewedBy antigos no doc e o hasOnly() do dono abaixo
+    // rejeitaria o reenvio).
+    //
+    // Uid do admin hardcoded de propósito (mesmo valor de ADMIN_UID em
+    // src/config/admin.ts e do literal já usado na regra de create de
+    // matches/{matchId} acima — Rules não importa constantes do app, então
+    // os três precisam ficar em sincronia manual). A Cloud Function
+    // onVerificationReviewed (Admin SDK, ignora estas regras) é quem
+    // sincroniza users/{uid}.verified a partir da mudança de status aqui —
+    // ver functions/src/index.ts.
+    match /verifications/{uid} {
+      function isAdmin() {
+        return isSignedIn() && request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3';
+      }
+
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Dono cria/reenvia: só como 'pending', com selfieUrl e createdAt —
+      // nunca consegue setar status já aprovado/rejeitado nem escrever
+      // reviewedAt/reviewedBy (hasOnly bloqueia por padrão).
+      allow create, update: if isOwner(uid)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.selfieUrl is string
+        && request.resource.data.selfieUrl.size() > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly(['status', 'selfieUrl', 'createdAt']);
+
+      // Admin revisa: só pode mexer em status/reviewedAt/reviewedBy, e só pra
+      // aprovar ou rejeitar — nunca reescreve selfieUrl/createdAt do usuário,
+      // então não dá pra forjar uma aprovação por essa via nem pela do dono.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.reviewedBy == request.auth.uid;
+
+      allow delete: if false;
     }
 
     // ───────────────────────── deny by default ─────────────────────────
