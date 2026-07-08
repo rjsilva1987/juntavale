@@ -42,9 +42,10 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         }),
       );
       const blockedUsers = profile?.blockedUsers ?? [];
-      const visible = enriched.filter(
-        (m) => !m.otherProfile || !blockedUsers.includes(m.otherProfile.uid),
-      );
+      const visible = enriched.filter((m) => {
+        if (m.blockedBy && m.blockedBy.length > 0) return false;
+        return !m.otherProfile || !blockedUsers.includes(m.otherProfile.uid);
+      });
       // Sort by most recent message
       visible.sort((a, b) => {
         const ta = a.lastMessageAt?.toMillis() ?? 0;

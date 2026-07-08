@@ -52,6 +52,7 @@ export interface Match {
   lastMessage?: string;
   lastMessageAt?: Timestamp;
   typing?: Record<string, boolean>;
+  blockedBy?: string[];
 }
 
 export interface Message {
@@ -243,5 +244,17 @@ export const listenTypingStatus = (
     const data = snap.data() as Match | undefined;
     const otherUid = data?.users?.find((u) => u !== currentUid);
     callback(Boolean(otherUid && data?.typing?.[otherUid]));
+  });
+};
+
+// ─── Block status (S19) ─────────────────────────────────────
+
+export const listenMatchBlockStatus = (
+  matchId: string,
+  callback: (blockedBy: string[]) => void,
+) => {
+  return onSnapshot(doc(db, 'matches', matchId), (snap) => {
+    const data = snap.data() as Match | undefined;
+    callback(data?.blockedBy ?? []);
   });
 };

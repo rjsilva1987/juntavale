@@ -20,6 +20,18 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    // Evita repetir o texto do get() de matches/{matchId} nas regras abaixo.
+    function getMatch(matchId) {
+      return get(/databases/$(database)/documents/matches/$(matchId)).data;
+    }
+
+    // Recebe o match já lido (getMatch chamado 1x pelo caller) em vez de
+    // chamar getMatch de novo aqui — Rules não tem 'let', então isso é o jeito
+    // de checar duas condições sobre o mesmo doc com um único get() faturado.
+    function matchAllowsPost(m, uid) {
+      return uid in m.users && m.get('blockedBy', []).size() == 0;
+    }
+
     // Campos que o dono do perfil pode criar/editar. Qualquer campo fora desta
     // lista (ex: um futuro "isAdmin" ou "verified") NUNCA pode ser escrito pelo
     // client, mesmo que alguém adicione o campo no app no futuro e esqueça de
@@ -120,11 +132,14 @@ service cloud.firestore {
         && mutualLikeExists(request.resource.data.users)
         && request.resource.data.createdAt == request.time
         && (!('typing' in request.resource.data) || request.resource.data.typing == {})
+        // blockedBy (S19) é de propósito ausente desta lista: só a Cloud
+        // Function onBlockCreated/onBlockDeleted (Admin SDK) pode escrevê-lo.
         && request.resource.data.keys().hasOnly(['users', 'createdAt', 'lastMessage', 'lastMessageAt', 'typing']);
 
       // Ninguém pode trocar os participantes depois de criado. Só lastMessage,
-      // lastMessageAt e typing podem mudar — e dentro de "typing", cada um só
-      // altera a própria chave (não dá pra forjar "a outra pessoa está digitando").
+      // lastMessageAt e typing podem mudar (blockedBy também fica de fora daqui
+      // pelo mesmo motivo acima) — e dentro de "typing", cada um só altera a
+      // própria chave (não dá pra forjar "a outra pessoa está digitando").
       allow update: if isSignedIn() && request.auth.uid in resource.data.users
         && request.resource.data.users == resource.data.users
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -144,10 +159,13 @@ service cloud.firestore {
       // ─────────────── matches/{matchId}/messages ───────────────
       match /messages/{messageId} {
         allow read: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users;
+          && request.auth.uid in getMatch(matchId).users;
 
+        // blockedBy vazio/ausente (S19) é exigido no create: enquanto alguém
+        // tiver o match bloqueado, ninguém — nem quem bloqueou, nem quem foi
+        // bloqueado — consegue mandar mensagem, mesmo direto pela API.
         allow create: if isSignedIn()
-          && request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users
+          && matchAllowsPost(getMatch(matchId), request.auth.uid)
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000

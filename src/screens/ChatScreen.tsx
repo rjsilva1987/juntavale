@@ -33,7 +33,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
-import { listenMessages, sendMessage, uploadChatImage, Message } from '@/services/firestoreService';
+import {
+  listenMessages,
+  listenMatchBlockStatus,
+  sendMessage,
+  uploadChatImage,
+  Message,
+} from '@/services/firestoreService';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
 
@@ -50,6 +56,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [reportVisible, setReportVisible] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [blockedBy, setBlockedBy] = useState<string[]>([]);
+  const isBlocked = blockedBy.length > 0;
   const flatListRef = React.useRef<FlatList>(null);
   const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
 
@@ -62,9 +70,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return unsub;
   }, [matchId]);
 
+  useEffect(() => {
+    const unsub = listenMatchBlockStatus(matchId, setBlockedBy);
+    return unsub;
+  }, [matchId]);
+
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !user) return;
+    if (!trimmed || !user || isBlocked) return;
     setText('');
     try {
       await sendMessage(matchId, user.uid, trimmed);
@@ -77,7 +90,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   const handleSendImage = async (uri: string) => {
-    if (!user) return;
+    if (!user || isBlocked) return;
     setUploadProgress(0);
     try {
       const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
@@ -118,7 +131,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   const handleShareLocation = async () => {
     setAttachSheetVisible(false);
-    if (!user) return;
+    if (!user || isBlocked) return;
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
@@ -354,31 +367,41 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           )}
 
           {/* Input */}
-          <View style={styles.inputRow}>
-            <AnimatedPressable style={styles.inputIcon} onPress={() => setAttachSheetVisible(true)}>
-              <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
-            </AnimatedPressable>
-            <TextInput
-              style={styles.input}
-              placeholder={`Mensagem para ${otherName}…`}
-              placeholderTextColor={theme.colors.textLight}
-              value={text}
-              onChangeText={handleChangeText}
-              multiline
-              maxLength={500}
-            />
-            <AnimatedPressable
-              style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!text.trim()}
-            >
-              <Ionicons
-                name="send"
-                size={18}
-                color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+          {isBlocked ? (
+            <View style={styles.blockedBanner}>
+              <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedBannerText}>Conversa indisponível</Text>
+            </View>
+          ) : (
+            <View style={styles.inputRow}>
+              <AnimatedPressable
+                style={styles.inputIcon}
+                onPress={() => setAttachSheetVisible(true)}
+              >
+                <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
+              </AnimatedPressable>
+              <TextInput
+                style={styles.input}
+                placeholder={`Mensagem para ${otherName}…`}
+                placeholderTextColor={theme.colors.textLight}
+                value={text}
+                onChangeText={handleChangeText}
+                multiline
+                maxLength={500}
               />
-            </AnimatedPressable>
-          </View>
+              <AnimatedPressable
+                style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!text.trim()}
+              >
+                <Ionicons
+                  name="send"
+                  size={18}
+                  color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+                />
+              </AnimatedPressable>
+            </View>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
 
@@ -629,6 +652,19 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   inputIcon: { padding: 6, paddingBottom: 8 },
+
+  blockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.white,
+    padding: theme.spacing.md,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  blockedBannerText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+
   input: {
     flex: 1,
     backgroundColor: theme.colors.surface,

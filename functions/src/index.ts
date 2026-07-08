@@ -139,11 +139,21 @@ export const onBlockCreated = onDocumentCreated(
 
     const { blocker, blocked } = snap.data() as { blocker: string; blocked: string };
 
+    // Arquiva o match (em vez de apagar) para que desbloquear restaure a
+    // conversa inteira. blockedBy é escrito só por aqui (Admin SDK) — o
+    // client nunca consegue setar esse campo, ver firestore.rules.
+    const matchRefs = [
+      db.doc(`matches/${blocker}_${blocked}`),
+      db.doc(`matches/${blocked}_${blocker}`),
+    ];
+    const matchSnaps = await Promise.all(matchRefs.map((ref) => ref.get()));
+
     await Promise.all([
       db.doc(`users/${blocker}`).update({ blockedUsers: FieldValue.arrayUnion(blocked) }),
       db.doc(`users/${blocked}`).update({ blockedUsers: FieldValue.arrayUnion(blocker) }),
-      db.doc(`matches/${blocker}_${blocked}`).delete(),
-      db.doc(`matches/${blocked}_${blocker}`).delete(),
+      ...matchRefs
+        .filter((_, i) => matchSnaps[i].exists)
+        .map((ref) => ref.update({ blockedBy: FieldValue.arrayUnion(blocker) })),
     ]);
   },
 );
@@ -156,9 +166,18 @@ export const onBlockDeleted = onDocumentDeleted(
 
     const { blocker, blocked } = snap.data() as { blocker: string; blocked: string };
 
+    const matchRefs = [
+      db.doc(`matches/${blocker}_${blocked}`),
+      db.doc(`matches/${blocked}_${blocker}`),
+    ];
+    const matchSnaps = await Promise.all(matchRefs.map((ref) => ref.get()));
+
     await Promise.all([
       db.doc(`users/${blocker}`).update({ blockedUsers: FieldValue.arrayRemove(blocked) }),
       db.doc(`users/${blocked}`).update({ blockedUsers: FieldValue.arrayRemove(blocker) }),
+      ...matchRefs
+        .filter((_, i) => matchSnaps[i].exists)
+        .map((ref) => ref.update({ blockedBy: FieldValue.arrayRemove(blocker) })),
     ]);
   },
 );
