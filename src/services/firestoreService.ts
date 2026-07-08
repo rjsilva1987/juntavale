@@ -179,6 +179,11 @@ export const getMatches = (uid: string, callback: (matches: Match[]) => void) =>
   });
 };
 
+export const getMatchById = async (matchId: string): Promise<Match | null> => {
+  const snap = await getDoc(doc(db, 'matches', matchId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Match) : null;
+};
+
 // ─── Messages ─────────────────────────────────────────────
 
 export const sendMessage = async (

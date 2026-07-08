@@ -12,7 +12,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
+import { useChatDeepLink } from '@/navigation/useChatDeepLink';
 import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScreen';
 import AdminVerificationsScreen from '@/screens/AdminVerificationsScreen';
 import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
@@ -138,6 +140,7 @@ function AppStack() {
 export default function Navigation() {
   const { user, loading } = useAuth();
   useNotifications();
+  const { onNavigationReady } = useChatDeepLink(user?.uid);
 
   // Resolvido em paralelo com o Auth (AsyncStorage não depende do Firebase) —
   // null enquanto ainda não sabemos, true/false depois do getItem no mount.
@@ -169,7 +172,7 @@ export default function Navigation() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking} onReady={onNavigationReady}>
       {user ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
