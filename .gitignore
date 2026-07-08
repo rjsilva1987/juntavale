@@ -43,3 +43,9 @@ yarn-error.*
 # Editor
 .vscode/
 .idea/
+
+google-services.json
+*-firebase-adminsdk-*.json
+
+google-services.json
+*-firebase-adminsdk-*.json

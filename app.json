@@ -27,6 +27,7 @@
         "backgroundColor": "#D84545"
       },
       "package": "com.juntavale.app",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
