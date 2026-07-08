@@ -12,10 +12,12 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { navigationRef } from '@/navigation/navigationRef';
+import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
 import LikesScreen from '@/screens/LikesScreen';
 import LoginScreen from '@/screens/LoginScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
+import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
@@ -26,6 +28,8 @@ export type RootStackParamList = {
   Register: undefined;
   Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
   Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
+  MatchProfile: { uid: string; matchId: string; name: string; photoURL?: string };
+  BlockedUsers: undefined;
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -112,6 +116,8 @@ function AppStack() {
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
       <Stack.Screen name="Main" component={MainTabs} />
       <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
     </Stack.Navigator>
   );
 }

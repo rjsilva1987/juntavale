@@ -25,12 +25,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { ReportModal } from '@/components/ReportModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
+import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { listenMessages, sendMessage, uploadChatImage, Message } from '@/services/firestoreService';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
@@ -44,6 +46,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
+  const [optionsSheetVisible, setOptionsSheetVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const flatListRef = React.useRef<FlatList>(null);
@@ -140,6 +144,43 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }
   };
 
+  const handleViewProfile = () => {
+    setOptionsSheetVisible(false);
+    navigation.navigate('MatchProfile', {
+      uid: otherUid,
+      matchId,
+      name: otherName,
+      photoURL: otherPhoto,
+    });
+  };
+
+  const handleBlock = () => {
+    setOptionsSheetVisible(false);
+    if (!user) return;
+    Alert.alert(
+      'Bloquear usuário?',
+      `Você deixará de ver ${otherName} e o match será desfeito. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Bloquear',
+          style: 'destructive',
+          onPress: async () => {
+            await blockUser(user.uid, otherUid);
+            navigation.navigate('Main', { screen: 'Conversas' });
+          },
+        },
+      ],
+    );
+  };
+
+  const handleReport = async (reason: ReportReason, details: string) => {
+    if (!user) return;
+    await reportUser(user.uid, otherUid, reason, details);
+    setReportVisible(false);
+    Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
+  };
+
   const handleOpenLocation = (location: { latitude: number; longitude: number }) => {
     const url = Platform.select({
       ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
@@ -228,7 +269,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
-          <View style={styles.headerInfo}>
+          <AnimatedPressable style={styles.headerInfo} onPress={handleViewProfile}>
             {otherPhoto ? (
               <Image
                 source={{ uri: otherPhoto }}
@@ -257,8 +298,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 {isOtherTyping ? 'digitando...' : 'Online agora'}
               </Text>
             </View>
-          </View>
-          <AnimatedPressable>
+          </AnimatedPressable>
+          <AnimatedPressable onPress={() => setOptionsSheetVisible(true)}>
             <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.text} />
           </AnimatedPressable>
         </View>
@@ -388,6 +429,52 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           )}
         </Pressable>
       </Modal>
+
+      {/* Options action sheet (perfil / denunciar / bloquear) */}
+      <Modal
+        visible={optionsSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOptionsSheetVisible(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setOptionsSheetVisible(false)}>
+          <View style={styles.sheet}>
+            <AnimatedPressable style={styles.sheetOption} onPress={handleViewProfile}>
+              <Ionicons name="person-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Ver perfil</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                setOptionsSheetVisible(false);
+                setReportVisible(true);
+              }}
+            >
+              <Ionicons name="flag-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Denunciar</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable style={styles.sheetOption} onPress={handleBlock}>
+              <Ionicons name="ban-outline" size={22} color={theme.colors.nope} />
+              <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>Bloquear</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetGap} />
+            <AnimatedPressable
+              style={styles.sheetCancel}
+              onPress={() => setOptionsSheetVisible(false)}
+            >
+              <Text style={styles.sheetCancelText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <ReportModal
+        visible={reportVisible}
+        onClose={() => setReportVisible(false)}
+        onSubmit={handleReport}
+      />
     </Animated.View>
   );
 }

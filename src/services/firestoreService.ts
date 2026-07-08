@@ -43,6 +43,7 @@ export interface UserProfile {
   location?: { lat: number; lng: number };
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
+  blockedUsers?: string[];
 }
 
 export interface Match {
@@ -87,13 +88,14 @@ export const getDiscoverProfiles = async (
   currentUid: string,
   filters?: DiscoverFilters,
   currentLocation?: { lat: number; lng: number },
+  blockedUsers?: string[],
 ): Promise<UserProfile[]> => {
   // Get already-swiped user IDs
   const swipesSnap = await getDocs(
     query(collection(db, 'swipes'), where('from', '==', currentUid)),
   );
   const swipedIds = swipesSnap.docs.map((d) => d.data().to as string);
-  swipedIds.push(currentUid);
+  swipedIds.push(currentUid, ...(blockedUsers ?? []));
 
   // Fetch all users not yet swiped (Firestore doesn't support NOT IN > 10 easily,
   // so for production use a Cloud Function or pagination). Age/gender/distance

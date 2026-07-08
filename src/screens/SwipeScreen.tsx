@@ -88,7 +88,7 @@ export default function SwipeScreen() {
         }
       }
 
-      const data = await getDiscoverProfiles(user.uid, filters, currentLocation);
+      const data = await getDiscoverProfiles(user.uid, filters, currentLocation, profile?.blockedUsers);
       setProfiles(data);
       setCurrentIndex(0);
       setLastSwipedProfile(null);
@@ -99,7 +99,7 @@ export default function SwipeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.location, filters, translateX, translateY]);
+  }, [user, profile?.location, profile?.blockedUsers, filters, translateX, translateY]);
 
   useFocusEffect(
     useCallback(() => {

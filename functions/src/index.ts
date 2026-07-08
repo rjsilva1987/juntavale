@@ -1,7 +1,7 @@
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { onDocumentCreated, onDocumentDeleted } from 'firebase-functions/v2/firestore';
 
 initializeApp();
 
@@ -127,6 +127,38 @@ export const onMessageCreated = onDocumentCreated(
           otherPhoto: sender?.photoURL,
         },
       },
+    ]);
+  },
+);
+
+export const onBlockCreated = onDocumentCreated(
+  { document: 'blocks/{blockId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { blocker, blocked } = snap.data() as { blocker: string; blocked: string };
+
+    await Promise.all([
+      db.doc(`users/${blocker}`).update({ blockedUsers: FieldValue.arrayUnion(blocked) }),
+      db.doc(`users/${blocked}`).update({ blockedUsers: FieldValue.arrayUnion(blocker) }),
+      db.doc(`matches/${blocker}_${blocked}`).delete(),
+      db.doc(`matches/${blocked}_${blocker}`).delete(),
+    ]);
+  },
+);
+
+export const onBlockDeleted = onDocumentDeleted(
+  { document: 'blocks/{blockId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { blocker, blocked } = snap.data() as { blocker: string; blocked: string };
+
+    await Promise.all([
+      db.doc(`users/${blocker}`).update({ blockedUsers: FieldValue.arrayRemove(blocked) }),
+      db.doc(`users/${blocked}`).update({ blockedUsers: FieldValue.arrayRemove(blocker) }),
     ]);
   },
 );

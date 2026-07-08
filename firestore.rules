@@ -169,16 +169,51 @@ service cloud.firestore {
       }
     }
 
-    // ───────────────────────── reports / blocks (S19) ─────────────────────────
-    // Placeholder: quando a feature de denúncia/bloqueio entrar (roadmap S19),
-    // as regras entram aqui, por exemplo:
-    //   match /reports/{reportId} {
-    //     allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
-    //     allow read, update, delete: if false; // só um admin via Cloud Function/Console deve ler denúncias
-    //   }
-    //   match /blocks/{blockId} {
-    //     allow read, create, delete: if isSignedIn() && blockId matches request.auth.uid + '_.*';
-    //   }
+    // ───────────────────────── blocks (S19) ─────────────────────────
+    //
+    // O client só cria/apaga o doc de bloqueio — nunca escreve users/{uid}.blockedUsers
+    // diretamente (ver abaixo). Quem propaga o array pros dois lados e desfaz o
+    // match é a Cloud Function onBlockCreated/onBlockDeleted (Admin SDK, ignora
+    // estas regras) — ver functions/src/index.ts.
+    //
+    // Leitura restrita a quem bloqueou (ninguém lê "quem me bloqueou" por aqui —
+    // essa informação só existe agregada, e sem direção, no array blockedUsers
+    // de cada perfil, que já é público por causa do Descobrir/Swipe).
+    match /blocks/{blockId} {
+      allow read: if isSignedIn() && resource.data.blocker == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.blocker == request.auth.uid
+        && request.resource.data.blocked is string
+        && request.resource.data.blocked != request.auth.uid
+        && blockId == request.resource.data.blocker + '_' + request.resource.data.blocked
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly(['blocker', 'blocked', 'createdAt']);
+
+      allow update: if false; // bloqueio é imutável — só se cria/apaga
+
+      allow delete: if isSignedIn() && resource.data.blocker == request.auth.uid; // usado por unblockUser()
+    }
+
+    // ───────────────────────── reports (S19) ─────────────────────────
+    //
+    // Denúncia é só de ida: ninguém lê, edita ou apaga uma denúncia pelo client
+    // (nem quem denunciou, nem quem foi denunciado) — revisão é manual, via
+    // Console/Cloud Function futura.
+    match /reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reportedId is string
+        && request.resource.data.reportedId != request.auth.uid
+        && request.resource.data.reason in
+             ['spam', 'offensive_content', 'fake_profile', 'inappropriate_behavior', 'other']
+        && request.resource.data.details is string && request.resource.data.details.size() <= 500
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly(
+             ['reporterId', 'reportedId', 'reason', 'details', 'createdAt']);
+
+      allow read, update, delete: if false;
+    }
 
     // ───────────────────────── deny by default ─────────────────────────
     // Qualquer collection não listada acima (inclusive erros de digitação no

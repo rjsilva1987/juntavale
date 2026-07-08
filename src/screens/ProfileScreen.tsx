@@ -1,5 +1,7 @@
 // src/screens/ProfileScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -22,6 +24,7 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { RootStackParamList } from '@/navigation';
 import { storage } from '@/services/firebase';
 import { updateUserProfile, Gender } from '@/services/firestoreService';
 
@@ -47,6 +50,7 @@ const INTERESTS = [
 ];
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.name ?? '');
@@ -314,6 +318,15 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Usuários bloqueados */}
+        <AnimatedPressable
+          style={styles.blockedUsersBtn}
+          onPress={() => navigation.navigate('BlockedUsers')}
+        >
+          <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
+          <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
+        </AnimatedPressable>
+
         {/* Logout */}
         <AnimatedPressable style={styles.logoutBtn} onPress={logout}>
           <Ionicons name="log-out-outline" size={20} color={theme.colors.nope} />
@@ -533,6 +546,24 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.onSecondary },
+
+  blockedUsersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+  },
+  blockedUsersText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+  },
 
   logoutBtn: {
     flexDirection: 'row',

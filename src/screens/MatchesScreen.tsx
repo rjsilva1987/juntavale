@@ -26,7 +26,7 @@ interface MatchWithProfile extends Match {
 type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [matches, setMatches] = useState<MatchWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,17 +41,21 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           return { ...m, otherProfile: otherProfile ?? undefined };
         }),
       );
+      const blockedUsers = profile?.blockedUsers ?? [];
+      const visible = enriched.filter(
+        (m) => !m.otherProfile || !blockedUsers.includes(m.otherProfile.uid),
+      );
       // Sort by most recent message
-      enriched.sort((a, b) => {
+      visible.sort((a, b) => {
         const ta = a.lastMessageAt?.toMillis() ?? 0;
         const tb = b.lastMessageAt?.toMillis() ?? 0;
         return tb - ta;
       });
-      setMatches(enriched);
+      setMatches(visible);
       setLoading(false);
     });
     return unsub;
-  }, [user]);
+  }, [user, profile?.blockedUsers]);
 
   if (loading) {
     return (
