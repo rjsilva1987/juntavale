@@ -1,14 +1,15 @@
 // src/screens/MatchProfileScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { FadeIn, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { MatchModal } from '@/components/MatchModal';
-import { PhotoCarousel } from '@/components/PhotoCarousel';
+import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
@@ -28,6 +29,26 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   const [reportVisible, setReportVisible] = useState(false);
   const [actionPending, setActionPending] = useState(false);
   const [matchVisible, setMatchVisible] = useState(false);
+  const [photoAreaWidth, setPhotoAreaWidth] = useState(0);
+  const carouselRef = useRef<PhotoCarouselHandle>(null);
+
+  // Sem Pan concorrendo aqui (diferente do card da Descobrir) — o tap só
+  // precisa ceder pro drag manual do próprio pager quando passa do
+  // threshold, o que já é o comportamento padrão de Gesture.Tap.
+  const handlePhotoTap = (x: number) => {
+    if (photoAreaWidth === 0) return;
+    if (x < photoAreaWidth / 2) {
+      carouselRef.current?.goToPrevious();
+    } else {
+      carouselRef.current?.goToNext();
+    }
+  };
+  const photoTapGesture = Gesture.Tap()
+    .maxDuration(250)
+    .maxDistance(10)
+    .onEnd((e) => {
+      runOnJS(handlePhotoTap)(e.x);
+    });
 
   useEffect(() => {
     getUserProfile(uid).then((p) => {
@@ -124,9 +145,14 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.photosCard}>
-              <PhotoCarousel photos={photos} style={styles.photosCarousel} />
-            </View>
+            <GestureDetector gesture={photoTapGesture}>
+              <View
+                style={styles.photosCard}
+                onLayout={(e) => setPhotoAreaWidth(e.nativeEvent.layout.width)}
+              >
+                <PhotoCarousel ref={carouselRef} photos={photos} style={styles.photosCarousel} />
+              </View>
+            </GestureDetector>
 
             <View style={styles.infoCard}>
               <View style={styles.nameRow}>

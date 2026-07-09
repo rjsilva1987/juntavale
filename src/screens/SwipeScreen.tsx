@@ -21,7 +21,7 @@ import Animated, {
 import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
 import { MatchModal } from '@/components/MatchModal';
-import { PhotoCarousel } from '@/components/PhotoCarousel';
+import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
@@ -73,6 +73,26 @@ export default function SwipeScreen() {
   // Lets the PhotoCarousel's internal pager handle horizontal drags on the
   // photo itself, instead of the card's own pan gesture stealing them.
   const pagerNativeGesture = Gesture.Native();
+
+  // ℹ️-preview-style tap zones: left half = previous photo, right half =
+  // next. Ref lives here (not inside ProfileCard) so this same gesture —
+  // created once, at the same flat level as pagerNativeGesture above — can
+  // be registered on the outer Pan below, instead of nesting a 3rd
+  // GestureDetector layer inside the one that already wraps the carousel.
+  const carouselRef = useRef<PhotoCarouselHandle>(null);
+  const handlePhotoTap = (x: number) => {
+    if (x < CARD_W / 2) {
+      carouselRef.current?.goToPrevious();
+    } else {
+      carouselRef.current?.goToNext();
+    }
+  };
+  const tapGesture = Gesture.Tap()
+    .maxDuration(250)
+    .maxDistance(10)
+    .onEnd((e) => {
+      runOnJS(handlePhotoTap)(e.x);
+    });
 
   const loadProfiles = useCallback(async () => {
     if (!user) return;
@@ -165,7 +185,7 @@ export default function SwipeScreen() {
   };
 
   const gesture = Gesture.Pan()
-    .simultaneousWithExternalGesture(pagerNativeGesture)
+    .simultaneousWithExternalGesture(pagerNativeGesture, tapGesture)
     .onBegin(() => {
       runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
     })
@@ -278,6 +298,8 @@ export default function SwipeScreen() {
                 <ProfileCard
                   profile={currentProfile}
                   pagerNativeGesture={pagerNativeGesture}
+                  tapGesture={tapGesture}
+                  carouselRef={carouselRef}
                   onInfoPress={() =>
                     navigation.navigate('MatchProfile', {
                       uid: currentProfile.uid,
@@ -378,21 +400,29 @@ export default function SwipeScreen() {
 interface ProfileCardProps {
   profile: UserProfile;
   pagerNativeGesture?: ReturnType<typeof Gesture.Native>;
+  tapGesture?: ReturnType<typeof Gesture.Tap>;
+  carouselRef?: React.RefObject<PhotoCarouselHandle | null>;
   onInfoPress?: () => void;
 }
 
-function ProfileCard({ profile, pagerNativeGesture, onInfoPress }: ProfileCardProps) {
+function ProfileCard({
+  profile,
+  pagerNativeGesture,
+  tapGesture,
+  carouselRef,
+  onInfoPress,
+}: ProfileCardProps) {
   const photos = profile.photos?.length
     ? profile.photos
     : profile.photoURL
       ? [profile.photoURL]
       : [];
-  const carousel = <PhotoCarousel photos={photos} />;
+  const carousel = <PhotoCarousel ref={carouselRef} photos={photos} />;
 
   return (
     <View style={pcStyles.container}>
-      {pagerNativeGesture ? (
-        <GestureDetector gesture={pagerNativeGesture}>
+      {pagerNativeGesture && tapGesture ? (
+        <GestureDetector gesture={Gesture.Simultaneous(pagerNativeGesture, tapGesture)}>
           <View collapsable={false} style={{ flex: 1 }}>
             {carousel}
           </View>

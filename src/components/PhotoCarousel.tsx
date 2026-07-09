@@ -1,6 +1,6 @@
 // src/components/PhotoCarousel.tsx
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import PagerView from 'react-native-pager-view';
 
@@ -12,58 +12,86 @@ interface PhotoCarouselProps {
   style?: ViewStyle;
 }
 
-export function PhotoCarousel({ photos, style }: PhotoCarouselProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
+export interface PhotoCarouselHandle {
+  goToNext: () => void;
+  goToPrevious: () => void;
+}
 
-  if (photos.length === 0) {
-    return (
-      <View style={[styles.placeholder, style]}>
-        <Text style={styles.placeholderEmoji}>😊</Text>
-      </View>
+export const PhotoCarousel = forwardRef<PhotoCarouselHandle, PhotoCarouselProps>(
+  function PhotoCarousel({ photos, style }, ref) {
+    const [activeIndex, setActiveIndex] = useState(0);
+    const pagerRef = useRef<PagerView>(null);
+
+    // Edge-stop mora só aqui: quem chama só pede "próxima/anterior", o
+    // carrossel decide sozinho quando é no-op (sem loop nas pontas).
+    useImperativeHandle(
+      ref,
+      () => ({
+        goToNext: () => {
+          const next = activeIndex + 1;
+          if (next >= photos.length) return;
+          pagerRef.current?.setPage(next);
+        },
+        goToPrevious: () => {
+          const prev = activeIndex - 1;
+          if (prev < 0) return;
+          pagerRef.current?.setPage(prev);
+        },
+      }),
+      [activeIndex, photos.length],
     );
-  }
 
-  if (photos.length === 1) {
-    return (
-      <View style={[styles.container, style]}>
-        <Image
-          source={{ uri: photos[0] }}
-          style={styles.image}
-          contentFit="cover"
-          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-          transition={200}
-        />
-      </View>
-    );
-  }
+    if (photos.length === 0) {
+      return (
+        <View style={[styles.placeholder, style]}>
+          <Text style={styles.placeholderEmoji}>😊</Text>
+        </View>
+      );
+    }
 
-  return (
-    <View style={[styles.container, style]}>
-      <PagerView
-        style={styles.pager}
-        initialPage={0}
-        onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}
-      >
-        {photos.map((uri) => (
+    if (photos.length === 1) {
+      return (
+        <View style={[styles.container, style]}>
           <Image
-            key={uri}
-            source={{ uri }}
+            source={{ uri: photos[0] }}
             style={styles.image}
             contentFit="cover"
             placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
             transition={200}
           />
-        ))}
-      </PagerView>
+        </View>
+      );
+    }
 
-      <View style={styles.dots} pointerEvents="none">
-        {photos.map((uri, index) => (
-          <View key={uri} style={[styles.dot, index === activeIndex && styles.dotActive]} />
-        ))}
+    return (
+      <View style={[styles.container, style]}>
+        <PagerView
+          ref={pagerRef}
+          style={styles.pager}
+          initialPage={0}
+          onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}
+        >
+          {photos.map((uri) => (
+            <Image
+              key={uri}
+              source={{ uri }}
+              style={styles.image}
+              contentFit="cover"
+              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+              transition={200}
+            />
+          ))}
+        </PagerView>
+
+        <View style={styles.dots} pointerEvents="none">
+          {photos.map((uri, index) => (
+            <View key={uri} style={[styles.dot, index === activeIndex && styles.dotActive]} />
+          ))}
+        </View>
       </View>
-    </View>
-  );
-}
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
