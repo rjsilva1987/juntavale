@@ -21,10 +21,11 @@ import {
 type VerificationScreenProps = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export default function VerificationScreen({ navigation }: VerificationScreenProps) {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [verification, setVerification] = useState<Verification | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [gateApproved, setGateApproved] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -37,6 +38,21 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
   useEffect(() => {
     load();
   }, [load]);
+
+  // verifications/{uid}.status (lido uma vez em load()) e users/{uid}.verified
+  // (observado em tempo real pelo gate em navigation/index.tsx) são
+  // dessincronizados — uma Cloud Function assíncrona propaga um pro outro, e
+  // no meio do caminho essa tela pode ainda achar que está pendente enquanto
+  // o gate já sabe que aprovou. Observar profile.verified aqui é o mesmo sinal
+  // que o gate usa pra trocar PendingStack→AppStack (e desmontar esta tela
+  // sozinho); isso só evita que a UI local fique presa num estado que já não
+  // bate mais, sem navegar por conta própria — quem tira o usuário daqui é o
+  // gate.
+  useEffect(() => {
+    if (profile?.verified) setGateApproved(true);
+  }, [profile?.verified]);
+
+  const isApproved = verification?.status === 'approved' || gateApproved;
 
   const handleTakeSelfie = async () => {
     if (!user) return;
@@ -68,9 +84,13 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
-          </AnimatedPressable>
+          <View style={styles.backBtn}>
+            {!isApproved && (
+              <AnimatedPressable onPress={() => navigation.goBack()}>
+                <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
+              </AnimatedPressable>
+            )}
+          </View>
           <Text style={styles.headerTitle}>Verificação de perfil</Text>
           <View style={styles.backBtn} />
         </View>
@@ -81,7 +101,17 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
           </View>
         ) : (
           <View style={styles.content}>
-            {!verification || verification.status === 'rejected' ? (
+            {isApproved ? (
+              <>
+                <View style={styles.iconWrap}>
+                  <VerifiedBadge size={48} />
+                </View>
+                <Text style={styles.title}>Perfil verificado!</Text>
+                <Text style={styles.description}>
+                  Seu selo de verificação já aparece no seu perfil e no card de Descobrir.
+                </Text>
+              </>
+            ) : !verification || verification.status === 'rejected' ? (
               <>
                 <View style={styles.iconWrap}>
                   <Ionicons name="shield-checkmark-outline" size={48} color={theme.colors.secondary} />
@@ -110,7 +140,9 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                   )}
                 </AnimatedPressable>
               </>
-            ) : verification.status === 'pending' ? (
+            ) : (
+              // Só sobra 'pending' aqui: 'rejected'/sem pedido já caiu no
+              // branch acima, 'approved' já caiu em isApproved.
               <>
                 <View style={styles.iconWrap}>
                   <Ionicons name="time-outline" size={48} color={theme.colors.secondary} />
@@ -119,16 +151,6 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                 <Text style={styles.description}>
                   Recebemos sua selfie e nossa equipe vai revisar em breve. Você não precisa fazer
                   mais nada por enquanto.
-                </Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.iconWrap}>
-                  <VerifiedBadge size={48} />
-                </View>
-                <Text style={styles.title}>Perfil verificado!</Text>
-                <Text style={styles.description}>
-                  Seu selo de verificação já aparece no seu perfil e no card de Descobrir.
                 </Text>
               </>
             )}

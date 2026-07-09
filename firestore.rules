@@ -20,6 +20,14 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    // Uid da conta admin, hardcoded de propósito: Rules não importa
+    // src/config/admin.ts, então este valor precisa ser mantido em sincronia
+    // manual com ADMIN_UID no app (e com os literais iguais já usados na
+    // regra de create de matches/{matchId} e no allow read de verifications).
+    function isAdmin() {
+      return isSignedIn() && request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3';
+    }
+
     // Evita repetir o texto do get() de matches/{matchId} nas regras abaixo.
     function getMatch(matchId) {
       return get(/databases/$(database)/documents/matches/$(matchId)).data;
@@ -88,10 +96,30 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
 
       // ─────────────── users/{userId}/private ───────────────
-      // Dados que só o dono do perfil pode ler ou escrever (hoje só o push
-      // token, em users/{userId}/private/push). Nunca exposto a outros users.
-      match /private/{document=**} {
+      // Dois documentos com regras próprias (não um wildcard único), porque
+      // têm mutabilidade diferente: o push token é regravado a cada refresh,
+      // o ChaveF do cadastro (S-ChaveF) é criado uma vez e nunca muda.
+
+      // users/{userId}/private/push — token do Expo push, só o dono lê/escreve.
+      match /private/push {
         allow read, write: if isOwner(userId);
+      }
+
+      // users/{userId}/private/registration — ChaveF capturado no cadastro.
+      // Nunca exposto no doc público users/{userId} (que tem read amplo pra
+      // qualquer autenticado, por causa do Swipe/Discover) — só o dono e o
+      // admin enxergam. Imutável: uma vez criado, nem o dono pode alterar
+      // (allow update, delete: if false, explícito, não só ausência de regra).
+      match /private/registration {
+        allow read: if isOwner(userId) || isAdmin();
+
+        allow create: if isOwner(userId)
+          && request.resource.data.chaveF is string
+          && request.resource.data.chaveF.matches('^F\\d{7}$')
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['chaveF', 'createdAt']);
+
+        allow update, delete: if false;
       }
     }
 
@@ -253,10 +281,6 @@ service cloud.firestore {
     // sincroniza users/{uid}.verified a partir da mudança de status aqui —
     // ver functions/src/index.ts.
     match /verifications/{uid} {
-      function isAdmin() {
-        return isSignedIn() && request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3';
-      }
-
       allow read: if isOwner(uid) || isAdmin();
 
       // Dono cria/reenvia: só como 'pending', com selfieUrl e createdAt —

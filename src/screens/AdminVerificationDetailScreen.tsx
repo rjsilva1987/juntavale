@@ -12,7 +12,12 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import {
+  getRegistrationPrivate,
+  getUserProfile,
+  RegistrationPrivate,
+  UserProfile,
+} from '@/services/firestoreService';
 import {
   getVerificationStatus,
   reviewVerification,
@@ -32,15 +37,19 @@ export default function AdminVerificationDetailScreen({
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
+  const [registration, setRegistration] = useState<RegistrationPrivate | null>(null);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(false);
 
   useEffect(() => {
-    Promise.all([getUserProfile(uid), getVerificationStatus(uid)]).then(([p, v]) => {
-      setProfile(p);
-      setVerification(v);
-      setLoading(false);
-    });
+    Promise.all([getUserProfile(uid), getVerificationStatus(uid), getRegistrationPrivate(uid)]).then(
+      ([p, v, r]) => {
+        setProfile(p);
+        setVerification(v);
+        setRegistration(r);
+        setLoading(false);
+      },
+    );
   }, [uid]);
 
   const handleDecide = (status: 'approved' | 'rejected') => {
@@ -59,7 +68,7 @@ export default function AdminVerificationDetailScreen({
             setDeciding(true);
             try {
               await reviewVerification(uid, status, user.uid);
-              navigation.goBack();
+              if (navigation.canGoBack()) navigation.goBack();
             } catch {
               Alert.alert('Erro', 'Não foi possível registrar a decisão.');
             } finally {
@@ -81,7 +90,7 @@ export default function AdminVerificationDetailScreen({
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
           <Text style={styles.headerTitle}>Revisar verificação</Text>
@@ -133,6 +142,9 @@ export default function AdminVerificationDetailScreen({
                 {profile?.age ? `, ${profile.age}` : ''}
               </Text>
               {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+              <Text style={styles.chaveF}>
+                Chave F: {registration?.chaveF ?? 'não informado'}
+              </Text>
             </View>
 
             <View style={styles.actionsRow}>
@@ -225,6 +237,12 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   bio: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 22, marginTop: 8 },
+  chaveF: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginTop: 8,
+  },
 
   actionsRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
   actionBtn: {

@@ -36,12 +36,18 @@ const INTERESTS = [
 
 type RegisterScreenProps = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
+// Formato exigido pra ChaveF: letra F maiúscula + exatamente 7 dígitos (ex:
+// F1234567). O input aceita 'f' minúsculo, mas normaliza pra maiúsculo
+// (onChangeText) antes de validar contra esta regex e antes de gravar.
+const CHAVEF_REGEX = /^F\d{7}$/;
+
 export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const { register } = useAuth();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [chaveF, setChaveF] = useState('');
   const [age, setAge] = useState('');
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -54,13 +60,20 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !chaveF) {
       Alert.alert('Atenção', 'Preencha todos os campos.');
+      return;
+    }
+    if (!CHAVEF_REGEX.test(chaveF)) {
+      Alert.alert(
+        'Chave F inválida',
+        'A Chave F deve ter o formato F seguido de 7 dígitos (ex: F1234567).',
+      );
       return;
     }
     setLoading(true);
     try {
-      await register(email.trim(), password, name.trim());
+      await register(email.trim(), password, name.trim(), chaveF);
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Não foi possível criar a conta.';
       Alert.alert('Erro', errorMsg);
@@ -126,20 +139,36 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 secureTextEntry
               />
 
+              <Text style={styles.label}>Chave F</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="F1234567"
+                placeholderTextColor={theme.colors.textLight}
+                value={chaveF}
+                onChangeText={(t) => setChaveF(t.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={8}
+              />
+
               <AnimatedPressable
                 style={styles.btnPrimary}
                 onPress={() => {
-                  if (!name || !email || !password)
+                  if (!name || !email || !password || !chaveF)
                     return Alert.alert('Atenção', 'Preencha todos os campos.');
                   if (password.length < 6)
                     return Alert.alert('Atenção', 'Senha deve ter ao menos 6 caracteres.');
+                  if (!CHAVEF_REGEX.test(chaveF))
+                    return Alert.alert(
+                      'Chave F inválida',
+                      'A Chave F deve ter o formato F seguido de 7 dígitos (ex: F1234567).',
+                    );
                   setStep(2);
                 }}
               >
                 <Text style={styles.btnPrimaryText}>Continuar</Text>
               </AnimatedPressable>
 
-              <AnimatedPressable onPress={() => navigation.goBack()}>
+              <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()}>
                 <Text style={styles.linkText}>Já tenho conta</Text>
               </AnimatedPressable>
             </View>

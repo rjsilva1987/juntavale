@@ -49,7 +49,7 @@ export default function AdminVerificationsScreen({ navigation }: AdminVerificati
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
           <Text style={styles.headerTitle}>Verificações pendentes</Text>

@@ -279,7 +279,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
           <AnimatedPressable style={styles.headerInfo} onPress={handleViewProfile}>

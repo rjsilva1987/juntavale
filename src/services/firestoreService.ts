@@ -68,12 +68,24 @@ export interface Message {
 
 // ─── User ─────────────────────────────────────────────────
 
-export const createUserProfile = async (uid: string, data: Omit<UserProfile, 'uid'>) => {
-  await setDoc(doc(db, 'users', uid), {
-    ...data,
-    uid,
-    createdAt: serverTimestamp(),
-  });
+// Criação do doc público (users/{uid}) e do ChaveF privado
+// (users/{uid}/private/registration) é feita num writeBatch único em
+// AuthContext.register() — não aqui — pra garantir que os dois setDoc
+// entrem juntos ou nenhum entre.
+
+export interface RegistrationPrivate {
+  chaveF: string;
+  createdAt?: Timestamp;
+}
+
+// Admin-only na prática: firestore.rules só libera o read deste doc pro
+// próprio dono ou pra isAdmin(). Contas criadas antes do ChaveF existir não
+// têm este doc — retorna null nesse caso.
+export const getRegistrationPrivate = async (
+  uid: string,
+): Promise<RegistrationPrivate | null> => {
+  const snap = await getDoc(doc(db, 'users', uid, 'private', 'registration'));
+  return snap.exists() ? (snap.data() as RegistrationPrivate) : null;
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {

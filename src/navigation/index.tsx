@@ -9,6 +9,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ADMIN_UID } from '@/config/admin';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -24,6 +25,7 @@ import LoginScreen from '@/screens/LoginScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
+import PendingApprovalScreen from '@/screens/PendingApprovalScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
@@ -42,6 +44,8 @@ export type RootStackParamList = {
   Verification: undefined;
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
+  PendingApproval: undefined;
+  Profile: undefined;
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -123,6 +127,17 @@ function AuthStack() {
   );
 }
 
+function PendingStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+      <Stack.Screen name="PendingApproval" component={PendingApprovalScreen} />
+      <Stack.Screen name="Verification" component={VerificationScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
@@ -138,7 +153,7 @@ function AppStack() {
 }
 
 export default function Navigation() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   useNotifications();
   const { onNavigationReady } = useChatDeepLink(user?.uid);
 
@@ -171,9 +186,27 @@ export default function Navigation() {
     return <OnboardingScreen onDone={handleOnboardingDone} />;
   }
 
+  // O admin nunca pode cair na PendingStack: o doc dele também tem `verified`
+  // ausente (nunca passou por revisão), e é ele quem aprova todo mundo — sem
+  // essa exceção, o gate travaria o próprio admin fora do painel de aprovação.
+  const isGateOpen = user != null && (profile?.verified === true || user.uid === ADMIN_UID);
+
+  // key força o React (e por baixo, o react-native-screens) a desmontar o
+  // coordenador nativo antigo por completo ao trocar de modo, em vez de
+  // reconciliar dois Stack.Navigator diferentes na mesma posição — sem o
+  // key, a troca PendingStack→AppStack no gate podia deixar a tela nativa
+  // anterior órfã por cima da nova árvore (confirmado via log [GATE]).
+  const navMode = !user ? 'auth' : isGateOpen ? 'app' : 'pending';
+
   return (
     <NavigationContainer ref={navigationRef} linking={linking} onReady={onNavigationReady}>
-      {user ? <AppStack /> : <AuthStack />}
+      {navMode === 'auth' ? (
+        <AuthStack key="auth" />
+      ) : navMode === 'app' ? (
+        <AppStack key="app" />
+      ) : (
+        <PendingStack key="pending" />
+      )}
     </NavigationContainer>
   );
 }
