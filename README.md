@@ -146,20 +146,20 @@ eas submit --platform ios --profile production
 
 ## 🎨 Paleta de cores
 
-Paleta atual definida em [`src/constants/theme.ts`](src/constants/theme.ts) — tons coral/quentes:
+Paleta atual definida em [`src/constants/theme.ts`](src/constants/theme.ts) — tons azul/amarelo:
 
 | Token | Hex | Uso |
 |-------|-----|-----|
-| `primary` | `#FD3A69` | Cor principal, botões, destaques |
-| `primaryDark` | `#D81E52` | Variação escura do primary |
-| `primaryLight` | `#FFE3EA` | Fundos sutis, placeholders |
-| `secondary` | `#FF7A5C` | Cor secundária, CTAs |
-| `secondaryDark` | `#E85A3C` | Variação escura do secondary |
+| `primary` | `#2563EB` | Cor principal, botões, destaques |
+| `primaryDark` | `#1E3A8A` | Variação escura do primary |
+| `primaryLight` | `#DBEAFE` | Fundos sutis, placeholders |
+| `secondary` | `#FBBF24` | Cor secundária, CTAs |
+| `secondaryDark` | `#F59E0B` | Variação escura do secondary |
 | `like` | `#3DAA6B` | Curtir / status online |
 | `nope` | `#E5484D` | Dispensar |
-| `superLike` | `#3B82F6` | Super like |
+| `superLike` | `#FBBF24` | Super like |
 
-O splash screen e o ícone adaptativo (Android) usam `#D84545` (coral) como `backgroundColor`, definido no `app.json`.
+O splash screen e o ícone adaptativo (Android) usam `#1E3A8A` (azul escuro) como `backgroundColor`, definido no `app.json`.
 
 ---
 

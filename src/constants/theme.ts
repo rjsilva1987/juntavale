@@ -1,25 +1,25 @@
 // src/constants/theme.ts
 export const theme = {
   colors: {
-    // Core palette (warm Tinder-style tones)
-    primary: '#FD3A69',
-    primaryDark: '#D81E52',
-    primaryLight: '#FFE3EA',
-    secondary: '#FF7A5C',
-    secondaryDark: '#E85A3C',
-    secondaryLight: '#FFE8E0',
+    // Core palette (blue + yellow tones)
+    primary: '#2563EB',
+    primaryDark: '#1E3A8A',
+    primaryLight: '#DBEAFE',
+    secondary: '#FBBF24',
+    secondaryDark: '#F59E0B',
+    secondaryLight: '#FEF3C7',
 
-    background: '#FFFBFA',
+    background: '#F9FAFB',
     surface: '#FFFFFF',
 
-    text: '#241A1D',
-    textSecondary: '#8A7377',
-    textLight: '#B5A5A8',
+    text: '#1F2937',
+    textSecondary: '#6B7280',
+    textLight: '#9CA3AF',
 
     onPrimary: '#FFFFFF',
-    onSecondary: '#241A1D',
+    onSecondary: '#1E3A8A',
 
-    border: '#F1E4E6',
+    border: '#E5E7EB',
 
     error: '#E5484D',
     success: '#3DAA6B',
@@ -27,7 +27,7 @@ export const theme = {
     // Swipe-specific semantics
     like: '#3DAA6B',
     nope: '#E5484D',
-    superLike: '#3B82F6',
+    superLike: '#FBBF24',
 
     white: '#FFFFFF',
   },
