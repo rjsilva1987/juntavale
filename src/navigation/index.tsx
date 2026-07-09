@@ -118,40 +118,6 @@ function MainTabs() {
   );
 }
 
-function AuthStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function PendingStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-      <Stack.Screen name="PendingApproval" component={PendingApprovalScreen} />
-      <Stack.Screen name="Verification" component={VerificationScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-    </Stack.Navigator>
-  );
-}
-
-function AppStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-      <Stack.Screen name="Main" component={MainTabs} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
-      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-      <Stack.Screen name="Verification" component={VerificationScreen} />
-      <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
-      <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
-    </Stack.Navigator>
-  );
-}
-
 export default function Navigation() {
   const { user, profile, loading } = useAuth();
   useNotifications();
@@ -186,27 +152,45 @@ export default function Navigation() {
     return <OnboardingScreen onDone={handleOnboardingDone} />;
   }
 
-  // O admin nunca pode cair na PendingStack: o doc dele também tem `verified`
+  // O admin nunca pode cair no grupo pending: o doc dele também tem `verified`
   // ausente (nunca passou por revisão), e é ele quem aprova todo mundo — sem
   // essa exceção, o gate travaria o próprio admin fora do painel de aprovação.
   const isGateOpen = user != null && (profile?.verified === true || user.uid === ADMIN_UID);
 
-  // key força o React (e por baixo, o react-native-screens) a desmontar o
-  // coordenador nativo antigo por completo ao trocar de modo, em vez de
-  // reconciliar dois Stack.Navigator diferentes na mesma posição — sem o
-  // key, a troca PendingStack→AppStack no gate podia deixar a tela nativa
-  // anterior órfã por cima da nova árvore (confirmado via log [GATE]).
-  const navMode = !user ? 'auth' : isGateOpen ? 'app' : 'pending';
-
+  // Navigator raiz único: os grupos abaixo trocam o CONJUNTO de telas de um
+  // mesmo Stack.Navigator, nunca o navigator inteiro. react-native-screens
+  // gerencia uma única pilha nativa e o handoff entre grupos acontece nativo
+  // — padrão auth-flow da doc do React Navigation. 'Verification' existe só
+  // no grupo pending (de propósito: se aparecesse também no grupo app, a rota
+  // focada sobreviveria à troca de grupo e o RN preservaria o foco nela em
+  // vez de resetar pro initialRoute do grupo app — ver ProfileScreen.tsx pro
+  // caso de usuário já verificado, que não navega mais pra cá).
   return (
     <NavigationContainer ref={navigationRef} linking={linking} onReady={onNavigationReady}>
-      {navMode === 'auth' ? (
-        <AuthStack key="auth" />
-      ) : navMode === 'app' ? (
-        <AppStack key="app" />
-      ) : (
-        <PendingStack key="pending" />
-      )}
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!user ? (
+          <Stack.Group>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </Stack.Group>
+        ) : !isGateOpen ? (
+          <Stack.Group>
+            <Stack.Screen name="PendingApproval" component={PendingApprovalScreen} />
+            <Stack.Screen name="Verification" component={VerificationScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+          </Stack.Group>
+        ) : (
+          <Stack.Group>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
+            <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+            <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
+            <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
+          </Stack.Group>
+        )}
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }

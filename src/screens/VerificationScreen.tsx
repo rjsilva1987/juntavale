@@ -21,11 +21,10 @@ import {
 type VerificationScreenProps = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export default function VerificationScreen({ navigation }: VerificationScreenProps) {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [verification, setVerification] = useState<Verification | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [gateApproved, setGateApproved] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -39,20 +38,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     load();
   }, [load]);
 
-  // verifications/{uid}.status (lido uma vez em load()) e users/{uid}.verified
-  // (observado em tempo real pelo gate em navigation/index.tsx) são
-  // dessincronizados — uma Cloud Function assíncrona propaga um pro outro, e
-  // no meio do caminho essa tela pode ainda achar que está pendente enquanto
-  // o gate já sabe que aprovou. Observar profile.verified aqui é o mesmo sinal
-  // que o gate usa pra trocar PendingStack→AppStack (e desmontar esta tela
-  // sozinho); isso só evita que a UI local fique presa num estado que já não
-  // bate mais, sem navegar por conta própria — quem tira o usuário daqui é o
-  // gate.
-  useEffect(() => {
-    if (profile?.verified) setGateApproved(true);
-  }, [profile?.verified]);
-
-  const isApproved = verification?.status === 'approved' || gateApproved;
+  const isApproved = verification?.status === 'approved';
 
   const handleTakeSelfie = async () => {
     if (!user) return;
@@ -85,11 +71,9 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.backBtn}>
-            {!isApproved && (
-              <AnimatedPressable onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
-              </AnimatedPressable>
-            )}
+            <AnimatedPressable onPress={() => navigation.goBack()}>
+              <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
+            </AnimatedPressable>
           </View>
           <Text style={styles.headerTitle}>Verificação de perfil</Text>
           <View style={styles.backBtn} />
