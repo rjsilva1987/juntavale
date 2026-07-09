@@ -39,7 +39,7 @@ export type RootStackParamList = {
   Register: undefined;
   Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
   Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
-  MatchProfile: { uid: string; matchId: string; name: string; photoURL?: string };
+  MatchProfile: { uid: string; matchId?: string; name: string; photoURL?: string };
   BlockedUsers: undefined;
   Verification: undefined;
   AdminVerifications: undefined;

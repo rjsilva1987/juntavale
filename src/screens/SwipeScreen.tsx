@@ -275,7 +275,17 @@ export default function SwipeScreen() {
             {/* Current card (swipeable) */}
             <GestureDetector gesture={gesture}>
               <Animated.View collapsable={false} style={[styles.card, cardStyle]}>
-                <ProfileCard profile={currentProfile} pagerNativeGesture={pagerNativeGesture} />
+                <ProfileCard
+                  profile={currentProfile}
+                  pagerNativeGesture={pagerNativeGesture}
+                  onInfoPress={() =>
+                    navigation.navigate('MatchProfile', {
+                      uid: currentProfile.uid,
+                      name: currentProfile.name,
+                      photoURL: currentProfile.photoURL,
+                    })
+                  }
+                />
 
                 {/* LIKE stamp */}
                 <Animated.View style={[styles.stamp, styles.stampLike, likeStampStyle]}>
@@ -368,9 +378,10 @@ export default function SwipeScreen() {
 interface ProfileCardProps {
   profile: UserProfile;
   pagerNativeGesture?: ReturnType<typeof Gesture.Native>;
+  onInfoPress?: () => void;
 }
 
-function ProfileCard({ profile, pagerNativeGesture }: ProfileCardProps) {
+function ProfileCard({ profile, pagerNativeGesture, onInfoPress }: ProfileCardProps) {
   const photos = profile.photos?.length
     ? profile.photos
     : profile.photoURL
@@ -392,10 +403,21 @@ function ProfileCard({ profile, pagerNativeGesture }: ProfileCardProps) {
       <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={pcStyles.gradient} />
       <View style={pcStyles.info}>
         <View style={pcStyles.nameRow}>
-          <Text style={pcStyles.name}>
-            {profile.name}, {profile.age}
-          </Text>
-          {profile.verified && <VerifiedBadge size={18} />}
+          <View style={pcStyles.nameTextGroup}>
+            <Text style={pcStyles.name} numberOfLines={1}>
+              {profile.name}, {profile.age}
+            </Text>
+            {profile.verified && <VerifiedBadge size={18} />}
+          </View>
+          {onInfoPress && (
+            <TouchableOpacity
+              style={pcStyles.infoBtn}
+              onPress={onInfoPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="information-circle" size={28} color={theme.colors.white} />
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={pcStyles.bio} numberOfLines={2}>
           {profile.bio || 'Sem bio ainda…'}
@@ -536,7 +558,20 @@ const pcStyles = StyleSheet.create({
     right: 0,
     padding: 20,
   },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 4,
+  },
+  nameTextGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  infoBtn: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: theme.borderRadius.full,
+    padding: 4,
+    marginLeft: 8,
+  },
   name: {
     fontSize: theme.fontSize.xl,
     fontWeight: '700',

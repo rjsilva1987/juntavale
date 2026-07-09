@@ -7,6 +7,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -14,16 +15,19 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { getUserProfile, recordSwipe, UserProfile } from '@/services/firestoreService';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
 export default function MatchProfileScreen({ route, navigation }: MatchProfileScreenProps) {
-  const { uid, name, photoURL } = route.params;
-  const { user } = useAuth();
+  const { uid, matchId, name, photoURL } = route.params;
+  const isPreview = !matchId;
+  const { user, profile: myProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [reportVisible, setReportVisible] = useState(false);
+  const [actionPending, setActionPending] = useState(false);
+  const [matchVisible, setMatchVisible] = useState(false);
 
   useEffect(() => {
     getUserProfile(uid).then((p) => {
@@ -36,7 +40,9 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     if (!user) return;
     Alert.alert(
       'Bloquear usuário?',
-      `Você deixará de ver ${name} e o match será desfeito. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
+      isPreview
+        ? `Você deixará de ver ${name}. Essa ação pode ser desfeita depois em "Usuários bloqueados".`
+        : `Você deixará de ver ${name} e o match será desfeito. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -44,7 +50,11 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
           style: 'destructive',
           onPress: async () => {
             await blockUser(user.uid, uid);
-            navigation.navigate('Main', { screen: 'Conversas' });
+            if (isPreview) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('Main', { screen: 'Conversas' });
+            }
           },
         },
       ],
@@ -56,6 +66,43 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     await reportUser(user.uid, uid, reason, details);
     setReportVisible(false);
     Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
+  };
+
+  const handleSwipeAction = async (direction: 'like' | 'nope') => {
+    if (!user || actionPending) return;
+    setActionPending(true);
+    try {
+      const isMatch = await recordSwipe(user.uid, uid, direction);
+      if (isMatch) {
+        setMatchVisible(true);
+      } else {
+        navigation.goBack();
+      }
+    } catch {
+      Alert.alert('Erro', 'Não foi possível registrar sua ação. Tente novamente.');
+    } finally {
+      setActionPending(false);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (!user) return;
+    const chatMatchId = [user.uid, uid].sort().join('_');
+    setMatchVisible(false);
+    // replace (não navigate) pra não deixar este preview órfão embaixo do Chat
+    // na pilha — voltar do Chat deve cair direto na Descobrir, não num perfil
+    // já "usado" com o botão de curtir ainda ativo.
+    navigation.replace('Chat', {
+      matchId: chatMatchId,
+      otherUid: uid,
+      otherName: profile?.name ?? name,
+      otherPhoto: profile?.photoURL ?? photoURL,
+    });
+  };
+
+  const handleContinueAfterMatch = () => {
+    setMatchVisible(false);
+    navigation.goBack();
   };
 
   const photos = profile?.photos?.length ? profile.photos : photoURL ? [photoURL] : [];
@@ -111,6 +158,25 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
               )}
             </View>
 
+            {isPreview && (
+              <View style={styles.swipeActions}>
+                <AnimatedPressable
+                  style={[styles.swipeBtn, styles.nopeBtn]}
+                  onPress={() => handleSwipeAction('nope')}
+                  disabled={actionPending}
+                >
+                  <Ionicons name="close" size={28} color={theme.colors.nope} />
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={[styles.swipeBtn, styles.likeBtn]}
+                  onPress={() => handleSwipeAction('like')}
+                  disabled={actionPending}
+                >
+                  <Ionicons name="heart" size={28} color={theme.colors.like} />
+                </AnimatedPressable>
+              </View>
+            )}
+
             <AnimatedPressable style={styles.reportBtn} onPress={() => setReportVisible(true)}>
               <Ionicons name="flag-outline" size={20} color={theme.colors.textSecondary} />
               <Text style={styles.reportBtnText}>Denunciar</Text>
@@ -128,6 +194,15 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
         visible={reportVisible}
         onClose={() => setReportVisible(false)}
         onSubmit={handleReport}
+      />
+
+      <MatchModal
+        visible={matchVisible}
+        currentUserPhoto={myProfile?.photoURL}
+        matchedUserPhoto={profile?.photoURL ?? photoURL}
+        matchedUserName={profile?.name ?? name}
+        onSendMessage={handleSendMessage}
+        onContinue={handleContinueAfterMatch}
       />
     </Animated.View>
   );
@@ -191,6 +266,24 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   tagText: { fontSize: theme.fontSize.sm, color: theme.colors.white, fontWeight: '600' },
+
+  swipeActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: theme.spacing.lg,
+  },
+  swipeBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.white,
+  },
+  nopeBtn: { borderColor: theme.colors.nope },
+  likeBtn: { borderColor: theme.colors.like },
 
   reportBtn: {
     flexDirection: 'row',
