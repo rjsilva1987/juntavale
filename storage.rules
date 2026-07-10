@@ -25,22 +25,28 @@ service firebase.storage {
 
     // ───────────────────────── avatars ─────────────────────────
     //
-    // Nome do arquivo é sempre "{uid}.jpg" (ver ProfileScreen.tsx
-    // handlePickPhoto), então dá pra confirmar dono comparando o nome do
-    // arquivo com o uid autenticado, sem precisar de subpath novo.
+    // Um arquivo por foto em avatars/{uid}/{timestamp}.jpg (ver
+    // ProfileScreen.tsx / firestoreService.ts uploadProfilePhoto), mesmo
+    // padrão já usado em verifications/{uid}/{fileName} abaixo — dono
+    // identificado pelo uid no path, não mais pelo nome exato do arquivo.
     //
-    // ANTES: "allow read, write: if request.auth != null" — qualquer usuário
-    // logado conseguia SOBRESCREVER o avatar de qualquer outro (bastava saber
-    // o uid alheio, que já é público via users/{uid}). Corrigido abaixo: write
-    // exige que o nome do arquivo bata com o próprio uid.
+    // create/update ficam sob isValidImage(); delete fica separado e SEM
+    // isValidImage() — em request de delete, request.resource é null, e
+    // isValidImage() lê request.resource.size, o que dá erro (== deny) se
+    // aplicado também ao delete. Sem esse split, remover uma foto nunca
+    // funcionaria.
     //
-    // read continua amplo de propósito: Descobrir/Swipe mostra a foto de
+    // Sem compat com o path antigo avatars/{uid}.jpg de propósito — só
+    // contas de teste usavam ele, sem migração necessária.
+    //
+    // read continua amplo de propósito: Descobrir/Swipe mostra as fotos de
     // qualquer perfil pra qualquer usuário autenticado.
-    match /avatars/{fileName} {
+    match /avatars/{uid}/{fileName} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn()
-        && fileName == request.auth.uid + '.jpg'
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
         && isValidImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
     // ───────────────────────── chat images ─────────────────────────
