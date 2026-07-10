@@ -10,6 +10,7 @@ import {
 import { doc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+import { LookingFor } from '@/constants/lookingFor';
 import { auth, db } from '@/services/firebase';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import { removePushToken } from '@/services/notifications';
@@ -18,7 +19,16 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
-  register: (email: string, password: string, name: string, chaveF: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    name: string,
+    chaveF: string,
+    age: number,
+    bio: string,
+    interests: string[],
+    lookingFor: LookingFor,
+  ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -71,16 +81,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const register = async (email: string, password: string, name: string, chaveF: string) => {
+  const register = async (
+    email: string,
+    password: string,
+    name: string,
+    chaveF: string,
+    age: number,
+    bio: string,
+    interests: string[],
+    lookingFor: LookingFor,
+  ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
     const newProfile: Omit<UserProfile, 'uid'> = {
       name,
-      age: 25,
-      bio: '',
+      age,
+      bio,
       photoURL: '',
       photos: [],
-      interests: [],
+      interests,
+      lookingFor,
     };
     // users/{uid} (público) e users/{uid}/private/registration (ChaveF) num
     // único writeBatch: os dois setDoc só entram juntos, ou nenhum entra —

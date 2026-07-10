@@ -24,6 +24,7 @@ import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
@@ -452,6 +453,13 @@ function ProfileCard({
         <Text style={pcStyles.bio} numberOfLines={2}>
           {profile.bio || 'Sem bio ainda…'}
         </Text>
+        {profile.lookingFor && (
+          <View style={pcStyles.lookingForBadge}>
+            <Text style={pcStyles.lookingForBadgeText}>
+              {LOOKING_FOR_LABELS[profile.lookingFor]}
+            </Text>
+          </View>
+        )}
         <View style={pcStyles.tags}>
           {profile.interests?.slice(0, 3).map((t) => (
             <View key={t} style={pcStyles.tag}>
@@ -608,6 +616,19 @@ const pcStyles = StyleSheet.create({
     color: theme.colors.white,
   },
   bio: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
+  lookingForBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  lookingForBadgeText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.white,
+    fontWeight: '700',
+  },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: {
     backgroundColor: theme.colors.secondary,

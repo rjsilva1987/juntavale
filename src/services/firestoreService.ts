@@ -15,9 +15,10 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 import { ADMIN_UID } from '@/config/admin';
+import { LookingFor } from '@/constants/lookingFor';
 import { db, storage } from '@/services/firebase';
 import { haversineDistanceKm } from '@/utils/geo';
 
@@ -30,6 +31,7 @@ export interface DiscoverFilters {
   ageMax: number;
   maxDistance: number;
   gender: Gender | 'all';
+  lookingFor: LookingFor | 'all';
 }
 
 export interface UserProfile {
@@ -41,6 +43,10 @@ export interface UserProfile {
   photos: string[];
   interests: string[];
   gender?: Gender;
+  // Opcional só por causa de contas de teste criadas antes deste campo
+  // existir — nas rules (isValidProfile) é obrigatório em create/update pra
+  // toda conta nova, nunca fica vazio depois de setado uma vez.
+  lookingFor?: LookingFor;
   location?: { lat: number; lng: number };
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
@@ -97,6 +103,62 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
   await updateDoc(doc(db, 'users', uid), data);
 };
 
+// ─── Profile photos ───────────────────────────────────────
+//
+// photos[0] é sempre a principal; photoURL é um espelho de photos[0],
+// mantido em sincronia em toda mutação abaixo pra que os consumidores de
+// foto única (Likes, Matches, BlockedUsers, AdminVerifications, MatchModal,
+// nav params de Chat/MatchProfile, avatar do topo do ProfileScreen)
+// continuem corretos sem precisar ler photos[].
+
+export const MAX_PROFILE_PHOTOS = 4;
+
+export const uploadProfilePhoto = async (uid: string, localUri: string): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `avatars/${uid}/${Date.now()}.jpg`);
+  await uploadBytes(storageRef, blob);
+  return getDownloadURL(storageRef);
+};
+
+export const addProfilePhoto = async (
+  uid: string,
+  photos: string[],
+  url: string,
+): Promise<string[]> => {
+  if (photos.length >= MAX_PROFILE_PHOTOS) {
+    throw new Error('MAX_PHOTOS_REACHED');
+  }
+  const nextPhotos = [...photos, url];
+  await updateUserProfile(uid, { photos: nextPhotos, photoURL: nextPhotos[0] });
+  return nextPhotos;
+};
+
+export const removeProfilePhoto = async (
+  uid: string,
+  photos: string[],
+  url: string,
+): Promise<string[]> => {
+  const nextPhotos = photos.filter((p) => p !== url);
+  await updateUserProfile(uid, { photos: nextPhotos, photoURL: nextPhotos[0] ?? '' });
+  // Órfão no Storage é só custo de armazenamento, não um dado incorreto pro
+  // usuário — não vale falhar a remoção (já refletida no Firestore acima)
+  // por causa de um erro na limpeza do arquivo.
+  await deleteObject(ref(storage, url)).catch(() => {});
+  return nextPhotos;
+};
+
+export const setPrincipalPhoto = async (
+  uid: string,
+  photos: string[],
+  url: string,
+): Promise<string[]> => {
+  // Só reordena as URLs — o arquivo em si não muda de lugar no Storage.
+  const nextPhotos = [url, ...photos.filter((p) => p !== url)];
+  await updateUserProfile(uid, { photos: nextPhotos, photoURL: nextPhotos[0] });
+  return nextPhotos;
+};
+
 // ─── Discovery ────────────────────────────────────────────
 
 export const getDiscoverProfiles = async (
@@ -126,6 +188,7 @@ export const getDiscoverProfiles = async (
     if (filters) {
       if (candidate.age < filters.ageMin || candidate.age > filters.ageMax) return;
       if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
+      if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
       if (currentLocation && candidate.location) {
         const distance = haversineDistanceKm(currentLocation, candidate.location);
         if (distance > filters.maxDistance) return;

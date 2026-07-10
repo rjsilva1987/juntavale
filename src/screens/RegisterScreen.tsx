@@ -15,6 +15,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -51,6 +52,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [age, setAge] = useState('');
   const [bio, setBio] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(undefined);
   const [loading, setLoading] = useState(false);
 
   const toggleInterest = (item: string) => {
@@ -71,9 +73,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       );
       return;
     }
+    if (!lookingFor) {
+      Alert.alert('Busca obrigatória', 'Selecione o que você está buscando no app.');
+      return;
+    }
+    const ageNum = Number(age);
+    if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
+      Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
+      return;
+    }
     setLoading(true);
     try {
-      await register(email.trim(), password, name.trim(), chaveF);
+      await register(
+        email.trim(),
+        password,
+        name.trim(),
+        chaveF,
+        ageNum,
+        bio.trim(),
+        selectedInterests,
+        lookingFor,
+      );
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Não foi possível criar a conta.';
       Alert.alert('Erro', errorMsg);
@@ -203,16 +223,45 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
               <Text style={styles.charCount}>{bio.length}/160</Text>
 
-              <AnimatedPressable style={styles.btnPrimary} onPress={() => setStep(3)}>
+              <AnimatedPressable
+                style={styles.btnPrimary}
+                onPress={() => {
+                  const ageNum = Number(age);
+                  if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
+                    return Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
+                  }
+                  setStep(3);
+                }}
+              >
                 <Text style={styles.btnPrimaryText}>Continuar</Text>
               </AnimatedPressable>
             </View>
           )}
 
-          {/* Step 3 — Interesses */}
+          {/* Step 3 — Busca + Interesses */}
           {step === 3 && (
             <View style={styles.card}>
-              <Text style={styles.title}>Seus interesses</Text>
+              <Text style={styles.title}>O que você busca?</Text>
+              <Text style={styles.subtitle}>Obrigatório — escolha uma opção</Text>
+
+              <View style={styles.lookingForGrid}>
+                {LOOKING_FOR_OPTIONS.map((option) => {
+                  const active = lookingFor === option.value;
+                  return (
+                    <AnimatedPressable
+                      key={option.value}
+                      style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                      onPress={() => setLookingFor(option.value)}
+                    >
+                      <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
+                        {option.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
+              <Text style={[styles.title, { marginTop: theme.spacing.lg }]}>Seus interesses</Text>
               <Text style={styles.subtitle}>Escolha até 5 que te representam</Text>
 
               <View style={styles.tags}>
@@ -234,9 +283,9 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </View>
 
               <AnimatedPressable
-                style={[styles.btnPrimary, loading && { opacity: 0.7 }]}
+                style={[styles.btnPrimary, (loading || !lookingFor) && { opacity: 0.7 }]}
                 onPress={handleRegister}
-                disabled={loading}
+                disabled={loading || !lookingFor}
               >
                 {loading ? (
                   <ActivityIndicator color={theme.colors.onSecondary} />
@@ -341,4 +390,27 @@ const styles = StyleSheet.create({
   tagActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   tagText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   tagTextActive: { color: theme.colors.white, fontWeight: '600' },
+
+  lookingForGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  lookingForOption: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  lookingForOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  lookingForText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  lookingForTextActive: { color: theme.colors.onPrimary },
 });

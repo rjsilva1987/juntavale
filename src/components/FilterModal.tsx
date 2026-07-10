@@ -3,6 +3,7 @@ import Slider from '@react-native-community/slider';
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
+import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { DiscoverFilters, Gender } from '@/services/firestoreService';
 
@@ -19,6 +20,11 @@ const GENDER_OPTIONS: { label: string; value: Gender | 'all' }[] = [
   { label: 'Todos', value: 'all' },
   { label: 'Masculino', value: 'masculino' },
   { label: 'Feminino', value: 'feminino' },
+];
+
+const LOOKING_FOR_FILTER_OPTIONS: { label: string; value: LookingFor | 'all' }[] = [
+  { label: 'Todos', value: 'all' },
+  ...LOOKING_FOR_OPTIONS.map((option) => ({ label: option.label, value: option.value })),
 ];
 
 export function FilterModal({
@@ -112,6 +118,27 @@ export function FilterModal({
             })}
           </View>
 
+          {/* Busca (lookingFor) */}
+          <Text style={styles.label}>Busca</Text>
+          <View style={styles.lookingForRow}>
+            {LOOKING_FOR_FILTER_OPTIONS.map((option) => {
+              const active = draft.lookingFor === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                  onPress={() => setDraft((prev) => ({ ...prev, lookingFor: option.value }))}
+                >
+                  <Text
+                    style={[styles.lookingForText, active && styles.lookingForTextActive]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {/* Actions */}
           <View style={styles.actions}>
             <TouchableOpacity
@@ -187,6 +214,33 @@ const styles = StyleSheet.create({
   },
   genderText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   genderTextActive: { color: theme.colors.onPrimary },
+
+  lookingForRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  lookingForOption: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  lookingForOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  lookingForText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  lookingForTextActive: { color: theme.colors.onPrimary },
 
   actions: {
     flexDirection: 'row',

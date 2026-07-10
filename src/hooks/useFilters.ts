@@ -9,6 +9,7 @@ export const DEFAULT_FILTERS: DiscoverFilters = {
   ageMax: 60,
   maxDistance: 50,
   gender: 'all',
+  lookingFor: 'all',
 };
 
 interface UseFiltersReturn {

@@ -12,6 +12,7 @@ import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -163,6 +164,14 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 {profile?.verified && <VerifiedBadge size={18} />}
               </View>
 
+              {profile?.lookingFor && (
+                <View style={styles.lookingForBadge}>
+                  <Text style={styles.lookingForBadgeText}>
+                    {LOOKING_FOR_LABELS[profile.lookingFor]}
+                  </Text>
+                </View>
+              )}
+
               {!!profile?.bio && (
                 <>
                   <Text style={styles.sectionTitle}>Sobre</Text>
@@ -273,6 +282,19 @@ const styles = StyleSheet.create({
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+  lookingForBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  lookingForBadgeText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
   sectionTitle: {
     fontSize: theme.fontSize.sm,
     fontWeight: '700',

@@ -77,20 +77,42 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
 
+      // lookingFor fica FORA de isValidProfile() de propósito, igual uid/
+      // createdAt acima: create e update têm exigência diferente pra ele (o
+      // único campo obrigatório da lista, os demais são todos opcionais
+      // dentro de isValidProfile), então cada allow valida do seu jeito em
+      // vez de a função compartilhada ganhar um parâmetro pra isso.
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
         && request.resource.data.createdAt == request.time
+        // Obrigatório no cadastro: sem o campo (ou com valor fora da
+        // lista), o create inteiro é negado.
+        && request.resource.data.lookingFor in
+             ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'location', 'filters', 'createdAt'])
+              'gender', 'lookingFor', 'location', 'filters', 'createdAt'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
+        // Versão estrita: compara presença ANTES (resource.data) e DEPOIS
+        // (request.resource.data), não só o resultado isolado. Dois ramos:
+        // (a) ausente nos dois — conta de teste sem o campo continua
+        //     editando bio/foto/etc. sem travar; (b) presente no resultado
+        //     e com valor válido — cobre tanto "já tinha e trocou entre as
+        //     4 opções" quanto "não tinha e está definindo pela 1ª vez fora
+        //     do cadastro". Fora desses dois ramos só sobra o caso "tinha
+        //     antes e sumiu no resultado" — nenhum dos dois ramos cobre
+        //     isso, então fica negado: não dá pra remover o campo depois de
+        //     setado.
+        && ((!('lookingFor' in resource.data) && !('lookingFor' in request.resource.data))
+            || ('lookingFor' in request.resource.data && request.resource.data.lookingFor in
+                  ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'location', 'filters'])
+              'gender', 'lookingFor', 'location', 'filters'])
         && isValidProfile(request.resource.data);
 
       allow delete: if isOwner(userId);

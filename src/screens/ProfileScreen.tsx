@@ -4,7 +4,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import React, { useState } from 'react';
 import {
   View,
@@ -19,16 +18,23 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { PhotoCarousel } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
+import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { storage } from '@/services/firebase';
-import { updateUserProfile, Gender } from '@/services/firestoreService';
+import {
+  updateUserProfile,
+  addProfilePhoto,
+  removeProfilePhoto,
+  setPrincipalPhoto,
+  uploadProfilePhoto,
+  MAX_PROFILE_PHOTOS,
+  Gender,
+} from '@/services/firestoreService';
 
 const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Masculino', value: 'masculino' },
@@ -61,7 +67,7 @@ export default function ProfileScreen() {
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   const [saving, setSaving] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoActionPending, setPhotoActionPending] = useState(false);
 
   const toggleInterest = (item: string) => {
     setInterests((prev) =>
@@ -97,7 +103,14 @@ export default function ProfileScreen() {
     }
   };
 
-  const handlePickPhoto = async () => {
+  const photos = profile?.photos ?? [];
+
+  const handleAddPhoto = async () => {
+    if (!user) return;
+    if (photos.length >= MAX_PROFILE_PHOTOS) {
+      Alert.alert('Limite atingido', `Você pode ter no máximo ${MAX_PROFILE_PHOTOS} fotos.`);
+      return;
+    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permissão necessária', 'Permita o acesso à galeria nas configurações.');
@@ -111,26 +124,52 @@ export default function ProfileScreen() {
     });
     if (result.canceled || !result.assets[0]) return;
 
-    setUploadingPhoto(true);
+    setPhotoActionPending(true);
     try {
-      const uri = result.assets[0].uri;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      if (!user?.uid) throw new Error('User ID not available');
-      const storageRef = ref(storage, `avatars/${user.uid}.jpg`);
-      await uploadBytes(storageRef, blob);
-      const photoURL = await getDownloadURL(storageRef);
-
-      await updateUserProfile(user.uid, { photoURL });
+      const url = await uploadProfilePhoto(user.uid, result.assets[0].uri);
+      await addProfilePhoto(user.uid, photos, url);
       await refreshProfile();
-      Alert.alert('Sucesso!', 'Foto atualizada!');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Erro desconhecido';
       Alert.alert('Erro', 'Não foi possível salvar a foto: ' + errorMsg);
     } finally {
-      setUploadingPhoto(false);
+      setPhotoActionPending(false);
     }
+  };
+
+  const handleSetPrincipalPhoto = async (url: string) => {
+    if (!user) return;
+    setPhotoActionPending(true);
+    try {
+      await setPrincipalPhoto(user.uid, photos, url);
+      await refreshProfile();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível definir a foto principal.');
+    } finally {
+      setPhotoActionPending(false);
+    }
+  };
+
+  const handleRemovePhoto = (url: string) => {
+    if (!user) return;
+    Alert.alert('Remover foto?', 'Essa ação não pode ser desfeita.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: async () => {
+          setPhotoActionPending(true);
+          try {
+            await removeProfilePhoto(user.uid, photos, url);
+            await refreshProfile();
+          } catch {
+            Alert.alert('Erro', 'Não foi possível remover a foto.');
+          } finally {
+            setPhotoActionPending(false);
+          }
+        },
+      },
+    ]);
   };
 
   if (!profile) {
@@ -188,13 +227,10 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         </View>
 
-        {/* Avatar */}
+        {/* Avatar — só exibe a principal (photos[0]/photoURL); edição de
+            fotos acontece só na grade abaixo, um único caminho de edição. */}
         <View style={styles.avatarSection}>
-          <AnimatedPressable
-            onPress={handlePickPhoto}
-            style={styles.avatarWrap}
-            disabled={uploadingPhoto}
-          >
+          <View style={styles.avatarWrap}>
             {profile?.photoURL ? (
               <Image
                 source={{ uri: profile.photoURL }}
@@ -208,14 +244,7 @@ export default function ProfileScreen() {
                 <Text style={styles.avatarEmoji}>😊</Text>
               </View>
             )}
-            <View style={styles.cameraBtn}>
-              {uploadingPhoto ? (
-                <ActivityIndicator size="small" color={theme.colors.onSecondary} />
-              ) : (
-                <Ionicons name="camera" size={16} color={theme.colors.onSecondary} />
-              )}
-            </View>
-          </AnimatedPressable>
+          </View>
           {!editing && (
             <>
               <View style={styles.nameRow}>
@@ -223,6 +252,13 @@ export default function ProfileScreen() {
                 {profile?.verified && <VerifiedBadge size={18} />}
               </View>
               <Text style={styles.profileAge}>{profile?.age} anos</Text>
+              {profile?.lookingFor && (
+                <View style={styles.lookingForBadge}>
+                  <Text style={styles.lookingForBadgeText}>
+                    {LOOKING_FOR_LABELS[profile.lookingFor]}
+                  </Text>
+                </View>
+              )}
             </>
           )}
         </View>
@@ -236,15 +272,66 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Photos */}
+        {/* Photos — grade 2x2: única superfície de edição (adicionar, definir
+            principal, remover). photos[0] é sempre a principal. */}
         {!editing && (
-          <View style={styles.photosCard}>
-            <PhotoCarousel
-              photos={
-                profile.photos?.length ? profile.photos : profile.photoURL ? [profile.photoURL] : []
+          <View style={styles.photosGrid}>
+            {Array.from({ length: MAX_PROFILE_PHOTOS }).map((_, index) => {
+              const url = photos[index];
+              if (!url) {
+                return (
+                  <AnimatedPressable
+                    key={`empty-${index}`}
+                    style={styles.photoTileEmpty}
+                    onPress={handleAddPhoto}
+                    disabled={photoActionPending}
+                  >
+                    <Ionicons name="add" size={32} color={theme.colors.primary} />
+                  </AnimatedPressable>
+                );
               }
-              style={styles.photosCarousel}
-            />
+              const isPrincipal = index === 0;
+              return (
+                <View key={url} style={styles.photoTile}>
+                  <Image
+                    source={{ uri: url }}
+                    style={styles.photoTileImage}
+                    contentFit="cover"
+                    placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                    transition={200}
+                  />
+                  {isPrincipal && (
+                    <View style={styles.principalBadge}>
+                      <Text style={styles.principalBadgeText}>Principal</Text>
+                    </View>
+                  )}
+                  <View style={styles.photoTileActions}>
+                    {!isPrincipal && (
+                      <AnimatedPressable
+                        style={[
+                          styles.photoTileActionBtn,
+                          photoActionPending && styles.photoTileActionBtnDisabled,
+                        ]}
+                        onPress={() => handleSetPrincipalPhoto(url)}
+                        disabled={photoActionPending}
+                      >
+                        <Ionicons name="star" size={16} color={theme.colors.white} />
+                      </AnimatedPressable>
+                    )}
+                    <AnimatedPressable
+                      style={[
+                        styles.photoTileActionBtn,
+                        photoActionPending && styles.photoTileActionBtnDisabled,
+                      ]}
+                      onPress={() => handleRemovePhoto(url)}
+                      disabled={photoActionPending}
+                    >
+                      <Ionicons name="close" size={16} color={theme.colors.white} />
+                    </AnimatedPressable>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -451,22 +538,21 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.secondary,
   },
   avatarEmoji: { fontSize: 44 },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: theme.colors.secondary,
-    borderRadius: 14,
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.colors.white,
-  },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   profileName: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   profileAge: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 2 },
+  lookingForBadge: {
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  lookingForBadgeText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
 
   statsRow: {
     flexDirection: 'row',
@@ -501,14 +587,64 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     ...theme.shadows.medium,
   },
-  photosCard: {
-    height: 260,
-    margin: theme.spacing.md,
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  photoTile: {
+    width: '48%',
+    aspectRatio: 1,
     borderRadius: theme.borderRadius.lg,
     overflow: 'hidden',
-    ...theme.shadows.medium,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  photosCarousel: { flex: 1 },
+  photoTileImage: { width: '100%', height: '100%' },
+  photoTileEmpty: {
+    width: '48%',
+    aspectRatio: 1,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+  },
+  principalBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  principalBadgeText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.onSecondary,
+  },
+  photoTileActions: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  photoTileActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoTileActionBtnDisabled: { opacity: 0.5 },
   sectionTitle: {
     fontSize: theme.fontSize.sm,
     fontWeight: '700',
