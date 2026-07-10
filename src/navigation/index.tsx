@@ -22,6 +22,7 @@ import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
 import LikesScreen from '@/screens/LikesScreen';
 import LoginScreen from '@/screens/LoginScreen';
+import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
@@ -40,6 +41,7 @@ export type RootStackParamList = {
   Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
   Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
   MatchProfile: { uid: string; matchId?: string; name: string; photoURL?: string };
+  MatchesGrid: undefined;
   BlockedUsers: undefined;
   Verification: undefined;
   AdminVerifications: undefined;
@@ -185,6 +187,7 @@ export default function Navigation() {
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
+            <Stack.Screen name="MatchesGrid" component={MatchesGridScreen} />
             <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
             <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
             <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />

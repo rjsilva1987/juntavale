@@ -1,8 +1,7 @@
 // src/screens/LikesScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -10,47 +9,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
-import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/services/firebase';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { useLikers } from '@/hooks/useLikers';
 
 export default function LikesScreen() {
-  const { user } = useAuth();
-  const [likers, setLikers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadLikes = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      // People who liked me but I haven't swiped yet
-      const q = query(
-        collection(db, 'swipes'),
-        where('to', '==', user.uid),
-        where('direction', 'in', ['like', 'superlike']),
-      );
-      const snap = await getDocs(q);
-
-      // Check I haven't swiped them back
-      const mySwipesSnap = await getDocs(
-        query(collection(db, 'swipes'), where('from', '==', user.uid)),
-      );
-      const swipedByMe = new Set(mySwipesSnap.docs.map((d) => d.data().to));
-
-      const uids = snap.docs
-        .map((d) => d.data().from as string)
-        .filter((uid) => !swipedByMe.has(uid));
-
-      const profiles = await Promise.all(uids.map((uid) => getUserProfile(uid)));
-      setLikers(profiles.filter(Boolean) as UserProfile[]);
-    } catch (_) {}
-    setLoading(false);
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    loadLikes();
-  }, [user, loadLikes]);
+  const { likers, loading } = useLikers();
 
   if (loading) {
     return (

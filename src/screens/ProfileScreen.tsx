@@ -21,10 +21,12 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
-import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
+import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
+import { useLikers } from '@/hooks/useLikers';
 import { RootStackParamList } from '@/navigation';
 import {
   updateUserProfile,
@@ -35,6 +37,14 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
+
+// Ambas contam o mesmo array de matches visíveis hoje (todo match é uma
+// conversa no modelo atual), mas ficam como funções separadas de propósito:
+// se "Conversas" um dia passar a significar só conversas com mensagem real
+// (fora o placeholder inicial "Digam olá"), o filtro entra só aqui, sem
+// mexer em countActiveMatches nem no card "Matches".
+const countActiveMatches = (matches: MatchWithProfile[]): number => matches.length;
+const countActiveConversations = (matches: MatchWithProfile[]): number => matches.length;
 
 const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Masculino', value: 'masculino' },
@@ -68,6 +78,15 @@ export default function ProfileScreen() {
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
+
+  // Card "Curtidas" — mesma query de LikesScreen, via hook compartilhado.
+  const { likers, loading: likersLoading } = useLikers();
+
+  // Cards "Matches" e "Conversas" — mesmo hook usado em MatchesScreen, só
+  // que aqui só usamos as contagens, não a lista.
+  const { matches: activeMatches, loading: matchesLoading } = useActiveMatches();
+  const matchesCount = countActiveMatches(activeMatches);
+  const conversasCount = countActiveConversations(activeMatches);
 
   const toggleInterest = (item: string) => {
     setInterests((prev) =>
@@ -266,9 +285,27 @@ export default function ProfileScreen() {
         {/* Stats */}
         {!editing && (
           <View style={styles.statsRow}>
-            <StatCard label="Curtidas" value="0" icon="heart" />
-            <StatCard label="Matches" value="0" icon="people" />
-            <StatCard label="Mensagens" value="0" icon="chatbubble" />
+            <StatCard
+              label="Curtidas"
+              value={likers.length}
+              loading={likersLoading}
+              icon="heart"
+              onPress={() => navigation.navigate('Main', { screen: 'Curtidas' })}
+            />
+            <StatCard
+              label="Matches"
+              value={matchesCount}
+              loading={matchesLoading}
+              icon="people"
+              onPress={() => navigation.navigate('MatchesGrid')}
+            />
+            <StatCard
+              label="Conversas"
+              value={conversasCount}
+              loading={matchesLoading}
+              icon="chatbubble"
+              onPress={() => navigation.navigate('Main', { screen: 'Conversas' })}
+            />
           </View>
         )}
 
@@ -486,16 +523,27 @@ function Field({ label, value, onChange, multiline, keyboardType }: FieldProps) 
 interface StatCardProps {
   label: string;
   value: string | number;
+  loading?: boolean;
   icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
 }
 
-function StatCard({ label, value, icon }: StatCardProps) {
+function StatCard({ label, value, loading, icon, onPress }: StatCardProps) {
   return (
-    <View style={styles.statCard}>
+    <AnimatedPressable style={styles.statCard} onPress={onPress}>
       <Ionicons name={icon} size={22} color={theme.colors.primary} />
-      <Text style={styles.statValue}>{value}</Text>
+      {loading ? (
+        <SkeletonPlaceholder
+          width={24}
+          height={theme.fontSize.lg}
+          borderRadius={theme.borderRadius.sm}
+          style={{ marginTop: 4 }}
+        />
+      ) : (
+        <Text style={styles.statValue}>{value}</Text>
+      )}
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </AnimatedPressable>
   );
 }
 

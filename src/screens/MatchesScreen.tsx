@@ -12,51 +12,28 @@ import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
-import { useAuth } from '@/contexts/AuthContext';
+import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
-import { getMatches, getUserProfile, Match, UserProfile } from '@/services/firestoreService';
 import 'dayjs/locale/pt-br';
 dayjs.extend(relativeTime);
 dayjs.locale('pt-br');
 
-interface MatchWithProfile extends Match {
-  otherProfile?: UserProfile;
-}
-
 type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
-  const { user, profile } = useAuth();
+  const { matches: activeMatches, loading } = useActiveMatches();
   const [matches, setMatches] = useState<MatchWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    const unsub = getMatches(user.uid, async (rawMatches) => {
-      const enriched = await Promise.all(
-        rawMatches.map(async (m) => {
-          const otherId = m.users.find((u) => u !== user.uid);
-          if (!otherId) return { ...m, otherProfile: undefined };
-          const otherProfile = await getUserProfile(otherId);
-          return { ...m, otherProfile: otherProfile ?? undefined };
-        }),
-      );
-      const blockedUsers = profile?.blockedUsers ?? [];
-      const visible = enriched.filter((m) => {
-        if (m.blockedBy && m.blockedBy.length > 0) return false;
-        return !m.otherProfile || !blockedUsers.includes(m.otherProfile.uid);
-      });
-      // Sort by most recent message
-      visible.sort((a, b) => {
-        const ta = a.lastMessageAt?.toMillis() ?? 0;
-        const tb = b.lastMessageAt?.toMillis() ?? 0;
-        return tb - ta;
-      });
-      setMatches(visible);
-      setLoading(false);
+    // Sort by most recent message — específico desta tela (o hook
+    // compartilhado devolve a ordem "natural" do listener, sem ordenar).
+    const sorted = [...activeMatches].sort((a, b) => {
+      const ta = a.lastMessageAt?.toMillis() ?? 0;
+      const tb = b.lastMessageAt?.toMillis() ?? 0;
+      return tb - ta;
     });
-    return unsub;
-  }, [user, profile?.blockedUsers]);
+    setMatches(sorted);
+  }, [activeMatches]);
 
   if (loading) {
     return (
