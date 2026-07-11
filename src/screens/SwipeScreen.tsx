@@ -28,11 +28,13 @@ import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
+import { useSuperLikeQuota } from '@/hooks/useSuperLikeQuota';
 import { RootStackParamList } from '@/navigation';
 import {
   getDiscoverProfiles,
   recordSwipe,
   undoSwipe,
+  SuperLikeQuotaExceededError,
   UserProfile,
 } from '@/services/firestoreService';
 
@@ -50,6 +52,7 @@ export default function SwipeScreen() {
   const { user, profile } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { filters, saveFilters, clearFilters } = useFilters();
+  const { remaining: superLikesRemaining, limit: superLikeLimit } = useSuperLikeQuota();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -159,7 +162,31 @@ export default function SwipeScreen() {
           );
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        // Corrida rara: a cota acabou em outro device entre o tap aqui e o
+        // commit do batch no servidor. Nada foi gravado (rules rejeitaram o
+        // create do swipe) — só desfaz visualmente, sem chamar undoSwipe().
+        if (error instanceof SuperLikeQuotaExceededError) {
+          setCurrentIndex(swipedIndex);
+          setLastSwipedProfile(null);
+          showSuperLikeQuotaAlert();
+        }
+      });
+  };
+
+  const showSuperLikeQuotaAlert = () => {
+    Alert.alert(
+      'Super Likes esgotados ⭐',
+      'Seus 3 Super Likes do mês acabaram. Eles renovam no dia 1º. Em breve você poderá conseguir Super Likes extras!',
+    );
+  };
+
+  const handleSuperLikePress = () => {
+    if (superLikesRemaining === 0) {
+      showSuperLikeQuotaAlert();
+      return;
+    }
+    swipeCard('super');
   };
 
   const handleUndo = async () => {
@@ -345,8 +372,10 @@ export default function SwipeScreen() {
             icon="star"
             color={theme.colors.secondary}
             size={48}
-            onPress={() => swipeCard('super')}
+            onPress={handleSuperLikePress}
             iconColor={theme.colors.onSecondary}
+            dimmed={superLikesRemaining === 0}
+            badge={`${superLikesRemaining}/${superLikeLimit}`}
           />
           <ActionButton
             icon="heart"
@@ -480,26 +509,47 @@ interface ActionButtonProps {
   onPress: () => void;
   iconColor?: string;
   disabled?: boolean;
+  // Opacidade reduzida SEM bloquear o toque (diferente de `disabled`, que
+  // usa o `disabled` nativo do TouchableOpacity) — usado pelo superlike
+  // esgotado, que precisa continuar tocável só pra mostrar o Alert.
+  dimmed?: boolean;
+  badge?: string;
 }
 
-function ActionButton({ icon, color, size, onPress, iconColor, disabled }: ActionButtonProps) {
+function ActionButton({
+  icon,
+  color,
+  size,
+  onPress,
+  iconColor,
+  disabled,
+  dimmed,
+  badge,
+}: ActionButtonProps) {
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onPress();
   };
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.actionBtn,
-        { width: size, height: size, borderColor: color },
-        disabled && styles.actionBtnDisabled,
-      ]}
-      onPress={handlePress}
-      disabled={disabled}
-    >
-      <Ionicons name={icon} size={size * 0.45} color={iconColor || color} />
-    </TouchableOpacity>
+    <View>
+      <TouchableOpacity
+        style={[
+          styles.actionBtn,
+          { width: size, height: size, borderColor: color },
+          (disabled || dimmed) && styles.actionBtnDisabled,
+        ]}
+        onPress={handlePress}
+        disabled={disabled}
+      >
+        <Ionicons name={icon} size={size * 0.45} color={iconColor || color} />
+      </TouchableOpacity>
+      {badge && (
+        <View style={styles.actionBadge}>
+          <Text style={styles.actionBadgeText}>{badge}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -577,6 +627,22 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: {
     opacity: 0.35,
+  },
+  actionBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  actionBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.onSecondary,
   },
 });
 

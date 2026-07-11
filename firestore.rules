@@ -145,6 +145,38 @@ service cloud.firestore {
       }
     }
 
+    // ───────────────────────── users/{uid}/superLikes/usage (Super Like Fase 2) ─────────────────────────
+    //
+    // Contador mensal de superlikes, em caminho absoluto (em vez de aninhado
+    // em match /users/{userId} acima) pra não colidir o nome da variável de
+    // path com o {userId} já usado ali. year/month são sempre UTC (bate com
+    // request.time.year()/month(), que o servidor calcula em UTC) e o count
+    // só pode subir de 1 em 1 dentro do mesmo mês, ou resetar pra 1 num mês
+    // novo — nunca decrementar nem pular direto pra um valor maior.
+    match /users/{uid}/superLikes/usage {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'count'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && request.resource.data.count == 1;
+      allow update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'count'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && (
+          (resource.data.year == request.time.year()
+            && resource.data.month == request.time.month()
+            && request.resource.data.count == resource.data.count + 1
+            && request.resource.data.count <= 3)
+          ||
+          ((resource.data.year != request.time.year()
+            || resource.data.month != request.time.month())
+            && request.resource.data.count == 1)
+        );
+      allow delete: if false;
+    }
+
     // ───────────────────────── swipes ─────────────────────────
     //
     // Leitura liberada para from==me OU to==me (decisão consciente: a tela
@@ -161,7 +193,31 @@ service cloud.firestore {
         && swipeId == request.resource.data.from + '_' + request.resource.data.to
         && request.resource.data.direction in ['like', 'nope', 'superlike']
         && request.resource.data.createdAt == request.time
-        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt']);
+        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt'])
+        // Super Like Fase 2: se o swipe é 'superlike', o contador mensal
+        // (users/{uid}/superLikes/usage) precisa ter sido escrito no MESMO
+        // batch com um incremento real (getAfter reflete a escrita do batch
+        // ainda não commitado) — sem isso, um client malicioso criaria o
+        // swipe sem gastar cota. As próprias rules do contador acima já
+        // impedem resetar/decrementar count dentro do mesmo mês.
+        && (
+          request.resource.data.direction != 'superlike'
+          || (
+            getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month()
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count <= 3
+            && (
+              !exists(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage)
+                ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
+                : (
+                  (get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
+                    && get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month())
+                    ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count + 1
+                    : getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
+                )
+            )
+          )
+        );
 
       allow update: if false; // swipe é imutável — nunca se reescreve, só se cria/apaga
 

@@ -14,11 +14,13 @@ import {
   onSnapshot,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 import { ADMIN_UID } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
+import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { db, storage } from '@/services/firebase';
 import { haversineDistanceKm } from '@/utils/geo';
 
@@ -202,18 +204,62 @@ export const getDiscoverProfiles = async (
 
 // ─── Swipes & Matches ─────────────────────────────────────
 
+interface SuperLikeUsage {
+  year: number;
+  month: number;
+  count: number;
+}
+
+// Lançado por recordSwipe quando o superlike estouraria o limite mensal —
+// tipado por 'code' (padrão de erro do Firebase) pra a UI distinguir essa
+// falha de qualquer outro erro de rede/permissão sem depender da mensagem.
+export class SuperLikeQuotaExceededError extends Error {
+  code = 'superlike/quota-exceeded' as const;
+
+  constructor() {
+    super('Limite mensal de superlikes atingido.');
+    this.name = 'SuperLikeQuotaExceededError';
+  }
+}
+
 export const recordSwipe = async (
   fromUid: string,
   toUid: string,
   direction: 'like' | 'nope' | 'superlike',
 ): Promise<boolean> => {
-  // Save swipe
-  await setDoc(doc(db, 'swipes', `${fromUid}_${toUid}`), {
+  const swipeRef = doc(db, 'swipes', `${fromUid}_${toUid}`);
+  const swipeData = {
     from: fromUid,
     to: toUid,
     direction,
     createdAt: serverTimestamp(),
-  });
+  };
+
+  if (direction === 'superlike') {
+    // Contador mensal em UTC — bate com request.time.year()/month() usados
+    // nas rules (getAfter() do batch abaixo), que o servidor calcula em UTC.
+    const usageRef = doc(db, 'users', fromUid, 'superLikes', 'usage');
+    const usageSnap = await getDoc(usageRef);
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
+
+    const usage = usageSnap.exists() ? (usageSnap.data() as SuperLikeUsage) : null;
+    const isSameMonth = usage != null && usage.year === year && usage.month === month;
+
+    if (isSameMonth && usage.count >= SUPER_LIKE_LIMIT) {
+      throw new SuperLikeQuotaExceededError();
+    }
+
+    const nextCount = isSameMonth ? usage.count + 1 : 1;
+
+    const batch = writeBatch(db);
+    batch.set(usageRef, { year, month, count: nextCount });
+    batch.set(swipeRef, swipeData);
+    await batch.commit();
+  } else {
+    await setDoc(swipeRef, swipeData);
+  }
 
   if (direction === 'nope') return false;
 
