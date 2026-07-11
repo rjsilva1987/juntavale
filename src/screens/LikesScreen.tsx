@@ -1,18 +1,33 @@
 // src/screens/LikesScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useLikers } from '@/hooks/useLikers';
+import { RootStackParamList } from '@/navigation';
 
 export default function LikesScreen() {
-  const { likers, loading } = useLikers();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { likers, loading, reload } = useLikers();
+
+  // useLikers faz fetch único (getDocs), não onSnapshot — sem isso, quem foi
+  // retribuído/dispensado no preview continuaria aparecendo aqui até um
+  // remount da tela.
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+    }, [reload]),
+  );
 
   if (loading) {
     return (
@@ -52,15 +67,27 @@ export default function LikesScreen() {
       ) : (
         <FlatList
           data={likers}
-          keyExtractor={(item) => item.uid}
+          keyExtractor={(item) => item.profile.uid}
           numColumns={2}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={{ gap: 12 }}
           renderItem={({ item }) => (
-            <Animated.View style={styles.likerCard} entering={FadeInDown}>
-              {item.photoURL ? (
+            <AnimatedPressable
+              style={[styles.likerCard, item.isSuperLike && styles.likerCardSuperLike]}
+              entering={FadeInDown}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('MatchProfile', {
+                  uid: item.profile.uid,
+                  name: item.profile.name,
+                  photoURL: item.profile.photoURL,
+                  fromLikes: true,
+                });
+              }}
+            >
+              {item.profile.photoURL ? (
                 <Image
-                  source={{ uri: item.photoURL }}
+                  source={{ uri: item.profile.photoURL }}
                   style={styles.likerPhoto}
                   contentFit="cover"
                   placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
@@ -71,16 +98,20 @@ export default function LikesScreen() {
                   <Text style={{ fontSize: 40 }}>😊</Text>
                 </View>
               )}
-              {/* Blurred info — premium feature teaser */}
               <View style={styles.likerInfo}>
                 <Text style={styles.likerName}>
-                  {item.name}, {item.age}
+                  {item.profile.name}, {item.profile.age}
                 </Text>
               </View>
+              {item.isSuperLike && (
+                <View style={styles.superLikeBadge}>
+                  <Ionicons name="star" size={16} color={theme.colors.onSecondary} />
+                </View>
+              )}
               <View style={styles.heartBadge}>
                 <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
               </View>
-            </Animated.View>
+            </AnimatedPressable>
           )}
         />
       )}
@@ -127,6 +158,10 @@ const styles = StyleSheet.create({
     ...theme.shadows.medium,
     position: 'relative',
   },
+  likerCardSuperLike: {
+    borderWidth: 2,
+    borderColor: theme.colors.secondary,
+  },
   likerPhoto: { width: '100%', aspectRatio: 0.8 },
   likerPhotoPlaceholder: {
     width: '100%',
@@ -148,6 +183,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: 20,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  superLikeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
     backgroundColor: theme.colors.secondary,
     borderRadius: 20,
     width: 28,

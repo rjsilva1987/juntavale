@@ -22,7 +22,7 @@ import { getUserProfile, recordSwipe, UserProfile } from '@/services/firestoreSe
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
 export default function MatchProfileScreen({ route, navigation }: MatchProfileScreenProps) {
-  const { uid, matchId, name, photoURL } = route.params;
+  const { uid, matchId, name, photoURL, fromLikes } = route.params;
   const isPreview = !matchId;
   const { user, profile: myProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -206,6 +206,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                   style={[styles.swipeBtn, styles.likeBtn]}
                   onPress={() => handleSwipeAction('like')}
                   disabled={actionPending}
+                  accessibilityLabel={fromLikes ? 'Retribuir like' : 'Curtir'}
                 >
                   <Ionicons name="heart" size={28} color={theme.colors.like} />
                 </AnimatedPressable>

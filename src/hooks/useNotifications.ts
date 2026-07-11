@@ -36,9 +36,9 @@ export function useNotifications() {
         (response) => {
           const data = response.notification.request.content.data as
             Partial<PushNotificationData> | undefined;
-          if (!data?.matchId || !navigationRef.isReady()) return;
+          if (!data?.type || !navigationRef.isReady()) return;
 
-          if (data.type === 'message') {
+          if (data.type === 'message' && data.matchId) {
             navigationRef.navigate('Chat', {
               matchId: data.matchId,
               otherUid: data.otherUid ?? '',
@@ -47,6 +47,8 @@ export function useNotifications() {
             });
           } else if (data.type === 'match') {
             navigationRef.navigate('Main', { screen: 'Conversas' });
+          } else if (data.type === 'superlike') {
+            navigationRef.navigate('Main', { screen: 'Curtidas' });
           }
         },
       );

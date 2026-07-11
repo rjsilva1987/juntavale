@@ -84,6 +84,41 @@ export const onMatchCreated = onDocumentCreated(
   },
 );
 
+// Notifica quem recebeu um superlike, anonimamente (sem fromUid/nome/foto —
+// decisão de produto: só o match revela quem foi). Se o superlike já virou
+// match nesta mesma escrita (swipe reverso existente e != 'nope'),
+// onMatchCreated já notifica os dois lados — não duplicar aqui.
+export const onSuperLikeReceived = onDocumentCreated(
+  { document: 'swipes/{swipeId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { from, to, direction } = snap.data() as {
+      from: string;
+      to: string;
+      direction: string;
+    };
+    if (direction !== 'superlike') return;
+
+    const reverseSnap = await db.doc(`swipes/${to}_${from}`).get();
+    if (reverseSnap.exists && reverseSnap.data()?.direction !== 'nope') return;
+
+    const token = await getPushToken(to);
+    if (!token) return;
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: '⭐ Alguém te deu um Super Like!',
+        body: 'Abra o app para descobrir quem foi 👀',
+        data: { type: 'superlike' },
+      },
+    ]);
+  },
+);
+
 export const onMessageCreated = onDocumentCreated(
   { document: 'matches/{matchId}/messages/{messageId}', region: REGION },
   async (event) => {
