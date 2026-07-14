@@ -47,7 +47,7 @@ type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto } = route.params;
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [blockedBy, setBlockedBy] = useState<string[]>([]);
   const isBlocked = blockedBy.length > 0;
+  // Defesa em profundidade: MatchesScreen já barra a navegação pra cá se
+  // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
+  // (deep link, MatchProfile, etc.) — a garantia real continua sendo a rule
+  // de create em matches/{matchId}/messages (verified==true no doc do
+  // remetente). Mensagens já existentes continuam visíveis de propósito: o
+  // histórico é lido normalmente, só o envio fica bloqueado.
+  const isUnverified = !profile?.verified;
   const flatListRef = React.useRef<FlatList>(null);
   const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
 
@@ -77,7 +84,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !user || isBlocked) return;
+    if (!trimmed || !user || isBlocked || isUnverified) return;
     setText('');
     try {
       await sendMessage(matchId, user.uid, trimmed);
@@ -90,7 +97,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   };
 
   const handleSendImage = async (uri: string) => {
-    if (!user || isBlocked) return;
+    if (!user || isBlocked || isUnverified) return;
     setUploadProgress(0);
     try {
       const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
@@ -131,7 +138,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   const handleShareLocation = async () => {
     setAttachSheetVisible(false);
-    if (!user || isBlocked) return;
+    if (!user || isBlocked || isUnverified) return;
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
@@ -372,6 +379,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
               <Text style={styles.blockedBannerText}>Conversa indisponível</Text>
             </View>
+          ) : isUnverified ? (
+            <Pressable
+              style={styles.blockedBanner}
+              onPress={() => navigation.navigate('Verification')}
+            >
+              <Ionicons name="shield-checkmark-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedBannerText}>Verifique seu perfil para responder</Text>
+            </Pressable>
           ) : (
             <View style={styles.inputRow}>
               <AnimatedPressable

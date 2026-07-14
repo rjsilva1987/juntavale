@@ -447,14 +447,13 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Verificação de perfil — 'Verification' só existe no grupo pending da
-            navegação; usuário já verificado não tem pra onde navegar (nem
-            precisa, o ícone+label já mostram o status), então o botão fica
-            inerte nesse caso em vez de apontar pra uma rota inexistente. */}
+        {/* Verificação de perfil — ponto de entrada permanente: 'Verification'
+            existe no grupo "app" independente de `verified`, então navega
+            sempre, mesmo já verificado (a própria tela mostra o estado
+            "Perfil verificado!" nesse caso). */}
         <AnimatedPressable
           style={styles.blockedUsersBtn}
-          onPress={profile?.verified ? undefined : () => navigation.navigate('Verification')}
-          disabled={profile?.verified}
+          onPress={() => navigation.navigate('Verification')}
         >
           <Ionicons
             name={profile?.verified ? 'shield-checkmark' : 'shield-checkmark-outline'}

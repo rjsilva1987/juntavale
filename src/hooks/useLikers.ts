@@ -14,6 +14,7 @@ export interface Liker {
 interface UseLikersReturn {
   likers: Liker[];
   loading: boolean;
+  error: Error | null;
   reload: () => Promise<void>;
 }
 
@@ -24,10 +25,12 @@ export function useLikers(): UseLikersReturn {
   const { user } = useAuth();
   const [likers, setLikers] = useState<Liker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       // People who liked me but I haven't swiped yet
       const q = query(
@@ -50,19 +53,39 @@ export function useLikers(): UseLikersReturn {
         }))
         .filter((entry) => !swipedByMe.has(entry.uid));
 
-      const withProfiles = await Promise.all(
+      const settled = await Promise.allSettled(
         entries.map(async (entry) => ({
           profile: await getUserProfile(entry.uid),
           isSuperLike: entry.isSuperLike,
         })),
       );
 
+      const withProfiles: { profile: UserProfile | null; isSuperLike: boolean }[] = [];
+      let rejectedCount = 0;
+      settled.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          const { profile, isSuperLike } = result.value;
+          withProfiles.push({
+            // uid do swipe é confiável mesmo quando o doc de users/{uid} é
+            // legado e não tem o campo `uid` gravado.
+            profile: profile ? { ...profile, uid: entries[i].uid } : null,
+            isSuperLike,
+          });
+        } else {
+          rejectedCount += 1;
+          console.error('[useLikers] Falha ao buscar perfil:', entries[i].uid, result.reason);
+        }
+      });
+
       const valid = withProfiles.filter((entry): entry is Liker => entry.profile !== null);
       // Super-likers primeiro; sort é estável (ES2019+), então a ordem
       // relativa dentro de cada grupo (a que já vinha do snapshot) se mantém.
       valid.sort((a, b) => Number(b.isSuperLike) - Number(a.isSuperLike));
       setLikers(valid);
-    } catch (_) {}
+    } catch (err) {
+      console.error('[useLikers] Erro na query de likes:', err);
+      setError(err instanceof Error ? err : new Error('Unknown error'));
+    }
     setLoading(false);
   }, [user]);
 
@@ -71,5 +94,5 @@ export function useLikers(): UseLikersReturn {
     load();
   }, [user, load]);
 
-  return { likers, loading, reload: load };
+  return { likers, loading, error, reload: load };
 }

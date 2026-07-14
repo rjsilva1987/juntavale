@@ -76,10 +76,11 @@ export interface Message {
 
 // ─── User ─────────────────────────────────────────────────
 
-// Criação do doc público (users/{uid}) e do ChaveF privado
-// (users/{uid}/private/registration) é feita num writeBatch único em
-// AuthContext.register() — não aqui — pra garantir que os dois setDoc
-// entrem juntos ou nenhum entre.
+// Criação do doc público (users/{uid}) é feita em AuthContext.register() —
+// não aqui. O ChaveF privado (users/{uid}/private/registration) não é mais
+// capturado no cadastro: é pedido na VerificationScreen, junto do envio da
+// selfie (submitRegistrationPrivate abaixo), já que agora só é exigido de
+// quem quer conversar, não de quem só quer usar o app.
 
 export interface RegistrationPrivate {
   chaveF: string;
@@ -94,6 +95,17 @@ export const getRegistrationPrivate = async (
 ): Promise<RegistrationPrivate | null> => {
   const snap = await getDoc(doc(db, 'users', uid, 'private', 'registration'));
   return snap.exists() ? (snap.data() as RegistrationPrivate) : null;
+};
+
+// Chamado pela VerificationScreen antes de submitVerification, só quando
+// getRegistrationPrivate ainda não achou um doc existente — as rules tornam
+// este doc create-only (allow update, delete: if false), então uma segunda
+// chamada pro mesmo uid seria rejeitada pelo servidor.
+export const submitRegistrationPrivate = async (uid: string, chaveF: string): Promise<void> => {
+  await setDoc(doc(db, 'users', uid, 'private', 'registration'), {
+    chaveF,
+    createdAt: serverTimestamp(),
+  });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {

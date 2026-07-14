@@ -7,7 +7,7 @@ import {
   User,
   updateProfile,
 } from 'firebase/auth';
-import { doc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import { LookingFor } from '@/constants/lookingFor';
@@ -23,7 +23,6 @@ interface AuthContextType {
     email: string,
     password: string,
     name: string,
-    chaveF: string,
     age: number,
     bio: string,
     interests: string[],
@@ -85,7 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     name: string,
-    chaveF: string,
     age: number,
     bio: string,
     interests: string[],
@@ -102,28 +100,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       interests,
       lookingFor,
     };
-    // users/{uid} (público) e users/{uid}/private/registration (ChaveF) num
-    // único writeBatch: os dois setDoc só entram juntos, ou nenhum entra —
-    // fecha a janela de conta criada sem ChaveF gravado (o próprio ChaveF é
-    // create-only nas regras, então uma escrita parcial ficaria presa pra
-    // sempre, já que o e-mail já estaria em uso pra tentar de novo).
-    // createUserWithEmailAndPassword acima fica fora do batch de propósito —
-    // Auth não é Firestore, essas duas operações não podem ser atômicas entre
-    // si. Se o batch abaixo falhar, sobra uma conta Auth sem nenhum doc no
-    // Firestore (nem público nem privado) — pior que hoje não, só continua a
-    // mesma janela pré-existente, agora sem o caso intermediário "só o
-    // público foi criado".
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'users', cred.user.uid), {
+    // createUserWithEmailAndPassword acima fica fora deste setDoc de
+    // propósito — Auth não é Firestore, as duas operações não podem ser
+    // atômicas entre si. Se o setDoc abaixo falhar, sobra uma conta Auth sem
+    // doc no Firestore. O ChaveF (users/{uid}/private/registration) não é
+    // mais capturado aqui — passou a ser pedido na VerificationScreen, junto
+    // do envio da selfie (ver submitRegistrationPrivate em firestoreService.ts).
+    await setDoc(doc(db, 'users', cred.user.uid), {
       ...newProfile,
       uid: cred.user.uid,
       createdAt: serverTimestamp(),
     });
-    batch.set(doc(db, 'users', cred.user.uid, 'private', 'registration'), {
-      chaveF,
-      createdAt: serverTimestamp(),
-    });
-    await batch.commit();
 
     setProfile({ ...newProfile, uid: cred.user.uid });
   };

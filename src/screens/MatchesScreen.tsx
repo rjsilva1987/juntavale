@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
 import 'dayjs/locale/pt-br';
@@ -21,6 +22,7 @@ dayjs.locale('pt-br');
 type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
+  const { profile } = useAuth();
   const { matches: activeMatches, loading } = useActiveMatches();
   const [matches, setMatches] = useState<MatchWithProfile[]>([]);
 
@@ -34,6 +36,30 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     });
     setMatches(sorted);
   }, [activeMatches]);
+
+  // Gate client-side: só evita a navegação e explica o motivo. A garantia
+  // real é a rule de create em matches/{matchId}/messages (verified==true) —
+  // isso aqui é UX, não segurança (ver ChatScreen.tsx pra defesa em
+  // profundidade, caso alguém chegue no Chat por outro caminho).
+  const handleOpenChat = (item: MatchWithProfile) => {
+    if (!profile?.verified) {
+      Alert.alert(
+        'Verifique seu perfil para conversar',
+        'Você precisa verificar seu perfil antes de enviar mensagens.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Verificar agora', onPress: () => navigation.navigate('Verification') },
+        ],
+      );
+      return;
+    }
+    navigation.navigate('Chat', {
+      matchId: item.id,
+      otherUid: item.otherProfile?.uid ?? '',
+      otherName: item.otherProfile?.name ?? 'Usuário',
+      otherPhoto: item.otherProfile?.photoURL ?? '',
+    });
+  };
 
   if (loading) {
     return (
@@ -82,14 +108,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
             <AnimatedPressable
               style={styles.matchCard}
               entering={FadeInDown}
-              onPress={() =>
-                navigation.navigate('Chat', {
-                  matchId: item.id,
-                  otherUid: item.otherProfile?.uid ?? '',
-                  otherName: item.otherProfile?.name ?? 'Usuário',
-                  otherPhoto: item.otherProfile?.photoURL ?? '',
-                })
-              }
+              onPress={() => handleOpenChat(item)}
             >
               {/* Avatar */}
               <View style={styles.avatarWrap}>

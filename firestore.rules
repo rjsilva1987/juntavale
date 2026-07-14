@@ -276,6 +276,7 @@ service cloud.firestore {
         // bloqueado — consegue mandar mensagem, mesmo direto pela API.
         allow create: if isSignedIn()
           && matchAllowsPost(getMatch(matchId), request.auth.uid)
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 2000

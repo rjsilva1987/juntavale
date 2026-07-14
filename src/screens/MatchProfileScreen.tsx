@@ -1,13 +1,14 @@
 // src/screens/MatchProfileScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, runOnJS } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { EmptyState } from '@/components/EmptyState';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
@@ -51,12 +52,29 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
       runOnJS(handlePhotoTap)(e.x);
     });
 
-  useEffect(() => {
-    getUserProfile(uid).then((p) => {
-      setProfile(p);
+  const loadProfile = useCallback(() => {
+    if (!uid) {
+      console.error('[MatchProfile] uid ausente nos params');
       setLoading(false);
-    });
+      setProfile(null);
+      return;
+    }
+    setLoading(true);
+    getUserProfile(uid)
+      .then((p) => {
+        setProfile(p);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('[MatchProfile] Erro ao buscar perfil:', err);
+        setProfile(null);
+        setLoading(false);
+      });
   }, [uid]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleBlock = () => {
     if (!user) return;
@@ -144,6 +162,14 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
           </View>
+        ) : profile === null ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Não foi possível carregar o perfil"
+            subtitle="Verifique sua conexão e tente novamente."
+            buttonLabel="Tentar novamente"
+            onButtonPress={loadProfile}
+          />
         ) : (
           <ScrollView contentContainerStyle={styles.content}>
             <GestureDetector gesture={photoTapGesture}>

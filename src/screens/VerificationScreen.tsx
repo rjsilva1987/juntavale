@@ -3,15 +3,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { CHAVEF_REGEX } from '@/constants/chaveF';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import { getRegistrationPrivate, submitRegistrationPrivate } from '@/services/firestoreService';
 import {
   getVerificationStatus,
   submitVerification,
@@ -21,16 +23,26 @@ import {
 type VerificationScreenProps = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export default function VerificationScreen({ navigation }: VerificationScreenProps) {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [verification, setVerification] = useState<Verification | null>(null);
+  // null enquanto ainda não sabemos (mesma janela de `loading` abaixo) — true
+  // pra contas antigas que já tinham ChaveF gravado no cadastro, false pra
+  // quem nunca gravou (cadastro atual não pede mais ChaveF), caso em que o
+  // campo abaixo aparece e passa a ser exigido aqui, na hora de verificar.
+  const [registrationExists, setRegistrationExists] = useState<boolean | null>(null);
+  const [chaveF, setChaveF] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const v = await getVerificationStatus(user.uid);
+    const [v, reg] = await Promise.all([
+      getVerificationStatus(user.uid),
+      getRegistrationPrivate(user.uid),
+    ]);
     setVerification(v);
+    setRegistrationExists(reg != null);
     setLoading(false);
   }, [user]);
 
@@ -38,10 +50,22 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
     load();
   }, [load]);
 
-  const isApproved = verification?.status === 'approved';
+  // Aprovação vem de profile.verified (realtime, via onSnapshot no useAuth)
+  // em vez de verification.status — este último é buscado uma única vez em
+  // load() e ficaria "Em análise" preso até reabrir a tela após o admin
+  // aprovar.
+  const isApproved = profile?.verified === true;
+  const needsChaveF = registrationExists === false;
 
   const handleTakeSelfie = async () => {
     if (!user) return;
+    if (needsChaveF && !CHAVEF_REGEX.test(chaveF)) {
+      Alert.alert(
+        'Chave F inválida',
+        'A Chave F deve ter o formato F seguido de 7 dígitos (ex: F1234567).',
+      );
+      return;
+    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permissão necessária', 'Permita o acesso à câmera nas configurações.');
@@ -57,6 +81,15 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
 
     setSubmitting(true);
     try {
+      // Grava o ChaveF ANTES da selfie: users/{uid}/private/registration é
+      // create-only nas rules, então isso precisa acontecer só uma vez, e
+      // antes é mais seguro que depois — se a selfie falhar, o usuário só
+      // tenta reenviar (branch 'rejected'/sem pedido), sem precisar
+      // redigitar o ChaveF, já que na próxima carga `registrationExists`
+      // já estará true.
+      if (needsChaveF) {
+        await submitRegistrationPrivate(user.uid, chaveF);
+      }
       await submitVerification(user.uid, result.assets[0].uri);
       await Promise.all([load(), refreshProfile()]);
     } catch {
@@ -110,6 +143,21 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                   visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente —
                   isso costuma levar até 48h. A selfie nunca fica pública.
                 </Text>
+                {needsChaveF && (
+                  <View style={styles.chaveFWrap}>
+                    <Text style={styles.chaveFLabel}>Chave F</Text>
+                    <TextInput
+                      style={styles.chaveFInput}
+                      placeholder="F1234567"
+                      placeholderTextColor={theme.colors.textLight}
+                      value={chaveF}
+                      onChangeText={(t) => setChaveF(t.toUpperCase())}
+                      autoCapitalize="characters"
+                      maxLength={8}
+                      editable={!submitting}
+                    />
+                  </View>
+                )}
                 <AnimatedPressable
                   style={styles.actionBtn}
                   onPress={handleTakeSelfie}
@@ -185,6 +233,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: theme.spacing.xl,
+  },
+
+  chaveFWrap: { width: '100%', maxWidth: 260, marginBottom: theme.spacing.lg },
+  chaveFLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    marginBottom: 6,
+  },
+  chaveFInput: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surface,
+    textAlign: 'center',
   },
 
   actionBtn: {
