@@ -16,7 +16,13 @@ import {
   Timestamp,
   writeBatch,
 } from 'firebase/firestore';
-import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import {
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
 
 import { ADMIN_UID } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
@@ -69,6 +75,10 @@ export interface LastMessage {
 export interface Match {
   id: string;
   users: string[];
+  // Gravado em recordSwipe() na criação do doc — sempre presente em matches
+  // novos; opcional só pra não quebrar leituras de docs antigos que, na
+  // prática, também têm o campo (existe desde a primeira versão do matching).
+  createdAt?: Timestamp;
   lastMessage?: LastMessage;
   // Mapa por usuário, escrito pelo CLIENTE (cada um só escreve a própria
   // chave — ver firestore.rules) ao abrir/focar o chat. Base do badge de não
@@ -103,9 +113,7 @@ export interface RegistrationPrivate {
 // Admin-only na prática: firestore.rules só libera o read deste doc pro
 // próprio dono ou pra isAdmin(). Contas criadas antes do ChaveF existir não
 // têm este doc — retorna null nesse caso.
-export const getRegistrationPrivate = async (
-  uid: string,
-): Promise<RegistrationPrivate | null> => {
+export const getRegistrationPrivate = async (uid: string): Promise<RegistrationPrivate | null> => {
   const snap = await getDoc(doc(db, 'users', uid, 'private', 'registration'));
   return snap.exists() ? (snap.data() as RegistrationPrivate) : null;
 };

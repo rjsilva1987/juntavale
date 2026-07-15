@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { Match } from '@/services/firestoreService';
+import { isMatchUnread } from '@/utils/matches';
 
 // Listener PRÓPRIO em vez de derivar de useActiveMatches: aquele hook
 // enriquece cada match com um getUserProfile() (getDoc, não realtime) do
@@ -34,13 +35,7 @@ export function useUnreadCount(): number {
         const otherId = m.users.find((u) => u !== uid);
         if (otherId && blockedUsers.includes(otherId)) return false;
 
-        // Match antigo (sem lastMessage) ou sem mensagem ainda, ou última
-        // mensagem enviada por mim mesmo: conta como lido.
-        if (!m.lastMessage || m.lastMessage.senderId === uid) return false;
-
-        const readAt = m.lastReadAt?.[uid];
-        if (!readAt) return true;
-        return m.lastMessage.createdAt.toMillis() > readAt.toMillis();
+        return isMatchUnread(m, uid);
       });
       setCount(unread.length);
     });
