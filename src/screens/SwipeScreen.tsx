@@ -399,6 +399,8 @@ export default function SwipeScreen() {
         currentUserPhoto={profile?.photoURL}
         matchedUserPhoto={matchedProfile?.photoURL}
         matchedUserName={matchedProfile?.name ?? ''}
+        myProfile={profile}
+        theirProfile={matchedProfile}
         onSendMessage={() => {
           if (user && matchedProfile) {
             const matchId = [user.uid, matchedProfile.uid].sort().join('_');
@@ -408,6 +410,19 @@ export default function SwipeScreen() {
               otherUid: matchedProfile.uid,
               otherName: matchedProfile.name,
               otherPhoto: matchedProfile.photoURL,
+            });
+          }
+        }}
+        onUseIcebreaker={(message) => {
+          if (user && matchedProfile) {
+            const matchId = [user.uid, matchedProfile.uid].sort().join('_');
+            setMatchedProfile(null);
+            navigation.navigate('Chat', {
+              matchId,
+              otherUid: matchedProfile.uid,
+              otherName: matchedProfile.name,
+              otherPhoto: matchedProfile.photoURL,
+              draftMessage: message,
             });
           }
         }}

@@ -48,7 +48,7 @@ const SKELETON_PATTERN = [false, true, false, false, true];
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
-  const { matchId, otherUid, otherName, otherPhoto } = route.params;
+  const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -79,8 +79,24 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // Ação escolhida no attach sheet, disparada com segurança só depois que o
   // Modal termina de fechar de verdade (ver runAfterAttachSheetClose).
   const pendingAttachActionRef = useRef<(() => void) | null>(null);
+  // draftMessage (sugestão de icebreaker do MatchModal) só é aplicado uma vez,
+  // na montagem inicial da tela — se o usuário apagar o texto ou os params
+  // mudarem depois (ex: deep link), não deve ser reaplicado.
+  // aguarda o profile do useAuth resolver antes de consumir (evita perder o draft por latência)
+  const draftAppliedRef = useRef(false);
 
   const uid = user?.uid;
+
+  useEffect(() => {
+    if (draftAppliedRef.current) return;
+    if (!draftMessage) {
+      draftAppliedRef.current = true;
+      return;
+    }
+    if (profile === null || profile === undefined) return; // aguarda profile resolver; NÃO marcar o ref
+    draftAppliedRef.current = true; // profile resolvido: consome o draft (aplicando ou não)
+    if (!isUnverified) setText(draftMessage);
+  }, [draftMessage, isUnverified, profile]);
 
   useFocusEffect(
     useCallback(() => {

@@ -9,13 +9,17 @@ import Animated, { BounceIn } from 'react-native-reanimated';
 
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
+import { getIcebreakers, IcebreakerProfile } from '@/utils/icebreakers';
 
 interface MatchModalProps {
   visible: boolean;
   currentUserPhoto?: string;
   matchedUserPhoto?: string;
   matchedUserName: string;
+  myProfile?: IcebreakerProfile | null;
+  theirProfile?: IcebreakerProfile | null;
   onSendMessage: () => void;
+  onUseIcebreaker?: (message: string) => void;
   onContinue: () => void;
 }
 
@@ -24,7 +28,10 @@ export function MatchModal({
   currentUserPhoto,
   matchedUserPhoto,
   matchedUserName,
+  myProfile,
+  theirProfile,
   onSendMessage,
+  onUseIcebreaker,
   onContinue,
 }: MatchModalProps) {
   useEffect(() => {
@@ -32,6 +39,8 @@ export function MatchModal({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [visible]);
+
+  const icebreaker = getIcebreakers(myProfile, theirProfile)[0];
 
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -51,6 +60,28 @@ export function MatchModal({
             <Avatar uri={currentUserPhoto} />
             <Avatar uri={matchedUserPhoto} />
           </View>
+
+          {icebreaker && onUseIcebreaker && (
+            <View style={styles.icebreakerCard}>
+              <View style={styles.icebreakerHeader}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color={theme.colors.primary}
+                />
+                <Text style={styles.icebreakerLabel}>Sugestão de mensagem</Text>
+              </View>
+              <Text style={styles.icebreakerText} numberOfLines={3}>
+                {icebreaker}
+              </Text>
+              <TouchableOpacity
+                style={styles.useIcebreakerBtn}
+                onPress={() => onUseIcebreaker(icebreaker)}
+              >
+                <Text style={styles.useIcebreakerBtnText}>Usar como mensagem</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.sendBtn} onPress={onSendMessage}>
             <Text style={styles.sendBtnText}>Enviar mensagem</Text>
@@ -124,6 +155,43 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  icebreakerCard: {
+    width: '100%',
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  icebreakerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+  },
+  icebreakerLabel: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    textTransform: 'uppercase',
+  },
+  icebreakerText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
+  },
+  useIcebreakerBtn: {
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  useIcebreakerBtnText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.onSecondary,
   },
   sendBtn: {
     backgroundColor: theme.colors.white,

@@ -38,7 +38,13 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
-  Chat: { matchId: string; otherUid: string; otherName: string; otherPhoto?: string };
+  Chat: {
+    matchId: string;
+    otherUid: string;
+    otherName: string;
+    otherPhoto?: string;
+    draftMessage?: string;
+  };
   MatchProfile: {
     uid: string;
     matchId?: string;

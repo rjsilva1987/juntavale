@@ -142,6 +142,19 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     });
   };
 
+  const handleUseIcebreaker = (message: string) => {
+    if (!user) return;
+    const chatMatchId = [user.uid, uid].sort().join('_');
+    setMatchVisible(false);
+    navigation.replace('Chat', {
+      matchId: chatMatchId,
+      otherUid: uid,
+      otherName: profile?.name ?? name,
+      otherPhoto: profile?.photoURL ?? photoURL,
+      draftMessage: message,
+    });
+  };
+
   const handleContinueAfterMatch = () => {
     setMatchVisible(false);
     navigation.goBack();
@@ -270,7 +283,10 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
         currentUserPhoto={myProfile?.photoURL}
         matchedUserPhoto={profile?.photoURL ?? photoURL}
         matchedUserName={profile?.name ?? name}
+        myProfile={myProfile}
+        theirProfile={profile}
         onSendMessage={handleSendMessage}
+        onUseIcebreaker={handleUseIcebreaker}
         onContinue={handleContinueAfterMatch}
       />
     </Animated.View>
