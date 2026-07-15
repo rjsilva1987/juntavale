@@ -1,7 +1,7 @@
 // src/screens/MatchProfileScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, runOnJS } from 'react-native-reanimated';
@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { ReportModal } from '@/components/ReportModal';
@@ -19,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { getUserProfile, recordSwipe, UserProfile } from '@/services/firestoreService';
+import { getSharedInterestSet } from '@/utils/interests';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
@@ -147,6 +149,12 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
 
   const photos = profile?.photos?.length ? profile.photos : photoURL ? [photoURL] : [];
 
+  const myInterests = useMemo(() => myProfile?.interests ?? [], [myProfile?.interests]);
+  const sharedInterestSet = useMemo(
+    () => getSharedInterestSet(myInterests, profile?.interests),
+    [myInterests, profile?.interests],
+  );
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -208,13 +216,12 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
               {(profile?.interests?.length ?? 0) > 0 && (
                 <>
                   <Text style={styles.sectionTitle}>Interesses</Text>
-                  <View style={styles.tags}>
-                    {profile?.interests?.map((item) => (
-                      <View key={item} style={styles.tag}>
-                        <Text style={styles.tagText}>{item}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  <InterestChips
+                    interests={profile?.interests ?? []}
+                    sharedSet={sharedInterestSet}
+                    maxVisible={100}
+                    variant="surface"
+                  />
                 </>
               )}
             </View>
@@ -332,15 +339,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   bio: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 22 },
-
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  tagText: { fontSize: theme.fontSize.sm, color: theme.colors.white, fontWeight: '600' },
 
   swipeActions: {
     flexDirection: 'row',
