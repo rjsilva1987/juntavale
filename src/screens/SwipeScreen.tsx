@@ -5,7 +5,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,6 +20,7 @@ import Animated, {
 
 import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
+import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
@@ -37,6 +38,7 @@ import {
   SuperLikeQuotaExceededError,
   UserProfile,
 } from '@/services/firestoreService';
+import { getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -59,6 +61,10 @@ export default function SwipeScreen() {
   const [matchedProfile, setMatchedProfile] = useState<UserProfile | null>(null);
   const [lastSwipedProfile, setLastSwipedProfile] = useState<LastSwipedProfile | null>(null);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  // Interesses do usuário logado, memoizados pra não recalcular a cada
+  // render — só muda quando o profile (e portanto profile.interests) muda.
+  const myInterests = useMemo(() => profile?.interests ?? [], [profile?.interests]);
 
   // Refs mirroring state so the JS-thread callback fired from a worklet
   // (via runOnJS) always reads the latest profile, not a stale closure.
@@ -316,7 +322,7 @@ export default function SwipeScreen() {
             {/* Next card (behind) */}
             {profiles[currentIndex + 1] && (
               <View style={[styles.card, styles.cardBehind]}>
-                <ProfileCard profile={profiles[currentIndex + 1]} />
+                <ProfileCard profile={profiles[currentIndex + 1]} myInterests={myInterests} />
               </View>
             )}
 
@@ -325,6 +331,7 @@ export default function SwipeScreen() {
               <Animated.View collapsable={false} style={[styles.card, cardStyle]}>
                 <ProfileCard
                   profile={currentProfile}
+                  myInterests={myInterests}
                   pagerNativeGesture={pagerNativeGesture}
                   tapGesture={tapGesture}
                   carouselRef={carouselRef}
@@ -429,6 +436,7 @@ export default function SwipeScreen() {
 // ─── ProfileCard ──────────────────────────────────────────
 interface ProfileCardProps {
   profile: UserProfile;
+  myInterests?: string[];
   pagerNativeGesture?: ReturnType<typeof Gesture.Native>;
   tapGesture?: ReturnType<typeof Gesture.Tap>;
   carouselRef?: React.RefObject<PhotoCarouselHandle | null>;
@@ -437,6 +445,7 @@ interface ProfileCardProps {
 
 function ProfileCard({
   profile,
+  myInterests,
   pagerNativeGesture,
   tapGesture,
   carouselRef,
@@ -448,6 +457,9 @@ function ProfileCard({
       ? [profile.photoURL]
       : [];
   const carousel = <PhotoCarousel ref={carouselRef} photos={photos} />;
+  // Lista de interesses é pequena — calcular o conjunto compartilhado por
+  // card a cada render é mais barato que memoizar por perfil.
+  const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
 
   return (
     <View style={pcStyles.container}>
@@ -489,13 +501,21 @@ function ProfileCard({
             </Text>
           </View>
         )}
-        <View style={pcStyles.tags}>
-          {profile.interests?.slice(0, 3).map((t) => (
-            <View key={t} style={pcStyles.tag}>
-              <Text style={pcStyles.tagText}>{t}</Text>
+        {!!profile.interests?.length && (
+          // pointerEvents="none" pra não interceptar as tap zones do
+          // PhotoCarousel nem o gesto de swipe do card.
+          <View pointerEvents="none">
+            <View style={pcStyles.interestsLabelRow}>
+              <Ionicons name="pricetags" size={14} color={theme.colors.white} />
+              <Text style={pcStyles.interestsLabel}>Interesses</Text>
             </View>
-          ))}
-        </View>
+            <InterestChips
+              interests={profile.interests}
+              sharedSet={sharedInterests}
+              maxVisible={6}
+            />
+          </View>
+        )}
       </View>
     </View>
   );
@@ -695,12 +715,6 @@ const pcStyles = StyleSheet.create({
     color: theme.colors.white,
     fontWeight: '700',
   },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag: {
-    backgroundColor: theme.colors.secondary,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  tagText: { fontSize: theme.fontSize.xs, fontWeight: '600', color: theme.colors.onSecondary },
+  interestsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  interestsLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.white },
 });
