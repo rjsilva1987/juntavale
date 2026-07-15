@@ -23,12 +23,18 @@ type Tab = 'received' | 'sent';
 interface LikeCardProps {
   profile: UserProfile;
   isSuperLike: boolean;
+  likedPhotoURL?: string;
   onPress: () => void;
 }
 
 // Compartilhado pelas duas abas — mesmo visual do grid original (borda
 // amarela + badge estrela pra superlike, badge coração sempre visível).
-function LikeCard({ profile, isSuperLike, onPress }: LikeCardProps) {
+function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress }: LikeCardProps) {
+  // Se a foto curtida falhar ao carregar (ex: deletada do Storage), some
+  // com a faixa inteira em vez de mostrar um quadrado quebrado (S35).
+  const [likedPhotoFailed, setLikedPhotoFailed] = useState(false);
+  const showLikedPhotoContext = !!likedPhotoURL && !likedPhotoFailed;
+
   return (
     <AnimatedPressable
       style={[styles.likerCard, isSuperLike && styles.likerCardSuperLike]}
@@ -52,6 +58,19 @@ function LikeCard({ profile, isSuperLike, onPress }: LikeCardProps) {
         <Text style={styles.likerName}>
           {profile.name}, {profile.age}
         </Text>
+        {showLikedPhotoContext && (
+          <View style={styles.likedPhotoRow}>
+            <Image
+              source={{ uri: likedPhotoURL }}
+              style={styles.likedPhotoThumb}
+              contentFit="cover"
+              onError={() => setLikedPhotoFailed(true)}
+            />
+            <Text style={styles.likedPhotoLabel} numberOfLines={1}>
+              Curtiu sua foto
+            </Text>
+          </View>
+        )}
       </View>
       {isSuperLike && (
         <View style={styles.superLikeBadge}>
@@ -156,6 +175,7 @@ export default function LikesScreen() {
                 <LikeCard
                   profile={item.profile}
                   isSuperLike={item.isSuperLike}
+                  likedPhotoURL={item.likedPhotoURL}
                   onPress={() => goToProfile(item.profile)}
                 />
               )}
@@ -282,6 +302,22 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   likerName: { color: theme.colors.white, fontWeight: '600', fontSize: theme.fontSize.sm },
+  likedPhotoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  likedPhotoThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.sm,
+  },
+  likedPhotoLabel: {
+    flexShrink: 1,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xs,
+  },
   heartBadge: {
     position: 'absolute',
     top: 10,

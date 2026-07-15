@@ -263,6 +263,7 @@ export const recordSwipe = async (
   fromUid: string,
   toUid: string,
   direction: 'like' | 'nope' | 'superlike',
+  likedPhotoURL?: string,
 ): Promise<boolean> => {
   const swipeRef = doc(db, 'swipes', `${fromUid}_${toUid}`);
   const swipeData = {
@@ -270,6 +271,9 @@ export const recordSwipe = async (
     to: toUid,
     direction,
     createdAt: serverTimestamp(),
+    // Contexto pra "Curtiram você" (S35): só grava em like/superlike — nope
+    // é sempre anônimo pro alvo, então nunca deve carregar essa informação.
+    ...(direction !== 'nope' && likedPhotoURL ? { likedPhotoURL } : {}),
   };
 
   if (direction === 'superlike') {

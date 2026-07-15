@@ -35,6 +35,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   const [actionPending, setActionPending] = useState(false);
   const [matchVisible, setMatchVisible] = useState(false);
   const [photoAreaWidth, setPhotoAreaWidth] = useState(0);
+  const [photoIndex, setPhotoIndex] = useState(0);
   const carouselRef = useRef<PhotoCarouselHandle>(null);
 
   // Sem Pan concorrendo aqui (diferente do card da Descobrir) — o tap só
@@ -115,7 +116,8 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     if (!user || actionPending) return;
     setActionPending(true);
     try {
-      const isMatch = await recordSwipe(user.uid, uid, direction);
+      const likedPhotoURL = photos[photoIndex] ?? profile?.photoURL ?? photoURL ?? undefined;
+      const isMatch = await recordSwipe(user.uid, uid, direction, likedPhotoURL);
       if (isMatch) {
         setMatchVisible(true);
       } else {
@@ -199,7 +201,12 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 style={styles.photosCard}
                 onLayout={(e) => setPhotoAreaWidth(e.nativeEvent.layout.width)}
               >
-                <PhotoCarousel ref={carouselRef} photos={photos} style={styles.photosCarousel} />
+                <PhotoCarousel
+                  ref={carouselRef}
+                  photos={photos}
+                  style={styles.photosCarousel}
+                  onIndexChange={setPhotoIndex}
+                />
               </View>
             </GestureDetector>
 

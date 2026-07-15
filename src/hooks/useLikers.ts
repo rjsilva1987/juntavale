@@ -9,6 +9,7 @@ import { getUserProfile, UserProfile } from '@/services/firestoreService';
 export interface Liker {
   profile: UserProfile;
   isSuperLike: boolean;
+  likedPhotoURL?: string;
 }
 
 interface UseLikersReturn {
@@ -50,6 +51,8 @@ export function useLikers(): UseLikersReturn {
         .map((d) => ({
           uid: d.data().from as string,
           isSuperLike: d.data().direction === 'superlike',
+          // Legado (swipe antigo sem o campo) fica undefined — tolerado.
+          likedPhotoURL: d.data().likedPhotoURL as string | undefined,
         }))
         .filter((entry) => !swipedByMe.has(entry.uid));
 
@@ -57,19 +60,25 @@ export function useLikers(): UseLikersReturn {
         entries.map(async (entry) => ({
           profile: await getUserProfile(entry.uid),
           isSuperLike: entry.isSuperLike,
+          likedPhotoURL: entry.likedPhotoURL,
         })),
       );
 
-      const withProfiles: { profile: UserProfile | null; isSuperLike: boolean }[] = [];
+      const withProfiles: {
+        profile: UserProfile | null;
+        isSuperLike: boolean;
+        likedPhotoURL?: string;
+      }[] = [];
       let rejectedCount = 0;
       settled.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          const { profile, isSuperLike } = result.value;
+          const { profile, isSuperLike, likedPhotoURL } = result.value;
           withProfiles.push({
             // uid do swipe é confiável mesmo quando o doc de users/{uid} é
             // legado e não tem o campo `uid` gravado.
             profile: profile ? { ...profile, uid: entries[i].uid } : null,
             isSuperLike,
+            likedPhotoURL,
           });
         } else {
           rejectedCount += 1;

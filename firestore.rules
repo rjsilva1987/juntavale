@@ -222,7 +222,19 @@ service cloud.firestore {
         && swipeId == request.resource.data.from + '_' + request.resource.data.to
         && request.resource.data.direction in ['like', 'nope', 'superlike']
         && request.resource.data.createdAt == request.time
-        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt', 'likedPhotoURL'])
+        // S35: contexto opcional ("curtiu sua foto") — só existe em
+        // like/superlike (nope nunca leva contexto pro alvo); campo
+        // ausente continua válido (compat com nope e clients antigos).
+        && (
+          !('likedPhotoURL' in request.resource.data)
+          || (
+            request.resource.data.direction != 'nope'
+            && request.resource.data.likedPhotoURL is string
+            && request.resource.data.likedPhotoURL.size() > 0
+            && request.resource.data.likedPhotoURL.size() <= 2048
+          )
+        )
         // Super Like Fase 2: se o swipe é 'superlike', o contador mensal
         // (users/{uid}/superLikes/usage) precisa ter sido escrito no MESMO
         // batch com um incremento real (getAfter reflete a escrita do batch

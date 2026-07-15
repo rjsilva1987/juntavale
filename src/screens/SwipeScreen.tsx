@@ -78,6 +78,17 @@ export default function SwipeScreen() {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
+  // Índice da foto visível no card atual do carrossel — usado só na hora do
+  // swipe (S35), não precisa de state/render. Reseta a cada card novo pra
+  // não vazar o índice do card anterior.
+  const photoIndexRef = useRef(0);
+  useEffect(() => {
+    photoIndexRef.current = 0;
+  }, [currentIndex]);
+  const handlePhotoIndexChange = (index: number) => {
+    photoIndexRef.current = index;
+  };
+
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -142,6 +153,12 @@ export default function SwipeScreen() {
   const completeSwipe = (dir: 'left' | 'right' | 'super') => {
     const target = profilesRef.current[currentIndexRef.current];
     const swipedIndex = currentIndexRef.current;
+    const targetPhotos = target?.photos?.length
+      ? target.photos
+      : target?.photoURL
+        ? [target.photoURL]
+        : [];
+    const likedPhotoURL = targetPhotos[photoIndexRef.current] ?? target?.photoURL ?? undefined;
     translateX.value = 0;
     translateY.value = 0;
     setCurrentIndex((i) => i + 1);
@@ -159,6 +176,7 @@ export default function SwipeScreen() {
       user.uid,
       target.uid,
       dir === 'right' ? 'like' : dir === 'super' ? 'superlike' : 'nope',
+      likedPhotoURL,
     )
       .then((isMatch) => {
         if (isMatch) {
@@ -341,6 +359,7 @@ export default function SwipeScreen() {
                   pagerNativeGesture={pagerNativeGesture}
                   tapGesture={tapGesture}
                   carouselRef={carouselRef}
+                  onPhotoIndexChange={handlePhotoIndexChange}
                   onInfoPress={() =>
                     navigation.navigate('MatchProfile', {
                       uid: currentProfile.uid,
@@ -461,6 +480,7 @@ interface ProfileCardProps {
   pagerNativeGesture?: ReturnType<typeof Gesture.Native>;
   tapGesture?: ReturnType<typeof Gesture.Tap>;
   carouselRef?: React.RefObject<PhotoCarouselHandle | null>;
+  onPhotoIndexChange?: (index: number) => void;
   onInfoPress?: () => void;
 }
 
@@ -470,6 +490,7 @@ function ProfileCard({
   pagerNativeGesture,
   tapGesture,
   carouselRef,
+  onPhotoIndexChange,
   onInfoPress,
 }: ProfileCardProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -478,8 +499,12 @@ function ProfileCard({
     : profile.photoURL
       ? [profile.photoURL]
       : [];
+  const handleIndexChange = (index: number) => {
+    setPhotoIndex(index);
+    onPhotoIndexChange?.(index);
+  };
   const carousel = (
-    <PhotoCarousel ref={carouselRef} photos={photos} onIndexChange={setPhotoIndex} />
+    <PhotoCarousel ref={carouselRef} photos={photos} onIndexChange={handleIndexChange} />
   );
   // Lista de interesses é pequena — calcular o conjunto compartilhado por
   // card a cada render é mais barato que memoizar por perfil.
