@@ -60,6 +60,10 @@ export interface UserProfile {
   createdAt?: Timestamp;
   blockedUsers?: string[];
   verified?: boolean;
+  // Prompts estilo Hinge (S33) — até 3, ordem = ordem de exibição escolhida
+  // pelo usuário. Opcional: docs legados sem o campo = sem prompts, toda
+  // leitura precisa tolerar undefined. Ver src/constants/prompts.ts.
+  prompts?: { id: string; answer: string }[];
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client

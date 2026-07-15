@@ -40,6 +40,34 @@ service cloud.firestore {
       return uid in m.users && m.get('blockedBy', []).size() == 0;
     }
 
+    // Um item de users/{uid}.prompts[] — { id: string, answer: string },
+    // resposta de 1 a 150 chars. Ver src/constants/prompts.ts (catálogo) e
+    // MAX_ANSWER_LENGTH no app.
+    function isValidPromptItem(item) {
+      return item is map && item.keys().hasOnly(['id', 'answer'])
+        && item.id is string
+        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 150
+        && item.answer.matches('.*\\S.*');
+    }
+
+    // Rules não tem loop — valida cada item individualmente por índice, com
+    // curto-circuito no size() (padrão igual ao comentário do S33: só entra
+    // no índice N se list.size() > N). Máximo 3 prompts (MAX_PROMPTS no app).
+    // Cada ramo também barra id duplicado contra os índices já validados
+    // antes dele (list[1] vs list[0]; list[2] vs list[0] e list[1]).
+    function isValidPrompts(list) {
+      return list is list && list.size() <= 3
+        && (list.size() == 0
+            || (isValidPromptItem(list[0])
+                && (list.size() == 1
+                    || (isValidPromptItem(list[1])
+                        && list[0].id != list[1].id
+                        && (list.size() == 2
+                            || (isValidPromptItem(list[2])
+                                && list[0].id != list[2].id
+                                && list[1].id != list[2].id))))));
+    }
+
     // Campos que o dono do perfil pode criar/editar. Qualquer campo fora desta
     // lista (ex: um futuro "isAdmin" ou "verified") NUNCA pode ser escrito pelo
     // client, mesmo que alguém adicione o campo no app no futuro e esqueça de
@@ -53,7 +81,8 @@ service cloud.firestore {
         && data.interests is list && data.interests.size() <= 15
         && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
-        && (!('filters' in data) || data.filters is map);
+        && (!('filters' in data) || data.filters is map)
+        && (!('prompts' in data) || isValidPrompts(data.prompts));
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -91,7 +120,7 @@ service cloud.firestore {
              ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'location', 'filters', 'createdAt'])
+              'gender', 'lookingFor', 'location', 'filters', 'createdAt', 'prompts'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -112,7 +141,7 @@ service cloud.firestore {
                   ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'location', 'filters'])
+              'gender', 'lookingFor', 'location', 'filters', 'prompts'])
         && isValidProfile(request.resource.data);
 
       allow delete: if isOwner(userId);

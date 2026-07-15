@@ -13,6 +13,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
   type TextInputProps,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -23,6 +24,13 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
+import {
+  PROMPTS_CATALOG,
+  MAX_PROMPTS,
+  MAX_ANSWER_LENGTH,
+  getPromptText,
+  type PromptId,
+} from '@/constants/prompts';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
@@ -78,6 +86,16 @@ export default function ProfileScreen() {
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
+
+  // Prompts (S33) — editados via modais próprios, fora do form de
+  // nome/idade/bio/gênero/interesses acima. Sempre grava o array completo
+  // (substituição, não merge por item), reaproveitando updateUserProfile.
+  const userPrompts = profile?.prompts ?? [];
+  const [catalogModalVisible, setCatalogModalVisible] = useState(false);
+  const [answerModalVisible, setAnswerModalVisible] = useState(false);
+  const [editingPromptId, setEditingPromptId] = useState<PromptId | null>(null);
+  const [answerDraft, setAnswerDraft] = useState('');
+  const [promptSaving, setPromptSaving] = useState(false);
 
   // Card "Curtidas" — mesma query de LikesScreen, via hook compartilhado.
   const { likers, loading: likersLoading } = useLikers();
@@ -189,6 +207,68 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  const openAddPrompt = () => {
+    if (userPrompts.length >= MAX_PROMPTS) return;
+    setCatalogModalVisible(true);
+  };
+
+  const handlePickPrompt = (id: PromptId) => {
+    setEditingPromptId(id);
+    setAnswerDraft('');
+    setCatalogModalVisible(false);
+    setAnswerModalVisible(true);
+  };
+
+  const handleOpenExistingPrompt = (item: { id: string; answer: string }) => {
+    setEditingPromptId(item.id as PromptId);
+    setAnswerDraft(item.answer);
+    setAnswerModalVisible(true);
+  };
+
+  const closeAnswerModal = () => {
+    setAnswerModalVisible(false);
+    setEditingPromptId(null);
+    setAnswerDraft('');
+  };
+
+  const handleSavePromptAnswer = async () => {
+    if (!user || !editingPromptId) return;
+    const trimmed = answerDraft.trim();
+    if (trimmed.length < 1 || trimmed.length > MAX_ANSWER_LENGTH) return;
+    setPromptSaving(true);
+    try {
+      const existingIndex = userPrompts.findIndex((p) => p.id === editingPromptId);
+      const nextPrompts =
+        existingIndex >= 0
+          ? userPrompts.map((p, i) =>
+              i === existingIndex ? { id: editingPromptId, answer: trimmed } : p,
+            )
+          : [...userPrompts, { id: editingPromptId, answer: trimmed }];
+      await updateUserProfile(user.uid, { prompts: nextPrompts });
+      await refreshProfile();
+      closeAnswerModal();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a resposta.');
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
+  const handleRemovePrompt = async () => {
+    if (!user || !editingPromptId) return;
+    setPromptSaving(true);
+    try {
+      const nextPrompts = userPrompts.filter((p) => p.id !== editingPromptId);
+      await updateUserProfile(user.uid, { prompts: nextPrompts });
+      await refreshProfile();
+      closeAnswerModal();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível remover o prompt.');
+    } finally {
+      setPromptSaving(false);
+    }
   };
 
   if (!profile) {
@@ -447,6 +527,37 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Prompts (S33) — edição via modais próprios, independente do form
+            de nome/idade/bio/gênero/interesses acima (mesmo padrão da grade
+            de fotos: só visível fora do modo de edição). */}
+        {!editing && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Perguntas</Text>
+            <Text style={styles.promptsSubtitle}>Escolha até 3 perguntas para o seu perfil</Text>
+
+            {userPrompts.map((item) => (
+              <AnimatedPressable
+                key={item.id}
+                style={styles.promptCard}
+                onPress={() => handleOpenExistingPrompt(item)}
+              >
+                <View style={styles.promptCardText}>
+                  <Text style={styles.promptQuestion}>{getPromptText(item.id)}</Text>
+                  <Text style={styles.promptAnswer}>{item.answer}</Text>
+                </View>
+                <Ionicons name="pencil-outline" size={18} color={theme.colors.textSecondary} />
+              </AnimatedPressable>
+            ))}
+
+            {userPrompts.length < MAX_PROMPTS && (
+              <AnimatedPressable style={styles.addPromptBtn} onPress={openAddPrompt}>
+                <Ionicons name="add" size={18} color={theme.colors.primary} />
+                <Text style={styles.addPromptText}>Adicionar</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         {/* Verificação de perfil — ponto de entrada permanente: 'Verification'
             existe no grupo "app" independente de `verified`, então navega
             sempre, mesmo já verificado (a própria tela mostra o estado
@@ -491,6 +602,111 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Sair da conta</Text>
         </AnimatedPressable>
       </ScrollView>
+
+      {/* Catálogo de prompts — só exibido pra adicionar um novo (prompts já
+          usados ficam desabilitados/acinzentados). Editar um já respondido
+          abre handleOpenExistingPrompt diretamente, sem passar por aqui. */}
+      <Modal
+        visible={catalogModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCatalogModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Escolha uma pergunta</Text>
+              <AnimatedPressable onPress={() => setCatalogModalVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </AnimatedPressable>
+            </View>
+            <ScrollView>
+              {PROMPTS_CATALOG.map((item) => {
+                const used = userPrompts.some((p) => p.id === item.id);
+                return (
+                  <AnimatedPressable
+                    key={item.id}
+                    style={[styles.catalogItem, used && styles.catalogItemDisabled]}
+                    onPress={() => !used && handlePickPrompt(item.id)}
+                    disabled={used}
+                  >
+                    <Text style={[styles.catalogItemText, used && styles.catalogItemTextDisabled]}>
+                      {item.text}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edição da resposta — usada tanto pra um prompt novo (vindo do
+          catálogo acima) quanto pra editar/remover um já respondido. */}
+      <Modal
+        visible={answerModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeAnswerModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingPromptId ? getPromptText(editingPromptId) : ''}
+            </Text>
+            <TextInput
+              style={styles.promptInput}
+              value={answerDraft}
+              onChangeText={setAnswerDraft}
+              multiline
+              maxLength={MAX_ANSWER_LENGTH}
+              placeholder="Sua resposta..."
+              placeholderTextColor={theme.colors.textLight}
+            />
+            <Text
+              style={[
+                styles.promptCounter,
+                answerDraft.trim().length === 0 && styles.promptCounterError,
+              ]}
+            >
+              {answerDraft.length}/{MAX_ANSWER_LENGTH}
+            </Text>
+
+            <AnimatedPressable
+              style={[
+                styles.saveBtn,
+                (promptSaving || answerDraft.trim().length === 0) && styles.saveBtnDisabled,
+              ]}
+              onPress={handleSavePromptAnswer}
+              disabled={promptSaving || answerDraft.trim().length === 0}
+            >
+              {promptSaving ? (
+                <ActivityIndicator color={theme.colors.onSecondary} />
+              ) : (
+                <Text style={styles.saveBtnText}>Salvar</Text>
+              )}
+            </AnimatedPressable>
+
+            {editingPromptId && userPrompts.some((p) => p.id === editingPromptId) && (
+              <AnimatedPressable
+                style={styles.removePromptBtn}
+                onPress={handleRemovePrompt}
+                disabled={promptSaving}
+              >
+                <Text style={styles.removePromptText}>Remover prompt</Text>
+              </AnimatedPressable>
+            )}
+
+            <AnimatedPressable
+              style={styles.cancelPromptBtn}
+              onPress={closeAnswerModal}
+              disabled={promptSaving}
+            >
+              <Text style={styles.cancelPromptText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
@@ -796,4 +1012,104 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   logoutText: { color: theme.colors.nope, fontSize: theme.fontSize.md, fontWeight: '600' },
+
+  promptsSubtitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  promptCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    marginBottom: 8,
+  },
+  promptCardText: { flex: 1 },
+  promptQuestion: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+  promptAnswer: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  addPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  addPromptText: { fontSize: theme.fontSize.sm, color: theme.colors.primary, fontWeight: '700' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+    padding: theme.spacing.md,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+
+  catalogItem: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    padding: 14,
+    marginBottom: 8,
+  },
+  catalogItemDisabled: { opacity: 0.4 },
+  catalogItemText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  catalogItemTextDisabled: { color: theme.colors.textLight },
+
+  promptInput: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surface,
+    height: 100,
+    textAlignVertical: 'top',
+    marginTop: 12,
+  },
+  promptCounter: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  promptCounterError: { color: theme.colors.error },
+
+  removePromptBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  removePromptText: { color: theme.colors.error, fontSize: theme.fontSize.md, fontWeight: '600' },
+
+  cancelPromptBtn: { alignItems: 'center', paddingVertical: 10 },
+  cancelPromptText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+  },
 });
