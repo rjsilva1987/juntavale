@@ -480,6 +480,12 @@ function ProfileCard({
               {profile.name}, {profile.age}
             </Text>
             {profile.verified && <VerifiedBadge size={18} />}
+            {photos.length > 1 && (
+              <View style={pcStyles.photoCountBadge} pointerEvents="none">
+                <Ionicons name="camera" size={13} color={theme.colors.white} />
+                <Text style={pcStyles.photoCountText}>{photos.length}</Text>
+              </View>
+            )}
           </View>
           {onInfoPress && (
             <TouchableOpacity
@@ -699,6 +705,21 @@ const pcStyles = StyleSheet.create({
   name: {
     fontSize: theme.fontSize.xl,
     fontWeight: '700',
+    color: theme.colors.white,
+    flexShrink: 1,
+  },
+  photoCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  photoCountText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: theme.colors.white,
   },
   bio: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
