@@ -51,6 +51,7 @@ export type RootStackParamList = {
     name: string;
     photoURL?: string;
     fromLikes?: boolean;
+    alreadyLiked?: boolean;
   };
   MatchesGrid: undefined;
   BlockedUsers: undefined;

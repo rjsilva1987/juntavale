@@ -25,7 +25,7 @@ import { getSharedInterestSet } from '@/utils/interests';
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
 export default function MatchProfileScreen({ route, navigation }: MatchProfileScreenProps) {
-  const { uid, matchId, name, photoURL, fromLikes } = route.params;
+  const { uid, matchId, name, photoURL, fromLikes, alreadyLiked } = route.params;
   const isPreview = !matchId;
   const { user, profile: myProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -248,14 +248,20 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 >
                   <Ionicons name="close" size={28} color={theme.colors.nope} />
                 </AnimatedPressable>
-                <AnimatedPressable
-                  style={[styles.swipeBtn, styles.likeBtn]}
-                  onPress={() => handleSwipeAction('like')}
-                  disabled={actionPending}
-                  accessibilityLabel={fromLikes ? 'Retribuir like' : 'Curtir'}
-                >
-                  <Ionicons name="heart" size={28} color={theme.colors.like} />
-                </AnimatedPressable>
+                {alreadyLiked ? (
+                  <View style={styles.alreadyLikedChip}>
+                    <Text style={styles.alreadyLikedChipText}>Curtida enviada ✓</Text>
+                  </View>
+                ) : (
+                  <AnimatedPressable
+                    style={[styles.swipeBtn, styles.likeBtn]}
+                    onPress={() => handleSwipeAction('like')}
+                    disabled={actionPending}
+                    accessibilityLabel={fromLikes ? 'Retribuir like' : 'Curtir'}
+                  >
+                    <Ionicons name="heart" size={28} color={theme.colors.like} />
+                  </AnimatedPressable>
+                )}
               </View>
             )}
 
@@ -373,6 +379,21 @@ const styles = StyleSheet.create({
   },
   nopeBtn: { borderColor: theme.colors.nope },
   likeBtn: { borderColor: theme.colors.like },
+  alreadyLikedChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    height: 56,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  alreadyLikedChipText: {
+    color: theme.colors.textSecondary,
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+  },
 
   reportBtn: {
     flexDirection: 'row',

@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -14,27 +14,114 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useLikers } from '@/hooks/useLikers';
+import { useMyLikes } from '@/hooks/useMyLikes';
 import { RootStackParamList } from '@/navigation';
+import { UserProfile } from '@/services/firestoreService';
+
+type Tab = 'received' | 'sent';
+
+interface LikeCardProps {
+  profile: UserProfile;
+  isSuperLike: boolean;
+  onPress: () => void;
+}
+
+// Compartilhado pelas duas abas — mesmo visual do grid original (borda
+// amarela + badge estrela pra superlike, badge coração sempre visível).
+function LikeCard({ profile, isSuperLike, onPress }: LikeCardProps) {
+  return (
+    <AnimatedPressable
+      style={[styles.likerCard, isSuperLike && styles.likerCardSuperLike]}
+      entering={FadeInDown}
+      onPress={onPress}
+    >
+      {profile.photoURL ? (
+        <Image
+          source={{ uri: profile.photoURL }}
+          style={styles.likerPhoto}
+          contentFit="cover"
+          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+          transition={200}
+        />
+      ) : (
+        <View style={styles.likerPhotoPlaceholder}>
+          <Text style={{ fontSize: 40 }}>😊</Text>
+        </View>
+      )}
+      <View style={styles.likerInfo}>
+        <Text style={styles.likerName}>
+          {profile.name}, {profile.age}
+        </Text>
+      </View>
+      {isSuperLike && (
+        <View style={styles.superLikeBadge}>
+          <Ionicons name="star" size={16} color={theme.colors.onSecondary} />
+        </View>
+      )}
+      <View style={styles.heartBadge}>
+        <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
+      </View>
+    </AnimatedPressable>
+  );
+}
 
 export default function LikesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { likers, loading, reload } = useLikers();
+  const [tab, setTab] = useState<Tab>('received');
+  const { likers, loading: loadingReceived, reload: reloadReceived } = useLikers();
+  const { profiles: myLikes, loading: loadingSent, reload: reloadSent } = useMyLikes();
 
-  // useLikers faz fetch único (getDocs), não onSnapshot — sem isso, quem foi
-  // retribuído/dispensado no preview continuaria aparecendo aqui até um
-  // remount da tela.
+  // useLikers/useMyLikes fazem fetch único (getDocs), não onSnapshot — sem
+  // isso, quem foi retribuído/dispensado/bloqueado no preview continuaria
+  // aparecendo aqui até um remount da tela. Recarrega as duas abas juntas
+  // (mais simples do que só a ativa, e o custo de mais uma leitura por
+  // focus é aceitável aqui).
   useFocusEffect(
     useCallback(() => {
-      reload();
-    }, [reload]),
+      reloadReceived();
+      reloadSent();
+    }, [reloadReceived, reloadSent]),
   );
 
-  if (loading) {
-    return (
-      <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Quem curtiu você</Text>
-        </View>
+  const goToProfile = (profile: UserProfile, alreadyLiked?: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('MatchProfile', {
+      uid: profile.uid,
+      name: profile.name,
+      photoURL: profile.photoURL,
+      fromLikes: true,
+      ...(alreadyLiked ? { alreadyLiked: true } : {}),
+    });
+  };
+
+  const loading = tab === 'received' ? loadingReceived : loadingSent;
+
+  return (
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Curtidas</Text>
+      </View>
+
+      <View style={styles.tabs}>
+        <AnimatedPressable
+          style={[styles.tabButton, tab === 'received' && styles.tabButtonActive]}
+          onPress={() => setTab('received')}
+        >
+          <Text style={[styles.tabLabel, tab === 'received' && styles.tabLabelActive]}>
+            Curtiram você{!loadingReceived ? ` (${likers.length})` : ''}
+          </Text>
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={[styles.tabButton, tab === 'sent' && styles.tabButtonActive]}
+          onPress={() => setTab('sent')}
+        >
+          <Text style={[styles.tabLabel, tab === 'sent' && styles.tabLabelActive]}>
+            Suas curtidas{!loadingSent ? ` (${myLikes.length})` : ''}
+          </Text>
+        </AnimatedPressable>
+      </View>
+
+      {loading ? (
         <View style={styles.skeletonGrid}>
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonPlaceholder
@@ -45,82 +132,57 @@ export default function LikesScreen() {
             />
           ))}
         </View>
-      </Animated.View>
-    );
-  }
-
-  return (
-    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Quem curtiu você</Text>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{likers.length}</Text>
-        </View>
-      </View>
-
-      {likers.length === 0 ? (
+      ) : tab === 'received' ? (
+        likers.length === 0 ? (
+          <EmptyState
+            icon="star-outline"
+            title="Ninguém curtiu ainda"
+            subtitle="Continue completando seu perfil para atrair mais pessoas!"
+          />
+        ) : (
+          <>
+            <View style={styles.launchBanner}>
+              <Text style={styles.launchBannerText}>
+                🎉 Período de lançamento: veja quem te curtiu de graça!
+              </Text>
+            </View>
+            <FlatList
+              data={likers}
+              keyExtractor={(item) => item.profile.uid}
+              numColumns={2}
+              contentContainerStyle={styles.grid}
+              columnWrapperStyle={{ gap: 12 }}
+              renderItem={({ item }) => (
+                <LikeCard
+                  profile={item.profile}
+                  isSuperLike={item.isSuperLike}
+                  onPress={() => goToProfile(item.profile)}
+                />
+              )}
+            />
+          </>
+        )
+      ) : myLikes.length === 0 ? (
         <EmptyState
-          icon="star-outline"
-          title="Ninguém curtiu ainda"
-          subtitle="Continue completando seu perfil para atrair mais pessoas!"
+          icon="heart-outline"
+          title="Você ainda não curtiu ninguém"
+          subtitle="Os perfis que você curtir aparecem aqui até virarem match"
         />
       ) : (
-        <>
-          <View style={styles.launchBanner}>
-            <Text style={styles.launchBannerText}>
-              🎉 Período de lançamento: veja quem te curtiu de graça!
-            </Text>
-          </View>
-          <FlatList
-            data={likers}
-            keyExtractor={(item) => item.profile.uid}
-            numColumns={2}
-            contentContainerStyle={styles.grid}
-            columnWrapperStyle={{ gap: 12 }}
-            renderItem={({ item }) => (
-              <AnimatedPressable
-                style={[styles.likerCard, item.isSuperLike && styles.likerCardSuperLike]}
-                entering={FadeInDown}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate('MatchProfile', {
-                    uid: item.profile.uid,
-                    name: item.profile.name,
-                    photoURL: item.profile.photoURL,
-                    fromLikes: true,
-                  });
-                }}
-              >
-                {item.profile.photoURL ? (
-                  <Image
-                    source={{ uri: item.profile.photoURL }}
-                    style={styles.likerPhoto}
-                    contentFit="cover"
-                    placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                    transition={200}
-                  />
-                ) : (
-                  <View style={styles.likerPhotoPlaceholder}>
-                    <Text style={{ fontSize: 40 }}>😊</Text>
-                  </View>
-                )}
-                <View style={styles.likerInfo}>
-                  <Text style={styles.likerName}>
-                    {item.profile.name}, {item.profile.age}
-                  </Text>
-                </View>
-                {item.isSuperLike && (
-                  <View style={styles.superLikeBadge}>
-                    <Ionicons name="star" size={16} color={theme.colors.onSecondary} />
-                  </View>
-                )}
-                <View style={styles.heartBadge}>
-                  <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
-                </View>
-              </AnimatedPressable>
-            )}
-          />
-        </>
+        <FlatList
+          data={myLikes}
+          keyExtractor={(item) => item.profile.uid}
+          numColumns={2}
+          contentContainerStyle={styles.grid}
+          columnWrapperStyle={{ gap: 12 }}
+          renderItem={({ item }) => (
+            <LikeCard
+              profile={item.profile}
+              isSuperLike={item.isSuperLike}
+              onPress={() => goToProfile(item.profile, true)}
+            />
+          )}
+        />
       )}
     </Animated.View>
   );
@@ -142,6 +204,33 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   title: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.primary },
+
+  tabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+  },
+  tabButtonActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  tabLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  tabLabelActive: {
+    color: theme.colors.white,
+  },
+
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -149,13 +238,6 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     gap: 12,
   },
-  badge: {
-    backgroundColor: theme.colors.secondary,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  badgeText: { fontSize: theme.fontSize.sm, fontWeight: '700', color: theme.colors.onSecondary },
 
   launchBanner: {
     marginHorizontal: theme.spacing.md,
