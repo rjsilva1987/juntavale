@@ -28,6 +28,7 @@ import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
+import SupportScreen from '@/screens/SupportScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
 import VerificationScreen from '@/screens/VerificationScreen';
 
@@ -55,6 +56,7 @@ export type RootStackParamList = {
   };
   MatchesGrid: undefined;
   BlockedUsers: undefined;
+  Support: undefined;
   Verification: undefined;
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
@@ -210,6 +212,7 @@ export default function Navigation() {
             <Stack.Screen name="Verification" component={VerificationScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+            <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
             <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
           </Stack.Group>

@@ -585,6 +585,15 @@ export default function ProfileScreen() {
           <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
         </AnimatedPressable>
 
+        {/* Ajuda / Fale Conosco (S36) */}
+        <AnimatedPressable
+          style={styles.blockedUsersBtn}
+          onPress={() => navigation.navigate('Support')}
+        >
+          <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
+          <Text style={styles.blockedUsersText}>Ajuda</Text>
+        </AnimatedPressable>
+
         {/* Painel Admin — só visível pra ADMIN_UID */}
         {user?.uid === ADMIN_UID && (
           <AnimatedPressable
