@@ -65,55 +65,62 @@ export default function LikesScreen() {
           subtitle="Continue completando seu perfil para atrair mais pessoas!"
         />
       ) : (
-        <FlatList
-          data={likers}
-          keyExtractor={(item) => item.profile.uid}
-          numColumns={2}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={{ gap: 12 }}
-          renderItem={({ item }) => (
-            <AnimatedPressable
-              style={[styles.likerCard, item.isSuperLike && styles.likerCardSuperLike]}
-              entering={FadeInDown}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                navigation.navigate('MatchProfile', {
-                  uid: item.profile.uid,
-                  name: item.profile.name,
-                  photoURL: item.profile.photoURL,
-                  fromLikes: true,
-                });
-              }}
-            >
-              {item.profile.photoURL ? (
-                <Image
-                  source={{ uri: item.profile.photoURL }}
-                  style={styles.likerPhoto}
-                  contentFit="cover"
-                  placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                  transition={200}
-                />
-              ) : (
-                <View style={styles.likerPhotoPlaceholder}>
-                  <Text style={{ fontSize: 40 }}>😊</Text>
+        <>
+          <View style={styles.launchBanner}>
+            <Text style={styles.launchBannerText}>
+              🎉 Período de lançamento: veja quem te curtiu de graça!
+            </Text>
+          </View>
+          <FlatList
+            data={likers}
+            keyExtractor={(item) => item.profile.uid}
+            numColumns={2}
+            contentContainerStyle={styles.grid}
+            columnWrapperStyle={{ gap: 12 }}
+            renderItem={({ item }) => (
+              <AnimatedPressable
+                style={[styles.likerCard, item.isSuperLike && styles.likerCardSuperLike]}
+                entering={FadeInDown}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  navigation.navigate('MatchProfile', {
+                    uid: item.profile.uid,
+                    name: item.profile.name,
+                    photoURL: item.profile.photoURL,
+                    fromLikes: true,
+                  });
+                }}
+              >
+                {item.profile.photoURL ? (
+                  <Image
+                    source={{ uri: item.profile.photoURL }}
+                    style={styles.likerPhoto}
+                    contentFit="cover"
+                    placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                    transition={200}
+                  />
+                ) : (
+                  <View style={styles.likerPhotoPlaceholder}>
+                    <Text style={{ fontSize: 40 }}>😊</Text>
+                  </View>
+                )}
+                <View style={styles.likerInfo}>
+                  <Text style={styles.likerName}>
+                    {item.profile.name}, {item.profile.age}
+                  </Text>
                 </View>
-              )}
-              <View style={styles.likerInfo}>
-                <Text style={styles.likerName}>
-                  {item.profile.name}, {item.profile.age}
-                </Text>
-              </View>
-              {item.isSuperLike && (
-                <View style={styles.superLikeBadge}>
-                  <Ionicons name="star" size={16} color={theme.colors.onSecondary} />
+                {item.isSuperLike && (
+                  <View style={styles.superLikeBadge}>
+                    <Ionicons name="star" size={16} color={theme.colors.onSecondary} />
+                  </View>
+                )}
+                <View style={styles.heartBadge}>
+                  <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
                 </View>
-              )}
-              <View style={styles.heartBadge}>
-                <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
-              </View>
-            </AnimatedPressable>
-          )}
-        />
+              </AnimatedPressable>
+            )}
+          />
+        </>
       )}
     </Animated.View>
   );
@@ -149,6 +156,20 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: { fontSize: theme.fontSize.sm, fontWeight: '700', color: theme.colors.onSecondary },
+
+  launchBanner: {
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+  },
+  launchBannerText: {
+    color: theme.colors.onSecondary,
+    fontWeight: '600',
+    fontSize: theme.fontSize.sm,
+    textAlign: 'center',
+  },
 
   grid: { padding: theme.spacing.md, gap: 12 },
   likerCard: {
