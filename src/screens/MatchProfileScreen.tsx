@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
+import { PromptCard } from '@/components/PromptCard';
 import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
@@ -235,6 +236,20 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                     maxVisible={100}
                     variant="surface"
                   />
+                </>
+              )}
+
+              {(profile?.prompts?.length ?? 0) > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Perguntas</Text>
+                  {profile?.prompts?.map((item, index) => (
+                    <PromptCard
+                      key={`${item.id}-${index}`}
+                      promptId={item.id}
+                      answer={item.answer}
+                      variant="surface"
+                    />
+                  ))}
                 </>
               )}
             </View>

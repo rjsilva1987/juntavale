@@ -23,6 +23,7 @@ import { FilterModal } from '@/components/FilterModal';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
+import { PromptCard } from '@/components/PromptCard';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
@@ -475,6 +476,11 @@ function ProfileCard({
   // Lista de interesses é pequena — calcular o conjunto compartilhado por
   // card a cada render é mais barato que memoizar por perfil.
   const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
+  const firstPrompt = profile.prompts?.[0];
+  // Com prompt no card, o overlay (chips + pergunta/resposta) fica alto
+  // demais com os 6 chips de antes — reduz pra 4 só quando há prompt pra
+  // mostrar junto, mantendo 6 no caso comum (sem prompt).
+  const chipsMaxVisible = firstPrompt ? 4 : 6;
 
   return (
     <View style={pcStyles.container}>
@@ -522,19 +528,32 @@ function ProfileCard({
             </Text>
           </View>
         )}
-        {!!profile.interests?.length && (
+        {(!!profile.interests?.length || firstPrompt) && (
           // pointerEvents="none" pra não interceptar as tap zones do
           // PhotoCarousel nem o gesto de swipe do card.
           <View pointerEvents="none">
-            <View style={pcStyles.interestsLabelRow}>
-              <Ionicons name="pricetags" size={14} color={theme.colors.white} />
-              <Text style={pcStyles.interestsLabel}>Interesses</Text>
-            </View>
-            <InterestChips
-              interests={profile.interests}
-              sharedSet={sharedInterests}
-              maxVisible={6}
-            />
+            {!!profile.interests?.length && (
+              <>
+                <View style={pcStyles.interestsLabelRow}>
+                  <Ionicons name="pricetags" size={14} color={theme.colors.white} />
+                  <Text style={pcStyles.interestsLabel}>Interesses</Text>
+                </View>
+                <InterestChips
+                  interests={profile.interests}
+                  sharedSet={sharedInterests}
+                  maxVisible={chipsMaxVisible}
+                />
+              </>
+            )}
+            {firstPrompt && (
+              <View style={pcStyles.promptWrap}>
+                <PromptCard
+                  promptId={firstPrompt.id}
+                  answer={firstPrompt.answer}
+                  variant="overlay"
+                />
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -753,4 +772,5 @@ const pcStyles = StyleSheet.create({
   },
   interestsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
   interestsLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.white },
+  promptWrap: { marginTop: 8 },
 });
