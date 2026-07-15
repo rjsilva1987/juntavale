@@ -30,8 +30,8 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     // Sort by most recent message — específico desta tela (o hook
     // compartilhado devolve a ordem "natural" do listener, sem ordenar).
     const sorted = [...activeMatches].sort((a, b) => {
-      const ta = a.lastMessageAt?.toMillis() ?? 0;
-      const tb = b.lastMessageAt?.toMillis() ?? 0;
+      const ta = a.lastMessage?.createdAt?.toMillis() ?? 0;
+      const tb = b.lastMessage?.createdAt?.toMillis() ?? 0;
       return tb - ta;
     });
     setMatches(sorted);
@@ -132,13 +132,15 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               <View style={styles.matchInfo}>
                 <Text style={styles.matchName}>{item.otherProfile?.name ?? 'Usuário'}</Text>
                 <Text style={styles.lastMsg} numberOfLines={1}>
-                  {item.lastMessage || 'Digam olá um ao outro! 👋'}
+                  {item.lastMessage?.text || 'Digam olá um ao outro! 👋'}
                 </Text>
               </View>
 
               {/* Time */}
-              {item.lastMessageAt && (
-                <Text style={styles.time}>{dayjs(item.lastMessageAt.toDate()).fromNow(true)}</Text>
+              {item.lastMessage?.createdAt && (
+                <Text style={styles.time}>
+                  {dayjs(item.lastMessage.createdAt.toDate()).fromNow(true)}
+                </Text>
               )}
             </AnimatedPressable>
           )}

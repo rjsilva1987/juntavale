@@ -56,11 +56,24 @@ export interface UserProfile {
   verified?: boolean;
 }
 
+// Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
+// nunca grava lastMessage, ver firestore.rules. text já vem truncado (~120
+// chars) e com o placeholder de foto/localização quando a mensagem não tem
+// texto.
+export interface LastMessage {
+  text: string;
+  senderId: string;
+  createdAt: Timestamp;
+}
+
 export interface Match {
   id: string;
   users: string[];
-  lastMessage?: string;
-  lastMessageAt?: Timestamp;
+  lastMessage?: LastMessage;
+  // Mapa por usuário, escrito pelo CLIENTE (cada um só escreve a própria
+  // chave — ver firestore.rules) ao abrir/focar o chat. Base do badge de não
+  // lidas em useUnreadCount.
+  lastReadAt?: Record<string, Timestamp>;
   typing?: Record<string, boolean>;
   blockedBy?: string[];
 }
@@ -282,8 +295,6 @@ export const recordSwipe = async (
     await setDoc(doc(db, 'matches', matchId), {
       users: [fromUid, toUid],
       createdAt: serverTimestamp(),
-      lastMessage: '',
-      lastMessageAt: serverTimestamp(),
     });
     return true; // it's a match!
   }
@@ -334,10 +345,8 @@ export const sendMessage = async (
     ...(imageUrl ? { imageUrl } : {}),
     ...(location ? { location } : {}),
   });
-  await updateDoc(doc(db, 'matches', matchId), {
-    lastMessage: imageUrl ? '📷 Foto' : location ? '📍 Localização' : text,
-    lastMessageAt: serverTimestamp(),
-  });
+  // lastMessage do doc do match é escrito pela Cloud Function onMessageCreated
+  // (Admin SDK), não aqui — ver firestore.rules e a interface LastMessage.
 };
 
 export const uploadChatImage = async (
@@ -368,6 +377,15 @@ export const listenMessages = (matchId: string, callback: (messages: Message[]) 
     const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Message);
     callback(messages);
   });
+};
+
+// ─── Leitura (badge de não lidas, S27) ──────────────────────
+
+// Grava lastReadAt.{uid} no doc do match — cada participante só consegue
+// escrever a própria chave (ver firestore.rules). Chamado pelo ChatScreen ao
+// montar/focar e quando chega mensagem nova com a tela em foco.
+export const markMatchRead = async (matchId: string, uid: string) => {
+  await updateDoc(doc(db, 'matches', matchId), { [`lastReadAt.${uid}`]: serverTimestamp() });
 };
 
 // ─── Typing indicator ──────────────────────────────────────

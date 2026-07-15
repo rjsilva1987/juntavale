@@ -137,13 +137,6 @@ export const onMessageCreated = onDocumentCreated(
     const users = matchSnap.data()?.users as string[] | undefined;
     if (!users) return;
 
-    const recipientUid = users.find((u) => u !== message.senderId);
-    if (!recipientUid) return;
-
-    const token = await getPushToken(recipientUid);
-    if (!token) return;
-
-    const sender = await getUserBasicInfo(message.senderId);
     const preview = message.text
       ? message.text
       : message.imageUrl
@@ -151,6 +144,32 @@ export const onMessageCreated = onDocumentCreated(
         : message.location
           ? '📍 Localização'
           : '';
+    const lastMessageText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
+
+    // Fundação pro badge de não lidas (S27) e pro preview da lista de
+    // conversas (S29): lastMessage só é escrito aqui (Admin SDK), nunca pelo
+    // client — ver firestore.rules (matches/{matchId} não libera 'lastMessage'
+    // no allow update). Match arquivado/apagado entre o envio da mensagem e
+    // esta function rodar não deve derrubar a function — só loga e segue.
+    try {
+      await matchSnap.ref.update({
+        lastMessage: {
+          text: lastMessageText,
+          senderId: message.senderId,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+      });
+    } catch (error) {
+      console.error('[onMessageCreated] falha ao atualizar lastMessage:', error);
+    }
+
+    const recipientUid = users.find((u) => u !== message.senderId);
+    if (!recipientUid) return;
+
+    const token = await getPushToken(recipientUid);
+    if (!token) return;
+
+    const sender = await getUserBasicInfo(message.senderId);
 
     await sendExpoNotifications([
       {

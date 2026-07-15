@@ -242,22 +242,29 @@ service cloud.firestore {
         && mutualLikeExists(request.resource.data.users)
         && request.resource.data.createdAt == request.time
         && (!('typing' in request.resource.data) || request.resource.data.typing == {})
-        // blockedBy (S19) é de propósito ausente desta lista: só a Cloud
-        // Function onBlockCreated/onBlockDeleted (Admin SDK) pode escrevê-lo.
-        && request.resource.data.keys().hasOnly(['users', 'createdAt', 'lastMessage', 'lastMessageAt', 'typing']);
+        // blockedBy (S19) e lastMessage (S27) são de propósito ausentes desta
+        // lista: só Cloud Functions (Admin SDK — onBlockCreated/onBlockDeleted
+        // e onMessageCreated respectivamente) podem escrevê-los. Admin SDK
+        // bypassa rules, então isso não impede as functions, só o client.
+        && request.resource.data.keys().hasOnly(['users', 'createdAt', 'typing']);
 
-      // Ninguém pode trocar os participantes depois de criado. Só lastMessage,
-      // lastMessageAt e typing podem mudar (blockedBy também fica de fora daqui
-      // pelo mesmo motivo acima) — e dentro de "typing", cada um só altera a
-      // própria chave (não dá pra forjar "a outra pessoa está digitando").
+      // Ninguém pode trocar os participantes depois de criado. lastMessage
+      // NUNCA aparece aqui — é escrito só pela Cloud Function onMessageCreated
+      // via Admin SDK (bypassa rules), o client não tem allow para ele. Do que
+      // o client pode mudar: typing (cada um só altera a própria chave — não
+      // dá pra forjar "a outra pessoa está digitando") e lastReadAt (S27,
+      // idem: cada um só marca a própria leitura, nunca a do outro).
       allow update: if isSignedIn() && request.auth.uid in resource.data.users
         && request.resource.data.users == resource.data.users
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['lastMessage', 'lastMessageAt', 'typing'])
-        && (!('lastMessage' in request.resource.data) || request.resource.data.lastMessage is string)
-        && (!('lastMessageAt' in request.resource.data) || request.resource.data.lastMessageAt is timestamp)
+             .hasOnly(['typing', 'lastReadAt'])
         && resource.data.get('typing', {}).diff(request.resource.data.get('typing', {}))
-             .affectedKeys().hasOnly([request.auth.uid]);
+             .affectedKeys().hasOnly([request.auth.uid])
+        && resource.data.get('lastReadAt', {}).diff(request.resource.data.get('lastReadAt', {}))
+             .affectedKeys().hasOnly([request.auth.uid])
+        && (resource.data.get('lastReadAt', {}).diff(request.resource.data.get('lastReadAt', {}))
+              .affectedKeys().size() == 0
+            || request.resource.data.lastReadAt[request.auth.uid] is timestamp);
 
       // Decisão: qualquer participante pode apagar o match a qualquer momento
       // (usado hoje só por undoSwipe(), mas também funciona como "desfazer

@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
@@ -64,8 +65,20 @@ export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
+// Fonte única de label + ícone por aba. Ionicons segue a convenção
+// "<nome>"/"<nome>-outline" para focado/não focado nas 4 abas atuais — dá pra
+// assumir o mesmo padrão pra uma 5ª aba futura (ex: "Explorar"), bastando uma
+// entrada nova aqui + um <Tab.Screen> correspondente abaixo.
+const TAB_META: Record<string, { label: string; icon: string }> = {
+  Descobrir: { label: 'Descobrir', icon: 'flame' },
+  Curtidas: { label: 'Curtidas', icon: 'heart' },
+  Conversas: { label: 'Conversas', icon: 'chatbubble' },
+  Perfil: { label: 'Perfil', icon: 'person' },
+};
+
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const unreadCount = useUnreadCount();
 
   return (
     <Tab.Navigator
@@ -82,14 +95,12 @@ function MainTabs() {
           height: 62 + insets.bottom,
         },
         tabBarLabelStyle: { fontSize: theme.fontSize.xs, fontWeight: '600' },
+        tabBarLabel: TAB_META[route.name]?.label ?? route.name,
         tabBarIcon: ({ color, size, focused }) => {
-          const icons: Record<string, string> = {
-            Descobrir: focused ? 'flame' : 'flame-outline',
-            Curtidas: focused ? 'heart' : 'heart-outline',
-            Conversas: focused ? 'chatbubble' : 'chatbubble-outline',
-            Perfil: focused ? 'person' : 'person-outline',
-          };
-          return <Ionicons name={icons[route.name] as any} size={size} color={color} />;
+          const icon = TAB_META[route.name]?.icon ?? 'ellipse';
+          return (
+            <Ionicons name={(focused ? icon : `${icon}-outline`) as any} size={size} color={color} />
+          );
         },
       })}
     >
@@ -107,7 +118,10 @@ function MainTabs() {
           </ErrorBoundary>
         )}
       </Tab.Screen>
-      <Tab.Screen name="Conversas">
+      <Tab.Screen
+        name="Conversas"
+        options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+      >
         {({ navigation }) => (
           <ErrorBoundary>
             <MatchesScreen
