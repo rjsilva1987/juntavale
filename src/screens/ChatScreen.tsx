@@ -76,6 +76,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // digitando não deixar o badge acender. isFocusedRef em vez de useIsFocused
   // pra não re-renderizar a tela inteira a cada troca de foco.
   const isFocusedRef = useRef(false);
+  // Ação escolhida no attach sheet, disparada com segurança só depois que o
+  // Modal termina de fechar de verdade (ver runAfterAttachSheetClose).
+  const pendingAttachActionRef = useRef<(() => void) | null>(null);
 
   const uid = user?.uid;
 
@@ -134,22 +137,31 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }
   };
 
-  // No iOS, disparar o picker/câmera/prompt de permissão enquanto o Modal
-  // do menu de anexos ainda está sendo descartado falha silenciosamente
-  // (conflito de apresentação de modais nativos). Adiar a ação até depois
-  // da animação de fechamento (~300ms) resolve; Android nunca teve o problema
-  // mas o delay é inofensivo lá também.
-  const runAfterAttachSheetClose = (action: () => void | Promise<void>) => {
-    setAttachSheetVisible(false);
-    setTimeout(() => {
-      Promise.resolve(action()).catch((error) => {
-        console.error('Erro na ação do menu de anexos:', error);
-        Alert.alert('Erro', 'Não foi possível completar a ação. Tente novamente.');
-      });
-    }, 400);
+  const runAttachAction = (action: () => void | Promise<void>) => {
+    Promise.resolve(action()).catch((error) => {
+      console.error('Erro na ação do menu de anexos:', error);
+      Alert.alert('Erro', 'Não foi possível completar a ação. Tente novamente.');
+    });
   };
 
-  const handleTakePhoto = () =>
+  // No iOS, launchCameraAsync/launchImageLibraryAsync nunca resolvem (promise
+  // pendura pra sempre) se chamados enquanto o Modal do attach sheet ainda
+  // está sendo apresentado/descartado — dois view controllers modais em voo
+  // ao mesmo tempo. onDismiss do Modal (iOS-only) dispara só quando o dismiss
+  // já terminou de verdade, então guardamos a ação num ref e disparamos ali.
+  // Android não tem esse problema e não chama onDismiss, então mantém o
+  // setTimeout curto que já funcionava.
+  const runAfterAttachSheetClose = (action: () => void | Promise<void>) => {
+    if (Platform.OS === 'android') {
+      setAttachSheetVisible(false);
+      setTimeout(() => runAttachAction(action), 100);
+      return;
+    }
+    pendingAttachActionRef.current = () => runAttachAction(action);
+    setAttachSheetVisible(false);
+  };
+
+  const handleTakePhoto = () => {
     runAfterAttachSheetClose(async () => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
@@ -160,8 +172,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (result.canceled || !result.assets[0]) return;
       handleSendImage(result.assets[0].uri);
     });
+  };
 
-  const handlePickFromLibrary = () =>
+  const handlePickFromLibrary = () => {
     runAfterAttachSheetClose(async () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -175,8 +188,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (result.canceled || !result.assets[0]) return;
       handleSendImage(result.assets[0].uri);
     });
+  };
 
-  const handleShareLocation = () =>
+  const handleShareLocation = () => {
     runAfterAttachSheetClose(async () => {
       if (!user || isBlocked || isUnverified) return;
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -204,6 +218,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         Alert.alert('Erro', 'Não foi possível obter sua localização.');
       }
     });
+  };
 
   const handleViewProfile = () => {
     setOptionsSheetVisible(false);
@@ -467,6 +482,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         transparent
         animationType="slide"
         onRequestClose={() => setAttachSheetVisible(false)}
+        onDismiss={() => {
+          const pendingAction = pendingAttachActionRef.current;
+          pendingAttachActionRef.current = null;
+          pendingAction?.();
+        }}
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setAttachSheetVisible(false)}>
           <View style={styles.sheet}>
