@@ -323,7 +323,11 @@ export default function SwipeScreen() {
             {/* Next card (behind) */}
             {profiles[currentIndex + 1] && (
               <View style={[styles.card, styles.cardBehind]}>
-                <ProfileCard profile={profiles[currentIndex + 1]} myInterests={myInterests} />
+                <ProfileCard
+                  key={profiles[currentIndex + 1].uid}
+                  profile={profiles[currentIndex + 1]}
+                  myInterests={myInterests}
+                />
               </View>
             )}
 
@@ -331,6 +335,7 @@ export default function SwipeScreen() {
             <GestureDetector gesture={gesture}>
               <Animated.View collapsable={false} style={[styles.card, cardStyle]}>
                 <ProfileCard
+                  key={currentProfile.uid}
                   profile={currentProfile}
                   myInterests={myInterests}
                   pagerNativeGesture={pagerNativeGesture}
@@ -467,12 +472,15 @@ function ProfileCard({
   carouselRef,
   onInfoPress,
 }: ProfileCardProps) {
+  const [photoIndex, setPhotoIndex] = useState(0);
   const photos = profile.photos?.length
     ? profile.photos
     : profile.photoURL
       ? [profile.photoURL]
       : [];
-  const carousel = <PhotoCarousel ref={carouselRef} photos={photos} />;
+  const carousel = (
+    <PhotoCarousel ref={carouselRef} photos={photos} onIndexChange={setPhotoIndex} />
+  );
   // Lista de interesses é pequena — calcular o conjunto compartilhado por
   // card a cada render é mais barato que memoizar por perfil.
   const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
@@ -504,7 +512,9 @@ function ProfileCard({
             {photos.length > 1 && (
               <View style={pcStyles.photoCountBadge} pointerEvents="none">
                 <Ionicons name="camera" size={13} color={theme.colors.white} />
-                <Text style={pcStyles.photoCountText}>{photos.length}</Text>
+                <Text style={pcStyles.photoCountText}>
+                  {photoIndex + 1}/{photos.length}
+                </Text>
               </View>
             )}
           </View>

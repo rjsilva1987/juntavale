@@ -59,12 +59,6 @@ export type RootStackParamList = {
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
   Profile: undefined;
-  // Não registrada em nenhum Stack.Group abaixo (gate deixou de bloquear o
-  // app inteiro — ver Navigation() mais abaixo). Mantida só pra
-  // PendingApprovalScreen.tsx (arquivo preservado, não deletado) continuar
-  // type-checando como componente órfão; remover os dois juntos se um dia a
-  // tela for apagada de vez.
-  PendingApproval: undefined;
 };
 
 export type RootStackProps = NativeStackScreenProps<RootStackParamList>;
@@ -190,8 +184,8 @@ export default function Navigation() {
   // — padrão auth-flow da doc do React Navigation.
   //
   // O gate de verificação NÃO bloqueia mais o app inteiro (não existe mais
-  // grupo "pending"/isGateOpen nem PendingApprovalScreen na navegação): um
-  // usuário logado e não verificado já entra direto no grupo "app" e navega
+  // grupo "pending"/isGateOpen na navegação): um usuário logado e não
+  // verificado já entra direto no grupo "app" e navega
   // livremente por Descobrir/Curtidas/Perfil. A checagem de `verified` agora
   // é pontual, só onde faz sentido — enviar mensagem (ver MatchesScreen.tsx
   // e ChatScreen.tsx) — e é reforçada no servidor (firestore.rules exige

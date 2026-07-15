@@ -10,6 +10,7 @@ import { theme } from '@/constants/theme';
 interface PhotoCarouselProps {
   photos: string[];
   style?: ViewStyle;
+  onIndexChange?: (index: number) => void;
 }
 
 export interface PhotoCarouselHandle {
@@ -18,7 +19,7 @@ export interface PhotoCarouselHandle {
 }
 
 export const PhotoCarousel = forwardRef<PhotoCarouselHandle, PhotoCarouselProps>(
-  function PhotoCarousel({ photos, style }, ref) {
+  function PhotoCarousel({ photos, style, onIndexChange }, ref) {
     const [activeIndex, setActiveIndex] = useState(0);
     const pagerRef = useRef<PagerView>(null);
 
@@ -69,7 +70,11 @@ export const PhotoCarousel = forwardRef<PhotoCarouselHandle, PhotoCarouselProps>
           ref={pagerRef}
           style={styles.pager}
           initialPage={0}
-          onPageSelected={(e) => setActiveIndex(e.nativeEvent.position)}
+          onPageSelected={(e) => {
+            const position = e.nativeEvent.position;
+            setActiveIndex(position);
+            onIndexChange?.(position);
+          }}
         >
           {photos.map((uri) => (
             <Image
