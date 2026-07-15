@@ -1,11 +1,12 @@
 // src/screens/ChatScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -36,6 +37,7 @@ import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import {
   listenMessages,
   listenMatchBlockStatus,
+  markMatchRead,
   sendMessage,
   uploadChatImage,
   Message,
@@ -68,14 +70,36 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const flatListRef = React.useRef<FlatList>(null);
   const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
 
+  // Fundação do badge de não lidas (S27, ver useUnreadCount): marca
+  // lastReadAt.{meuUid} ao focar a tela e de novo sempre que uma mensagem
+  // nova chega enquanto ela está focada, pra abrir o chat com o outro lado
+  // digitando não deixar o badge acender. isFocusedRef em vez de useIsFocused
+  // pra não re-renderizar a tela inteira a cada troca de foco.
+  const isFocusedRef = useRef(false);
+
+  const uid = user?.uid;
+
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      if (uid) markMatchRead(matchId, uid).catch(() => {});
+      return () => {
+        isFocusedRef.current = false;
+      };
+    }, [matchId, uid]),
+  );
+
   useEffect(() => {
     const unsub = listenMessages(matchId, (msgs) => {
       setMessages(msgs);
       setLoading(false);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      if (isFocusedRef.current && uid) {
+        markMatchRead(matchId, uid).catch(() => {});
+      }
     });
     return unsub;
-  }, [matchId]);
+  }, [matchId, uid]);
 
   useEffect(() => {
     const unsub = listenMatchBlockStatus(matchId, setBlockedBy);
@@ -102,67 +126,84 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     try {
       const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
       await sendMessage(matchId, user.uid, '', imageUrl);
-    } catch {
+    } catch (error) {
+      console.error('Erro ao enviar imagem:', error);
       Alert.alert('Erro', 'Não foi possível enviar a imagem.');
     } finally {
       setUploadProgress(null);
     }
   };
 
-  const handleTakePhoto = async () => {
+  // No iOS, disparar o picker/câmera/prompt de permissão enquanto o Modal
+  // do menu de anexos ainda está sendo descartado falha silenciosamente
+  // (conflito de apresentação de modais nativos). Adiar a ação até depois
+  // da animação de fechamento (~300ms) resolve; Android nunca teve o problema
+  // mas o delay é inofensivo lá também.
+  const runAfterAttachSheetClose = (action: () => void | Promise<void>) => {
     setAttachSheetVisible(false);
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Permita o acesso à câmera nas configurações.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (result.canceled || !result.assets[0]) return;
-    handleSendImage(result.assets[0].uri);
+    setTimeout(() => {
+      Promise.resolve(action()).catch((error) => {
+        console.error('Erro na ação do menu de anexos:', error);
+        Alert.alert('Erro', 'Não foi possível completar a ação. Tente novamente.');
+      });
+    }, 400);
   };
 
-  const handlePickFromLibrary = async () => {
-    setAttachSheetVisible(false);
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Permita o acesso à galeria nas configurações.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
+  const handleTakePhoto = () =>
+    runAfterAttachSheetClose(async () => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão necessária', 'Permita o acesso à câmera nas configurações.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+      if (result.canceled || !result.assets[0]) return;
+      handleSendImage(result.assets[0].uri);
     });
-    if (result.canceled || !result.assets[0]) return;
-    handleSendImage(result.assets[0].uri);
-  };
 
-  const handleShareLocation = async () => {
-    setAttachSheetVisible(false);
-    if (!user || isBlocked || isUnverified) return;
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permissão necessária',
-        'Permita o acesso à localização para compartilhá-la no chat.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
-        ],
-      );
-      return;
-    }
-    try {
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+  const handlePickFromLibrary = () =>
+    runAfterAttachSheetClose(async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão necessária', 'Permita o acesso à galeria nas configurações.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
       });
-      await sendMessage(matchId, user.uid, '', undefined, {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-    } catch {
-      Alert.alert('Erro', 'Não foi possível obter sua localização.');
-    }
-  };
+      if (result.canceled || !result.assets[0]) return;
+      handleSendImage(result.assets[0].uri);
+    });
+
+  const handleShareLocation = () =>
+    runAfterAttachSheetClose(async () => {
+      if (!user || isBlocked || isUnverified) return;
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permissão necessária',
+          'Permita o acesso à localização para compartilhá-la no chat.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+      try {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        await sendMessage(matchId, user.uid, '', undefined, {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      } catch (error) {
+        console.error('Erro ao obter localização:', error);
+        Alert.alert('Erro', 'Não foi possível obter sua localização.');
+      }
+    });
 
   const handleViewProfile = () => {
     setOptionsSheetVisible(false);
