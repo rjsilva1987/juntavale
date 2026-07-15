@@ -1,7 +1,7 @@
 // src/components/ReportModal.tsx
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { Text, StyleSheet, Modal, Pressable, TextInput, ActivityIndicator } from 'react-native';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';

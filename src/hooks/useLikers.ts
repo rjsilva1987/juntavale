@@ -77,6 +77,10 @@ export function useLikers(): UseLikersReturn {
         }
       });
 
+      if (rejectedCount > 0) {
+        console.warn(`[useLikers] ${rejectedCount} perfis falharam ao carregar`);
+      }
+
       const valid = withProfiles.filter((entry): entry is Liker => entry.profile !== null);
       // Super-likers primeiro; sort é estável (ES2019+), então a ordem
       // relativa dentro de cada grupo (a que já vinha do snapshot) se mantém.
