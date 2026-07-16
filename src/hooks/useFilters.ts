@@ -10,6 +10,7 @@ export const DEFAULT_FILTERS: DiscoverFilters = {
   maxDistance: 50,
   gender: 'all',
   lookingFor: 'all',
+  verifiedOnly: false,
 };
 
 interface UseFiltersReturn {
@@ -22,12 +23,15 @@ interface UseFiltersReturn {
 
 export function useFilters(): UseFiltersReturn {
   const { user, profile, refreshProfile } = useAuth();
-  const [filters, setFilters] = useState<DiscoverFilters>(profile?.filters ?? DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<DiscoverFilters>({
+    ...DEFAULT_FILTERS,
+    ...(profile?.filters ?? {}),
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    setFilters(profile?.filters ?? DEFAULT_FILTERS);
+    setFilters({ ...DEFAULT_FILTERS, ...(profile?.filters ?? {}) });
   }, [profile?.filters]);
 
   const saveFilters = useCallback(

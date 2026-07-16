@@ -40,6 +40,7 @@ export interface DiscoverFilters {
   maxDistance: number;
   gender: Gender | 'all';
   lookingFor: LookingFor | 'all';
+  verifiedOnly: boolean;
 }
 
 export interface UserProfile {
@@ -200,6 +201,37 @@ export const setPrincipalPhoto = async (
 
 // ─── Discovery ────────────────────────────────────────────
 
+// S43 — perfis cadastrados há menos disso ganham posição garantida no deck.
+const NEW_PROFILE_BOOST_WINDOW_MS = 48 * 60 * 60 * 1000;
+// A cada N regulares, 1 boosted é intercalado (posições 3, 7, 11... 0-indexed).
+const NEW_PROFILE_BOOST_GAP = 3;
+
+// Intercala `boosted` dentro de `regular` a cada `gap` itens, preservando a
+// ordem interna de cada lista. Se uma lista acabar antes da outra, o restante
+// da lista que sobrou é anexado na sequência (sem re-sort).
+export const interleaveBoostedProfiles = (
+  regular: UserProfile[],
+  boosted: UserProfile[],
+  gap: number,
+): UserProfile[] => {
+  const result: UserProfile[] = [];
+  let regularIdx = 0;
+  let boostedIdx = 0;
+
+  while (regularIdx < regular.length || boostedIdx < boosted.length) {
+    for (let i = 0; i < gap && regularIdx < regular.length; i++) {
+      result.push(regular[regularIdx]);
+      regularIdx++;
+    }
+    if (boostedIdx < boosted.length) {
+      result.push(boosted[boostedIdx]);
+      boostedIdx++;
+    }
+  }
+
+  return result;
+};
+
 export const getDiscoverProfiles = async (
   currentUid: string,
   filters?: DiscoverFilters,
@@ -228,6 +260,7 @@ export const getDiscoverProfiles = async (
       if (candidate.age < filters.ageMin || candidate.age > filters.ageMax) return;
       if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
       if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
+      if (filters.verifiedOnly && candidate.verified !== true) return;
       if (currentLocation && candidate.location) {
         const distance = haversineDistanceKm(currentLocation, candidate.location);
         if (distance > filters.maxDistance) return;
@@ -236,7 +269,19 @@ export const getDiscoverProfiles = async (
 
     profiles.push(candidate);
   });
-  return profiles;
+
+  const boostThreshold = Date.now() - NEW_PROFILE_BOOST_WINDOW_MS;
+  const regular: UserProfile[] = [];
+  const boosted: UserProfile[] = [];
+  profiles.forEach((p) => {
+    if (p.createdAt && p.createdAt.toMillis() >= boostThreshold) {
+      boosted.push(p);
+    } else {
+      regular.push(p);
+    }
+  });
+
+  return interleaveBoostedProfiles(regular, boosted, NEW_PROFILE_BOOST_GAP);
 };
 
 // ─── Swipes & Matches ─────────────────────────────────────

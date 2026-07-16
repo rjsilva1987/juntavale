@@ -1,7 +1,8 @@
 // src/components/FilterModal.tsx
+import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
 
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
@@ -139,6 +140,21 @@ export function FilterModal({
             })}
           </View>
 
+          {/* Só verificados */}
+          <View style={styles.verifiedRow}>
+            <View style={styles.verifiedLabelRow}>
+              <Ionicons name="shield-checkmark" size={16} color={theme.colors.primary} />
+              <Text style={styles.label}>Apenas perfis verificados</Text>
+            </View>
+            <Switch
+              value={draft.verifiedOnly}
+              onValueChange={(value) => setDraft((prev) => ({ ...prev, verifiedOnly: value }))}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+              thumbColor={theme.colors.white}
+              ios_backgroundColor={theme.colors.border}
+            />
+          </View>
+
           {/* Actions */}
           <View style={styles.actions}>
             <TouchableOpacity
@@ -241,6 +257,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   lookingForTextActive: { color: theme.colors.onPrimary },
+
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  verifiedLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
 
   actions: {
     flexDirection: 'row',

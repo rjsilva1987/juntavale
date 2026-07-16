@@ -70,7 +70,6 @@ export const submitSupportTicket = async ({
     message: trimmed,
     status: 'open',
     createdAt: serverTimestamp(),
-    lastMessageAt: serverTimestamp(),
   });
   batch.set(messageRef, {
     senderId: uid,
@@ -114,9 +113,8 @@ export const getSupportTicket = async (ticketId: string): Promise<SupportTicket 
 };
 
 // Só o admin consegue de fato escrever isso (firestore.rules exige
-// diff().affectedKeys().hasOnly(['lastMessageAt','status']) e restringe o
-// dono a só reabrir) — mesmo padrão de reviewVerification em
-// verificationService.ts.
+// diff().affectedKeys().hasOnly(['status']) e restringe o dono a só
+// reabrir) — mesmo padrão de reviewVerification em verificationService.ts.
 export const updateTicketStatus = async (
   ticketId: string,
   status: SupportTicketStatus,
@@ -124,14 +122,14 @@ export const updateTicketStatus = async (
   await updateDoc(doc(db, 'support', ticketId), { status });
 };
 
-// S39 vai chamar isso a partir da tela de thread — aqui só precisa existir
-// e compilar. writeBatch: mensagem nova na subcollection + lastMessageAt no
-// pai, atomicamente. Reabertura: só quando quem manda é o DONO e o ticket já
-// estava 'resolved' — admin respondendo nunca muda o status (e as rules
-// também não deixam o dono ir na direção contrária, resolver o próprio
-// chamado). lastMessageAt é escrito pelo client por enquanto; quando existir
-// a Cloud Function onSupportMessageCreated (S40), avaliar mover essa escrita
-// pro servidor, como lastMessage em matches/{matchId} já funciona hoje.
+// writeBatch: mensagem nova na subcollection + reabertura de status (se
+// aplicável), atomicamente. Reabertura: só quando quem manda é o DONO e o
+// ticket já estava 'resolved' — admin respondendo nunca muda o status (e as
+// rules também não deixam o dono ir na direção contrária, resolver o próprio
+// chamado). lastMessageAt NÃO é mais escrito aqui — é responsabilidade da
+// Cloud Function onSupportMessageCreated (S40, Admin SDK), que usa o
+// createdAt da própria mensagem em vez de serverTimestamp() pra ficar
+// idempotente, mesmo padrão de lastMessage em matches/{matchId}.
 export const sendSupportMessage = async (
   ticketId: string,
   senderId: string,
@@ -154,10 +152,9 @@ export const sendSupportMessage = async (
     text: trimmed,
     createdAt: serverTimestamp(),
   });
-  batch.update(ticketRef, {
-    lastMessageAt: serverTimestamp(),
-    ...(shouldReopen ? { status: 'open' } : {}),
-  });
+  if (shouldReopen) {
+    batch.update(ticketRef, { status: 'open' });
+  }
   await batch.commit();
 };
 

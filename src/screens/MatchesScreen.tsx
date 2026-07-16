@@ -9,6 +9,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -114,6 +115,11 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
             <Text style={styles.avatarEmoji}>😊</Text>
           </View>
         )}
+        {item.otherProfile?.verified === true && (
+          <View style={styles.newMatchVerifiedBadge}>
+            <VerifiedBadge size={12} />
+          </View>
+        )}
       </View>
       <Text style={styles.newMatchName} numberOfLines={1}>
         {firstName(item.otherProfile?.name)}
@@ -154,7 +160,12 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         </View>
 
         <View style={styles.matchInfo}>
-          <Text style={styles.matchName}>{item.otherProfile?.name ?? 'Usuário'}</Text>
+          <View style={styles.matchNameRow}>
+            <Text style={styles.matchName} numberOfLines={1}>
+              {item.otherProfile?.name ?? 'Usuário'}
+            </Text>
+            {item.otherProfile?.verified === true && <VerifiedBadge size={14} />}
+          </View>
           <Text style={[styles.lastMsg, unread && styles.lastMsgUnread]} numberOfLines={1}>
             {youPrefix}
             {item.lastMessage.text}
@@ -251,6 +262,14 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   newMatchAvatar: { width: '100%', height: '100%', borderRadius: 34 },
+  newMatchVerifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: theme.colors.white,
+  },
   newMatchAvatarPlaceholder: {
     width: '100%',
     height: '100%',
@@ -306,11 +325,18 @@ const styles = StyleSheet.create({
   },
 
   matchInfo: { flex: 1 },
+  matchNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 3,
+    flexShrink: 1,
+  },
   matchName: {
     fontSize: theme.fontSize.md,
     fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 3,
+    flexShrink: 1,
   },
   lastMsg: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   lastMsgUnread: { fontWeight: '600', color: theme.colors.text },

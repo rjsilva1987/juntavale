@@ -439,13 +439,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ───────────────────────── support (S36-S38) ─────────────────────────
+    // ───────────────────────── support (S36-S40) ─────────────────────────
     //
     // Ticket de Ajuda/Fale Conosco. Ao contrário de reports (só de ida), o
     // dono pode ler o próprio ticket. status começa sempre 'open' no create
-    // (client nunca cria já 'resolved'). lastMessageAt (S38) é opcional no
-    // create — não quebra client antigo em produção — mas se presente
-    // precisa ser request.time, igual createdAt.
+    // (client nunca cria já 'resolved'). lastMessageAt (S40) é escrito só
+    // pela Cloud Function onSupportMessageCreated (Admin SDK, bypassa estas
+    // regras) — o client não tem allow para esse campo, nem em create nem
+    // em update.
     match /support/{ticketId} {
       allow read: if isAdmin() || resource.data.uid == request.auth.uid;
 
@@ -459,29 +460,20 @@ service cloud.firestore {
         && request.resource.data.message.matches('.*\\S.*')
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time
-        && (!('lastMessageAt' in request.resource.data)
-            || request.resource.data.lastMessageAt == request.time)
         && request.resource.data.keys().hasOnly(
-             ['uid', 'category', 'message', 'status', 'createdAt', 'lastMessageAt']);
+             ['uid', 'category', 'message', 'status', 'createdAt']);
 
-      // S38: dono ganhou permissão de update, mas só em dois campos e só pra
-      // REABRIR o próprio ticket (resolved -> open, nunca o contrário) — o
-      // hasOnly(affectedKeys) abaixo já garante que uid/category/message/
-      // createdAt do usuário nunca são reescritos por essa via. Admin
-      // continua podendo ir pra qualquer direção (open<->resolved), igual
-      // reviewVerification em verificationService.ts. lastMessageAt é
-      // escrito pelo client junto com cada mensagem nova (sendSupportMessage,
-      // writeBatch) — quando existir a Cloud Function
-      // onSupportMessageCreated (S40), avaliar mover essa escrita pro
-      // servidor, como lastMessage em matches/{matchId} já funciona hoje.
+      // S38: dono ganhou permissão de update, mas só no campo status, e só
+      // pra REABRIR o próprio ticket (resolved -> open, nunca o contrário) —
+      // o hasOnly(affectedKeys) abaixo já garante que uid/category/message/
+      // createdAt/lastMessageAt do usuário nunca são reescritos por essa
+      // via. Admin continua podendo ir pra qualquer direção
+      // (open<->resolved), igual reviewVerification em
+      // verificationService.ts.
       allow update: if isSignedIn()
         && (isAdmin() || isOwner(resource.data.uid))
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['lastMessageAt', 'status'])
-        && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageAt'])
-          || request.resource.data.lastMessageAt == request.time
-        )
+             .hasOnly(['status'])
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
           || (

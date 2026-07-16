@@ -38,7 +38,7 @@ export function useNotifications() {
             Partial<PushNotificationData> | undefined;
           if (!data?.type || !navigationRef.isReady()) return;
 
-          if (data.type === 'message' && data.matchId) {
+          if ((data.type === 'message' || data.type === 'match_reminder') && data.matchId) {
             navigationRef.navigate('Chat', {
               matchId: data.matchId,
               otherUid: data.otherUid ?? '',
@@ -49,6 +49,8 @@ export function useNotifications() {
             navigationRef.navigate('Main', { screen: 'Conversas' });
           } else if (data.type === 'superlike') {
             navigationRef.navigate('Main', { screen: 'Curtidas' });
+          } else if (data.type === 'support' && data.ticketId) {
+            navigationRef.navigate('SupportThread', { ticketId: data.ticketId });
           }
         },
       );

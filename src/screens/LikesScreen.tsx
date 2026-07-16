@@ -11,6 +11,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useLikers } from '@/hooks/useLikers';
@@ -55,9 +56,12 @@ function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress }: LikeCardProp
         </View>
       )}
       <View style={styles.likerInfo}>
-        <Text style={styles.likerName}>
-          {profile.name}, {profile.age}
-        </Text>
+        <View style={styles.likerNameRow}>
+          <Text style={styles.likerName} numberOfLines={1}>
+            {profile.name}, {profile.age}
+          </Text>
+          {profile.verified === true && <VerifiedBadge size={14} />}
+        </View>
         {showLikedPhotoContext && (
           <View style={styles.likedPhotoRow}>
             <Image
@@ -301,7 +305,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     padding: 10,
   },
-  likerName: { color: theme.colors.white, fontWeight: '600', fontSize: theme.fontSize.sm },
+  likerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  likerName: {
+    color: theme.colors.white,
+    fontWeight: '600',
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
   likedPhotoRow: {
     flexDirection: 'row',
     alignItems: 'center',

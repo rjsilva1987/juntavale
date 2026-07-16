@@ -11,11 +11,12 @@ import { db } from '@/services/firebase';
 // (functions/src/index.ts) — usado no client só pra rotear o deep-link ao
 // tocar na notificação (ver useNotifications.ts).
 export type PushNotificationData = {
-  type: 'match' | 'message' | 'superlike';
+  type: 'match' | 'message' | 'superlike' | 'support' | 'match_reminder';
   matchId?: string;
   otherUid?: string;
   otherName?: string;
   otherPhoto?: string;
+  ticketId?: string;
 };
 
 // expo-notifications não tem módulo nativo no Expo Go (SDK 53+); qualquer
