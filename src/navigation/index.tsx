@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
@@ -157,6 +158,7 @@ function MainTabs() {
 export default function Navigation() {
   const { user, loading } = useAuth();
   useNotifications();
+  useActivityTracker();
   const { onNavigationReady } = useChatDeepLink(user?.uid);
 
   // Resolvido em paralelo com o Auth (AsyncStorage não depende do Firebase) —

@@ -65,6 +65,10 @@ export interface UserProfile {
   // pelo usuário. Opcional: docs legados sem o campo = sem prompts, toda
   // leitura precisa tolerar undefined. Ver src/constants/prompts.ts.
   prompts?: { id: string; answer: string }[];
+  // S44a — gravado por useActivityTracker (mount + volta ao foreground, com
+  // throttle de 1h). Opcional: contas existentes não têm até o primeiro
+  // foreground pós-deploy; base pro re-engajamento (S44b).
+  lastActiveAt?: Timestamp;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
