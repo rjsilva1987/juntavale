@@ -147,12 +147,15 @@ service cloud.firestore {
                   ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'location', 'filters', 'prompts', 'lastActiveAt'])
+              'gender', 'lookingFor', 'location', 'filters', 'prompts', 'lastActiveAt',
+              'reengagementOptOut'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastActiveAt'])
             || request.resource.data.lastActiveAt == request.time)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reengagementOptOut'])
+            || request.resource.data.reengagementOptOut is bool)
         && isValidProfile(request.resource.data);
 
       allow delete: if isOwner(userId);

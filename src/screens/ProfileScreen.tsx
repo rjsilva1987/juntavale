@@ -14,6 +14,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Switch,
   type TextInputProps,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -86,6 +87,7 @@ export default function ProfileScreen() {
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
+  const [reengagementSaving, setReengagementSaving] = useState(false);
 
   // Prompts (S33) — editados via modais próprios, fora do form de
   // nome/idade/bio/gênero/interesses acima. Sempre grava o array completo
@@ -207,6 +209,24 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  // Lembretes e sugestões (S44c) — opt-OUT do re-engajamento por push (S44b,
+  // ainda não existe). O Switch NÃO reflete local otimista: value vem
+  // sempre de profile?.reengagementOptOut, então se o write falhar o
+  // Switch nunca chegou a se mover — mesmo padrão de "aguardar o write"
+  // usado no resto desta tela (handleSetPrincipalPhoto, handleRemovePhoto).
+  const handleToggleReengagement = async (value: boolean) => {
+    if (!user) return;
+    setReengagementSaving(true);
+    try {
+      await updateUserProfile(user.uid, { reengagementOptOut: !value });
+      await refreshProfile();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar essa preferência.');
+    } finally {
+      setReengagementSaving(false);
+    }
   };
 
   const openAddPrompt = () => {
@@ -584,6 +604,30 @@ export default function ProfileScreen() {
           <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
           <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
         </AnimatedPressable>
+
+        {/* Lembretes e sugestões (S44c) — opt-OUT do re-engajamento por push
+            (S44b, ainda não existe). Campo salvo é opt-OUT, mas o Switch
+            mostra a semântica positiva: ligado = recebe lembretes (padrão,
+            inclusive pra quem não tem o campo ainda). */}
+        <View style={styles.reengagementCard}>
+          <View style={styles.reengagementLabelRow}>
+            <Ionicons name="notifications-outline" size={20} color={theme.colors.primary} />
+            <View style={styles.reengagementTexts}>
+              <Text style={styles.reengagementLabel}>Lembretes e sugestões</Text>
+              <Text style={styles.reengagementSubtitle}>
+                Avisos de curtidas e conversas paradas quando você ficar um tempo sem entrar
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={!(profile?.reengagementOptOut ?? false)}
+            onValueChange={handleToggleReengagement}
+            disabled={reengagementSaving}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={theme.colors.white}
+            ios_backgroundColor={theme.colors.border}
+          />
+        </View>
 
         {/* Ajuda / Fale Conosco (S36) */}
         <AnimatedPressable
@@ -1022,6 +1066,37 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.fontSize.md,
     fontWeight: '600',
+  },
+
+  reengagementCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+  },
+  reengagementLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.xs,
+    flex: 1,
+  },
+  reengagementTexts: { flex: 1 },
+  reengagementLabel: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  reengagementSubtitle: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
   },
 
   logoutBtn: {

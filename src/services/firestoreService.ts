@@ -69,6 +69,11 @@ export interface UserProfile {
   // throttle de 1h). Opcional: contas existentes não têm até o primeiro
   // foreground pós-deploy; base pro re-engajamento (S44b).
   lastActiveAt?: Timestamp;
+  // S44c — opt-OUT dos pushes de re-engajamento (S44b, ainda não existe).
+  // Ausente ou false = recebe lembretes (padrão); true = não recebe.
+  // Nomeado como opt-out de propósito: contas existentes sem o campo
+  // continuam elegíveis sem precisar de migração.
+  reengagementOptOut?: boolean;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
