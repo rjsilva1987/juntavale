@@ -128,6 +128,14 @@ export default function AdminSupportDetailScreen({
             </Text>
 
             <AnimatedPressable
+              style={styles.viewConversationBtn}
+              onPress={() => navigation.navigate('SupportThread', { ticketId: ticket.id })}
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color={theme.colors.primary} />
+              <Text style={styles.viewConversationBtnText}>Ver conversa</Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
               style={[
                 styles.actionBtn,
                 ticket.status === 'open' ? styles.resolveBtn : styles.reopenBtn,
@@ -222,6 +230,23 @@ const styles = StyleSheet.create({
   },
   message: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 22 },
   date: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, marginTop: 8 },
+
+  viewConversationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: theme.spacing.lg,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 12,
+  },
+  viewConversationBtnText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
 
   actionBtn: {
     marginTop: theme.spacing.xl,

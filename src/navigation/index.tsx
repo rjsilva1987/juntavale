@@ -27,10 +27,12 @@ import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
+import MyTicketsScreen from '@/screens/MyTicketsScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import SupportScreen from '@/screens/SupportScreen';
+import SupportThreadScreen from '@/screens/SupportThreadScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
 import VerificationScreen from '@/screens/VerificationScreen';
 
@@ -59,6 +61,8 @@ export type RootStackParamList = {
   MatchesGrid: undefined;
   BlockedUsers: undefined;
   Support: undefined;
+  MyTickets: undefined;
+  SupportThread: { ticketId: string };
   Verification: undefined;
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
@@ -217,6 +221,8 @@ export default function Navigation() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
+            <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
+            <Stack.Screen name="SupportThread" component={SupportThreadScreen} />
             <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
             <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
             <Stack.Screen name="AdminSupport" component={AdminSupportScreen} />
