@@ -16,6 +16,8 @@ import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
+import AdminSupportDetailScreen from '@/screens/AdminSupportDetailScreen';
+import AdminSupportScreen from '@/screens/AdminSupportScreen';
 import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScreen';
 import AdminVerificationsScreen from '@/screens/AdminVerificationsScreen';
 import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
@@ -60,6 +62,8 @@ export type RootStackParamList = {
   Verification: undefined;
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
+  AdminSupport: undefined;
+  AdminSupportDetail: { ticketId: string };
   Profile: undefined;
 };
 
@@ -215,6 +219,8 @@ export default function Navigation() {
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
             <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
+            <Stack.Screen name="AdminSupport" component={AdminSupportScreen} />
+            <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
           </Stack.Group>
         )}
       </Stack.Navigator>

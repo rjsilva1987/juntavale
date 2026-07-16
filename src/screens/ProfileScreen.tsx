@@ -596,13 +596,28 @@ export default function ProfileScreen() {
 
         {/* Painel Admin — só visível pra ADMIN_UID */}
         {user?.uid === ADMIN_UID && (
-          <AnimatedPressable
-            style={styles.blockedUsersBtn}
-            onPress={() => navigation.navigate('AdminVerifications')}
-          >
-            <Ionicons name="briefcase-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.blockedUsersText}>Painel Admin</Text>
-          </AnimatedPressable>
+          <>
+            <AnimatedPressable
+              style={styles.blockedUsersBtn}
+              onPress={() => navigation.navigate('AdminVerifications')}
+            >
+              <Ionicons name="briefcase-outline" size={20} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedUsersText}>Painel Admin</Text>
+            </AnimatedPressable>
+
+            {/* Suporte (admin) — S37 */}
+            <AnimatedPressable
+              style={styles.blockedUsersBtn}
+              onPress={() => navigation.navigate('AdminSupport')}
+            >
+              <Ionicons
+                name="chatbox-ellipses-outline"
+                size={20}
+                color={theme.colors.textSecondary}
+              />
+              <Text style={styles.blockedUsersText}>Suporte (admin)</Text>
+            </AnimatedPressable>
+          </>
         )}
 
         {/* Logout */}
