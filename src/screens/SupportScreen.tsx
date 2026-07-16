@@ -43,6 +43,7 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
       await submitSupportTicket({ uid: user.uid, category, message });
       Alert.alert('Mensagem enviada!', 'Vamos te responder em breve.', [
         { text: 'OK', onPress: () => navigation.goBack() },
+        { text: 'Ver meus chamados', onPress: () => navigation.replace('MyTickets') },
       ]);
     } catch (err) {
       console.error(err);
@@ -74,6 +75,13 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <AnimatedPressable
+              style={styles.myTicketsLink}
+              onPress={() => navigation.navigate('MyTickets')}
+            >
+              <Text style={styles.myTicketsLinkText}>Meus chamados →</Text>
+            </AnimatedPressable>
+
             <Text style={styles.welcome}>Fale com a gente — respondemos o quanto antes.</Text>
 
             <Text style={styles.label}>Categoria</Text>
@@ -152,6 +160,12 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text },
 
   content: { padding: theme.spacing.md },
+  myTicketsLink: { alignSelf: 'flex-end', marginBottom: theme.spacing.sm },
+  myTicketsLinkText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
   welcome: {
     fontSize: theme.fontSize.md,
     color: theme.colors.textSecondary,

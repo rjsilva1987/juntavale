@@ -33,6 +33,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/matches/$(matchId)).data;
     }
 
+    // Evita repetir o texto do get() de support/{ticketId} nas regras da
+    // subcollection support/{ticketId}/messages (S38).
+    function getTicket(ticketId) {
+      return get(/databases/$(database)/documents/support/$(ticketId)).data;
+    }
+
     // Recebe o match já lido (getMatch chamado 1x pelo caller) em vez de
     // chamar getMatch de novo aqui — Rules não tem 'let', então isso é o jeito
     // de checar duas condições sobre o mesmo doc com um único get() faturado.
@@ -433,14 +439,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ───────────────────────── support (S36) ─────────────────────────
+    // ───────────────────────── support (S36-S38) ─────────────────────────
     //
     // Ticket de Ajuda/Fale Conosco. Ao contrário de reports (só de ida), o
-    // dono pode ler o próprio ticket — MVP não tem histórico na UI ainda,
-    // mas a regra já prepara essa melhoria futura sem precisar mexer aqui de
-    // novo. status começa sempre 'open' no create (client nunca cria já
-    // 'resolved') e só o admin pode mudar, e só esse campo — reviewVerification
-    // acima é o mesmo padrão (diff().affectedKeys().hasOnly(['status'])).
+    // dono pode ler o próprio ticket. status começa sempre 'open' no create
+    // (client nunca cria já 'resolved'). lastMessageAt (S38) é opcional no
+    // create — não quebra client antigo em produção — mas se presente
+    // precisa ser request.time, igual createdAt.
     match /support/{ticketId} {
       allow read: if isAdmin() || resource.data.uid == request.auth.uid;
 
@@ -454,16 +459,71 @@ service cloud.firestore {
         && request.resource.data.message.matches('.*\\S.*')
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time
+        && (!('lastMessageAt' in request.resource.data)
+            || request.resource.data.lastMessageAt == request.time)
         && request.resource.data.keys().hasOnly(
-             ['uid', 'category', 'message', 'status', 'createdAt']);
+             ['uid', 'category', 'message', 'status', 'createdAt', 'lastMessageAt']);
 
-      // Admin revisa: só pode fechar/reabrir o ticket via status, nunca
-      // reescreve uid/category/message/createdAt do usuário.
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['open', 'resolved'];
+      // S38: dono ganhou permissão de update, mas só em dois campos e só pra
+      // REABRIR o próprio ticket (resolved -> open, nunca o contrário) — o
+      // hasOnly(affectedKeys) abaixo já garante que uid/category/message/
+      // createdAt do usuário nunca são reescritos por essa via. Admin
+      // continua podendo ir pra qualquer direção (open<->resolved), igual
+      // reviewVerification em verificationService.ts. lastMessageAt é
+      // escrito pelo client junto com cada mensagem nova (sendSupportMessage,
+      // writeBatch) — quando existir a Cloud Function
+      // onSupportMessageCreated (S40), avaliar mover essa escrita pro
+      // servidor, como lastMessage em matches/{matchId} já funciona hoje.
+      allow update: if isSignedIn()
+        && (isAdmin() || isOwner(resource.data.uid))
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastMessageAt', 'status'])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageAt'])
+          || request.resource.data.lastMessageAt == request.time
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || (
+            request.resource.data.status in ['open', 'resolved']
+            && (
+              isAdmin()
+              || (resource.data.status == 'resolved' && request.resource.data.status == 'open')
+            )
+          )
+        );
 
       allow delete: if false;
+
+      // ─────────────── support/{ticketId}/messages (S38) ───────────────
+      //
+      // Mensagens da thread — mesmo padrão de imutabilidade de
+      // matches/{matchId}/messages (update/delete: false). senderId é
+      // sempre o uid de quem escreveu de verdade, inclusive quando é o
+      // admin respondendo — "Equipe JuntaVale" é só rótulo de UI (S39), não
+      // existe como dado aqui.
+      match /messages/{messageId} {
+        allow read: if isAdmin() || (isSignedIn() && getTicket(ticketId).uid == request.auth.uid);
+
+        // getAfter() em vez de getTicket() aqui: no writeBatch de
+        // submitSupportTicket, o ticket pai e esta 1ª mensagem nascem no
+        // mesmo batch, e get() só enxerga o estado PRÉ-batch (doc pai ainda
+        // não existe) — mesmo padrão já usado no getAfter() da quota de
+        // superlike em swipes/{swipeId}.
+        allow create: if isSignedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && (isAdmin()
+              || getAfter(/databases/$(database)/documents/support/$(ticketId)).data.uid
+                   == request.auth.uid)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.text.matches('.*\\S.*')
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);
+
+        allow update, delete: if false;
+      }
     }
 
     // ───────────────────────── deny by default ─────────────────────────
