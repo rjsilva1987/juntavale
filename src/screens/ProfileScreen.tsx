@@ -31,7 +31,9 @@ import {
   MAX_PROMPTS,
   MAX_ANSWER_LENGTH,
   getPromptText,
+  getWeeklyPrompt,
   type PromptId,
+  type WeeklyPromptId,
 } from '@/constants/prompts';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
@@ -112,9 +114,14 @@ export default function ProfileScreen() {
   const userPrompts = profile?.prompts ?? [];
   const [catalogModalVisible, setCatalogModalVisible] = useState(false);
   const [answerModalVisible, setAnswerModalVisible] = useState(false);
-  const [editingPromptId, setEditingPromptId] = useState<PromptId | null>(null);
+  const [editingPromptId, setEditingPromptId] = useState<PromptId | WeeklyPromptId | null>(null);
   const [answerDraft, setAnswerDraft] = useState('');
   const [promptSaving, setPromptSaving] = useState(false);
+
+  // Prompt da semana (S50) — mesmo array `prompts[]` de cima, rotação
+  // automática por data (getWeeklyPrompt), sem estado próprio na tela.
+  const currentWeeklyPrompt = getWeeklyPrompt(new Date());
+  const weeklyPromptEntry = userPrompts.find((p) => p.id === currentWeeklyPrompt.id);
 
   // Card "Curtidas" — mesma query de LikesScreen, via hook compartilhado.
   const { likers, loading: likersLoading } = useLikers();
@@ -265,8 +272,17 @@ export default function ProfileScreen() {
   };
 
   const handleOpenExistingPrompt = (item: { id: string; answer: string }) => {
-    setEditingPromptId(item.id as PromptId);
+    setEditingPromptId(item.id as PromptId | WeeklyPromptId);
     setAnswerDraft(item.answer);
+    setAnswerModalVisible(true);
+  };
+
+  // Prompt da semana (S50) — mesmo fluxo de edição de handleOpenExistingPrompt
+  // acima, só que aceita o caso "ainda não respondido" (weeklyPromptEntry
+  // undefined ⇒ draft vazio, handleSavePromptAnswer grava como item novo).
+  const openWeeklyPrompt = () => {
+    setEditingPromptId(currentWeeklyPrompt.id);
+    setAnswerDraft(weeklyPromptEntry?.answer ?? '');
     setAnswerModalVisible(true);
   };
 
@@ -619,13 +635,39 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Prompt da semana (S50) — rotação automática por data, destacada no
+            topo da área de prompts. Resposta grava no MESMO array `prompts[]`
+            de baixo (decisão fechada): quando a semana vira, o convite
+            rotaciona, mas a resposta antiga permanece no perfil como um
+            prompt normal (sem tratamento especial). */}
+        {!editing && (
+          <View style={[styles.card, styles.weeklyPromptCard]}>
+            <View style={styles.weeklyPromptHeader}>
+              <Ionicons name="calendar-outline" size={14} color={theme.colors.onSecondary} />
+              <Text style={styles.weeklyPromptLabel}>Prompt da semana</Text>
+            </View>
+            <Text style={styles.weeklyPromptQuestion}>{currentWeeklyPrompt.text}</Text>
+
+            {weeklyPromptEntry ? (
+              <AnimatedPressable style={styles.weeklyPromptAnswerBox} onPress={openWeeklyPrompt}>
+                <Text style={styles.promptAnswer}>{weeklyPromptEntry.answer}</Text>
+                <Ionicons name="pencil-outline" size={18} color={theme.colors.textSecondary} />
+              </AnimatedPressable>
+            ) : (
+              <AnimatedPressable style={styles.weeklyPromptCta} onPress={openWeeklyPrompt}>
+                <Text style={styles.weeklyPromptCtaText}>Responder</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         {/* Prompts (S33) — edição via modais próprios, independente do form
             de nome/idade/bio/gênero/interesses acima (mesmo padrão da grade
             de fotos: só visível fora do modo de edição). */}
         {!editing && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Perguntas</Text>
-            <Text style={styles.promptsSubtitle}>Escolha até 3 perguntas para o seu perfil</Text>
+            <Text style={styles.promptsSubtitle}>Escolha até 4 perguntas para o seu perfil</Text>
 
             {userPrompts.map((item) => (
               <AnimatedPressable
@@ -1278,6 +1320,55 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   logoutText: { color: theme.colors.nope, fontSize: theme.fontSize.md, fontWeight: '600' },
+
+  weeklyPromptCard: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.secondary,
+    backgroundColor: theme.colors.secondaryLight,
+  },
+  weeklyPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  weeklyPromptLabel: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.onSecondary,
+  },
+  weeklyPromptQuestion: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  weeklyPromptAnswerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+  },
+  weeklyPromptCta: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  weeklyPromptCtaText: {
+    color: theme.colors.onSecondary,
+    fontWeight: '700',
+    fontSize: theme.fontSize.sm,
+  },
 
   promptsSubtitle: {
     fontSize: theme.fontSize.sm,

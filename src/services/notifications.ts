@@ -11,7 +11,7 @@ import { db } from '@/services/firebase';
 // (functions/src/index.ts) — usado no client só pra rotear o deep-link ao
 // tocar na notificação (ver useNotifications.ts).
 export type PushNotificationData = {
-  type: 'match' | 'message' | 'superlike' | 'support' | 'match_reminder';
+  type: 'match' | 'message' | 'superlike' | 'support' | 'match_reminder' | 'weekly_prompt';
   matchId?: string;
   otherUid?: string;
   otherName?: string;

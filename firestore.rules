@@ -1,4 +1,4 @@
-// rules-stamp: S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
+// rules-stamp: S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -62,11 +62,14 @@ service cloud.firestore {
 
     // Rules não tem loop — valida cada item individualmente por índice, com
     // curto-circuito no size() (padrão igual ao comentário do S33: só entra
-    // no índice N se list.size() > N). Máximo 3 prompts (MAX_PROMPTS no app).
-    // Cada ramo também barra id duplicado contra os índices já validados
-    // antes dele (list[1] vs list[0]; list[2] vs list[0] e list[1]).
+    // no índice N se list.size() > N). Máximo 4 prompts (MAX_PROMPTS no app;
+    // S50 — bumped de 3 pra 4 pra caber os 3 prompts normais + 1 "prompt da
+    // semana" no mesmo array; decisão a validar na auditoria, ver comentário
+    // em src/constants/prompts.ts). Cada ramo também barra id duplicado
+    // contra os índices já validados antes dele (list[1] vs list[0]; list[2]
+    // vs list[0] e list[1]; list[3] vs list[0], list[1] e list[2]).
     function isValidPrompts(list) {
-      return list is list && list.size() <= 3
+      return list is list && list.size() <= 4
         && (list.size() == 0
             || (isValidPromptItem(list[0])
                 && (list.size() == 1
@@ -75,7 +78,12 @@ service cloud.firestore {
                         && (list.size() == 2
                             || (isValidPromptItem(list[2])
                                 && list[0].id != list[2].id
-                                && list[1].id != list[2].id))))));
+                                && list[1].id != list[2].id
+                                && (list.size() == 3
+                                    || (isValidPromptItem(list[3])
+                                        && list[0].id != list[3].id
+                                        && list[1].id != list[3].id
+                                        && list[2].id != list[3].id))))))));
     }
 
     // Campos que o dono do perfil pode criar/editar. Qualquer campo fora desta

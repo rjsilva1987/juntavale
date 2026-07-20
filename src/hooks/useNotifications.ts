@@ -51,6 +51,8 @@ export function useNotifications() {
             navigationRef.navigate('Main', { screen: 'Curtidas' });
           } else if (data.type === 'support' && data.ticketId) {
             navigationRef.navigate('SupportThread', { ticketId: data.ticketId });
+          } else if (data.type === 'weekly_prompt') {
+            navigationRef.navigate('Main', { screen: 'Perfil' });
           }
         },
       );

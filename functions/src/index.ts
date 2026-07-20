@@ -665,3 +665,88 @@ export const reengagementPush = onSchedule(
     }
   },
 );
+
+// S50 — Pool rotativo de "Prompt da semana". Réplica mínima de
+// WEEKLY_PROMPTS/getWeeklyPrompt (src/constants/prompts.ts) — functions não
+// importa código de src/, então isto precisa ficar em sincronia manual com
+// aquele arquivo (mesmo padrão do ADMIN_UID/SUPPORT_CATEGORY_LABELS acima).
+// manter em sincronia com src/constants/prompts.ts
+const WEEKLY_PROMPTS: { id: string; text: string }[] = [
+  { id: 'w01', text: 'Qual foi o maior mico que você já pagou num encontro?' },
+  { id: 'w02', text: 'Se dinheiro não fosse problema, seu sábado perfeito seria...' },
+  { id: 'w03', text: 'Qual música você defende com a vida mesmo todo mundo zoando?' },
+  { id: 'w04', text: 'Comida que você julgava antes de provar e hoje ama?' },
+  { id: 'w05', text: 'Qual talento inútil você tem orgulho de ter?' },
+  { id: 'w06', text: 'O que te faz rir sozinho só de lembrar?' },
+  { id: 'w07', text: 'Praia lotada ou cachoeira escondida? Defenda.' },
+  { id: 'w08', text: 'Qual série você já maratonou mais de uma vez?' },
+  { id: 'w09', text: "Seu 'red flag' mais inofensivo?" },
+  { id: 'w10', text: 'Se sua vida tivesse trilha sonora, qual seria a de abertura?' },
+  { id: 'w11', text: 'Qual é a sua opinião impopular mais forte?' },
+  { id: 'w12', text: 'O que você faria num domingo de chuva perfeito?' },
+];
+
+// manter em sincronia com src/constants/prompts.ts
+const WEEKLY_PROMPT_EPOCH = new Date('2026-01-05T00:00:00-03:00');
+const WEEKLY_PROMPT_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// manter em sincronia com src/constants/prompts.ts
+function getWeeklyPrompt(date: Date): { id: string; text: string } {
+  const rawIndex = Math.floor((date.getTime() - WEEKLY_PROMPT_EPOCH.getTime()) / WEEKLY_PROMPT_WEEK_MS);
+  const index = ((rawIndex % WEEKLY_PROMPTS.length) + WEEKLY_PROMPTS.length) % WEEKLY_PROMPTS.length;
+  return WEEKLY_PROMPTS[index];
+}
+
+// Décima Cloud Function do projeto (S50): toda segunda 12:00, empurra o
+// prompt da semana vigente pra todo mundo — conteúdo, não re-engajamento, por
+// isso sem streak/estado por usuário (ao contrário do reengagementPush). Lê a
+// collection users inteira 1x por semana (ver relatório da sessão pro custo
+// estimado), pulando quem optou por não receber lembretes ou não tem token —
+// mesmo filtro do reengagementPush.
+export const weeklyPromptPush = onSchedule(
+  { schedule: '0 12 * * 1', timeZone: 'America/Sao_Paulo', region: REGION },
+  async () => {
+    const prompt = getWeeklyPrompt(new Date());
+
+    const usersSnap = await db.collection('users').get();
+
+    let sent = 0;
+    let skippedOptOut = 0;
+    let skippedNoToken = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const uid = userDoc.id;
+      try {
+        const user = userDoc.data() as { reengagementOptOut?: boolean };
+
+        if (user.reengagementOptOut === true) {
+          skippedOptOut++;
+          continue;
+        }
+
+        const token = await getPushToken(uid);
+        if (!token) {
+          skippedNoToken++;
+          continue;
+        }
+
+        await sendExpoNotifications([
+          {
+            to: token,
+            sound: 'default',
+            title: 'Prompt da semana 📝',
+            body: `${prompt.text} — responde no seu perfil!`,
+            data: { type: 'weekly_prompt' },
+          },
+        ]);
+        sent++;
+      } catch (error) {
+        console.error('[weeklyPromptPush] falha ao processar usuário:', uid, error);
+      }
+    }
+
+    console.log(
+      `[weeklyPromptPush] prompt: ${prompt.id} | candidatos: ${usersSnap.size} | enviados: ${sent} | pulados (optOut/sem-token): ${skippedOptOut + skippedNoToken}`,
+    );
+  },
+);
