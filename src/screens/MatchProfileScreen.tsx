@@ -17,6 +17,7 @@ import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
+import { UF_NAMES } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
@@ -219,6 +220,13 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 {profile?.verified && <VerifiedBadge size={18} />}
               </View>
 
+              {profile?.uf && (
+                <View style={styles.ufRow}>
+                  <Ionicons name="location-outline" size={16} color={theme.colors.textSecondary} />
+                  <Text style={styles.ufText}>{UF_NAMES[profile.uf]}</Text>
+                </View>
+              )}
+
               {profile?.lookingFor && (
                 <View style={styles.lookingForBadge}>
                   <Text style={styles.lookingForBadgeText}>
@@ -360,6 +368,8 @@ const styles = StyleSheet.create({
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+  ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  ufText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   lookingForBadge: {
     alignSelf: 'flex-start',
     backgroundColor: theme.colors.primaryLight,

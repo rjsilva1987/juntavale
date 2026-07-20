@@ -124,9 +124,16 @@ service cloud.firestore {
         // lista), o create inteiro é negado.
         && request.resource.data.lookingFor in
              ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']
+        // S44 — mesmo padrão de lookingFor acima: descoberta nacional depende
+        // de toda conta nova ter uf, então é obrigatório no cadastro. Sem o
+        // campo (ou com sigla fora da lista), o create inteiro é negado.
+        && request.resource.data.uf in
+             ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG',
+              'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
+              'RS', 'SC', 'SE', 'SP', 'TO']
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'location', 'filters', 'createdAt', 'prompts'])
+              'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -145,9 +152,21 @@ service cloud.firestore {
         && ((!('lookingFor' in resource.data) && !('lookingFor' in request.resource.data))
             || ('lookingFor' in request.resource.data && request.resource.data.lookingFor in
                   ['relacionamento_serio', 'casual', 'amizade', 'descobrindo']))
+        // S44 — mesmo padrão do ramo de lookingFor acima, aplicado a uf: (a)
+        // ausente nos dois — conta legada sem uf segue editando bio/foto/etc.
+        // sem travar; (b) presente no resultado e com sigla válida — cobre
+        // tanto "já tinha e trocou entre as 27" quanto "não tinha e está
+        // definindo pela 1ª vez fora do cadastro". O caso "tinha antes e
+        // sumiu no resultado" não cai em nenhum dos dois ramos, então fica
+        // negado — não dá pra remover uf depois de setado.
+        && ((!('uf' in resource.data) && !('uf' in request.resource.data))
+            || ('uf' in request.resource.data && request.resource.data.uf in
+                  ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG',
+                   'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
+                   'RS', 'SC', 'SE', 'SP', 'TO']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'location', 'filters', 'prompts', 'lastActiveAt',
+              'gender', 'lookingFor', 'uf', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
@@ -236,7 +255,7 @@ service cloud.firestore {
         && swipeId == request.resource.data.from + '_' + request.resource.data.to
         && request.resource.data.direction in ['like', 'nope', 'superlike']
         && request.resource.data.createdAt == request.time
-        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt', 'likedPhotoURL'])
+        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt', 'likedPhotoURL', 'context'])
         // S35: contexto opcional ("curtiu sua foto") — só existe em
         // like/superlike (nope nunca leva contexto pro alvo); campo
         // ausente continua válido (compat com nope e clients antigos).
@@ -247,6 +266,32 @@ service cloud.firestore {
             && request.resource.data.likedPhotoURL is string
             && request.resource.data.likedPhotoURL.size() > 0
             && request.resource.data.likedPhotoURL.size() <= 2048
+          )
+        )
+        // S35-A: mesmo padrão do likedPhotoURL acima, mas como REFERÊNCIA
+        // (nunca URL/texto) do que estava visível no card — índice de foto
+        // ou id de prompt. Coexiste com likedPhotoURL (client ainda grava os
+        // dois); consolidar os dois campos fica pra uma etapa futura.
+        && (
+          !('context' in request.resource.data)
+          || (
+            request.resource.data.direction != 'nope'
+            && request.resource.data.context is map
+            && request.resource.data.context.keys().size() == 2
+            && (
+              (
+                request.resource.data.context.type == 'photo'
+                && request.resource.data.context.photoIndex is int
+                && request.resource.data.context.photoIndex >= 0
+                && request.resource.data.context.photoIndex < 9
+              )
+              || (
+                request.resource.data.context.type == 'prompt'
+                && request.resource.data.context.promptId is string
+                && request.resource.data.context.promptId.size() > 0
+                && request.resource.data.context.promptId.size() < 60
+              )
+            )
           )
         )
         // Super Like Fase 2: se o swipe é 'superlike', o contador mensal

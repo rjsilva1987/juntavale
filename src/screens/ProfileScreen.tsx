@@ -33,6 +33,7 @@ import {
   type PromptId,
 } from '@/constants/prompts';
 import { theme } from '@/constants/theme';
+import { UF, UFS, UF_NAMES } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
 import { useLikers } from '@/hooks/useLikers';
@@ -85,6 +86,10 @@ export default function ProfileScreen() {
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
+  // S44 — contas legadas sem uf conseguem definir pela 1ª vez aqui; uma vez
+  // setado, não há botão de "limpar" (só troca entre as 27), então nunca
+  // fica vazio de novo depois de definido.
+  const [uf, setUf] = useState<UF | undefined>(profile?.uf);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
@@ -132,6 +137,10 @@ export default function ProfileScreen() {
         bio,
         interests,
         gender,
+        // Omitido quando ainda indefinido (conta legada que não escolheu um
+        // estado nesta edição) — Firestore rejeita valor `undefined` num
+        // update, e as rules toleram a chave ausente igual antes.
+        ...(uf ? { uf } : {}),
       });
       await refreshProfile();
       setEditing(false);
@@ -491,6 +500,24 @@ export default function ProfileScreen() {
                   >
                     <Text style={[styles.genderText, active && styles.genderTextActive]}>
                       {option.label}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.fieldLabel}>Estado onde você mora</Text>
+            <View style={styles.ufList}>
+              {UFS.map((item) => {
+                const active = uf === item;
+                return (
+                  <AnimatedPressable
+                    key={item}
+                    style={[styles.ufOption, active && styles.ufOptionActive]}
+                    onPress={() => setUf(item)}
+                  >
+                    <Text style={[styles.ufText, active && styles.ufTextActive]}>
+                      {item} — {UF_NAMES[item]}
                     </Text>
                   </AnimatedPressable>
                 );
@@ -1022,6 +1049,22 @@ const styles = StyleSheet.create({
   },
   genderText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   genderTextActive: { color: theme.colors.onPrimary },
+
+  ufList: { gap: 8, marginTop: 8 },
+  ufOption: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: theme.colors.surface,
+  },
+  ufOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  ufText: { fontSize: theme.fontSize.sm, color: theme.colors.text, fontWeight: '600' },
+  ufTextActive: { color: theme.colors.onPrimary },
 
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   tag: {

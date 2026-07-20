@@ -7,7 +7,7 @@ import { DiscoverFilters, updateUserProfile } from '@/services/firestoreService'
 export const DEFAULT_FILTERS: DiscoverFilters = {
   ageMin: 18,
   ageMax: 60,
-  maxDistance: 50,
+  uf: 'all',
   gender: 'all',
   lookingFor: 'all',
   verifiedOnly: false,

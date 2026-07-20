@@ -27,8 +27,8 @@ import {
 import { ADMIN_UID } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
+import { UF } from '@/constants/ufs';
 import { db, storage } from '@/services/firebase';
-import { haversineDistanceKm } from '@/utils/geo';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ export type Gender = 'masculino' | 'feminino' | 'outro';
 export interface DiscoverFilters {
   ageMin: number;
   ageMax: number;
-  maxDistance: number;
+  uf: UF | 'all';
   gender: Gender | 'all';
   lookingFor: LookingFor | 'all';
   verifiedOnly: boolean;
@@ -56,6 +56,15 @@ export interface UserProfile {
   // existir — nas rules (isValidProfile) é obrigatório em create/update pra
   // toda conta nova, nunca fica vazio depois de setado uma vez.
   lookingFor?: LookingFor;
+  // S44 — mesmo padrão de lookingFor: opcional no tipo só por causa de
+  // contas legadas anteriores à descoberta nacional; obrigatório no create
+  // (RegisterScreen + firestore.rules) pra toda conta nova, nunca fica vazio
+  // depois de setado uma vez (ver rules de update).
+  uf?: UF;
+  // S44 removeu o uso de location no Descobrir (geo trocado por UF) — campo
+  // mantido no schema/rules por não ter sido pedida a remoção nesta sprint;
+  // não confundir com Message.location (compartilhamento de localização no
+  // chat), que é outro campo, em outra collection, e não é afetado.
   location?: { lat: number; lng: number };
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
@@ -241,10 +250,41 @@ export const interleaveBoostedProfiles = (
   return result;
 };
 
+// Fisher-Yates puro (não muta `list`) — usado pra embaralhar os perfis
+// regulares (não-boosted) de cada partição de UF antes de intercalar os
+// boosted (S44).
+const shuffled = <T>(list: T[]): T[] => {
+  const result = [...list];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+// Boost (S43) é secundário DENTRO de uma partição de UF (S44): separa
+// boosted/regular só entre os perfis já filtrados pra uma mesma partição,
+// embaralha os regulares e intercala os boosted por cima — nunca mistura
+// perfis de partições diferentes.
+const applyBoostAndShuffle = (list: UserProfile[]): UserProfile[] => {
+  const boostThreshold = Date.now() - NEW_PROFILE_BOOST_WINDOW_MS;
+  const regular: UserProfile[] = [];
+  const boosted: UserProfile[] = [];
+  list.forEach((p) => {
+    if (p.createdAt && p.createdAt.toMillis() >= boostThreshold) {
+      boosted.push(p);
+    } else {
+      regular.push(p);
+    }
+  });
+
+  return interleaveBoostedProfiles(shuffled(regular), boosted, NEW_PROFILE_BOOST_GAP);
+};
+
 export const getDiscoverProfiles = async (
   currentUid: string,
   filters?: DiscoverFilters,
-  currentLocation?: { lat: number; lng: number },
+  currentUserUf?: UF,
   blockedUsers?: string[],
 ): Promise<UserProfile[]> => {
   // Get already-swiped user IDs
@@ -256,9 +296,9 @@ export const getDiscoverProfiles = async (
   swipedIds.push(currentUid, ADMIN_UID, ...(blockedUsers ?? []));
 
   // Fetch all users not yet swiped (Firestore doesn't support NOT IN > 10 easily,
-  // so for production use a Cloud Function or pagination). Age/gender/distance
-  // filters are applied client-side here for the same reason — Firestore's
-  // client SDK has no geo-query support, so distance can't be pushed server-side.
+  // so for production use a Cloud Function or pagination). Age/gender/UF
+  // filters are applied client-side here for the same reason — descoberta
+  // agora é nacional (S44), sem geo-query.
   const usersSnap = await getDocs(collection(db, 'users'));
   const profiles: UserProfile[] = [];
   usersSnap.forEach((d) => {
@@ -270,27 +310,29 @@ export const getDiscoverProfiles = async (
       if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
       if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
       if (filters.verifiedOnly && candidate.verified !== true) return;
-      if (currentLocation && candidate.location) {
-        const distance = haversineDistanceKm(currentLocation, candidate.location);
-        if (distance > filters.maxDistance) return;
-      }
+      // Perfil SEM uf é excluído quando um estado específico está filtrado —
+      // comportamento intencional (S44).
+      if (filters.uf !== 'all' && candidate.uf !== filters.uf) return;
     }
 
     profiles.push(candidate);
   });
 
-  const boostThreshold = Date.now() - NEW_PROFILE_BOOST_WINDOW_MS;
-  const regular: UserProfile[] = [];
-  const boosted: UserProfile[] = [];
+  // S44 — descoberta nacional: partição por UF é o critério PRIMÁRIO
+  // (perfis da mesma UF do usuário logado aparecem antes de todo o resto),
+  // o boost de perfis novos (S43) é secundário e reaplicado dentro de cada
+  // partição via applyBoostAndShuffle — ver comentário dessa função.
+  const sameUf: UserProfile[] = [];
+  const rest: UserProfile[] = [];
   profiles.forEach((p) => {
-    if (p.createdAt && p.createdAt.toMillis() >= boostThreshold) {
-      boosted.push(p);
+    if (currentUserUf && p.uf === currentUserUf) {
+      sameUf.push(p);
     } else {
-      regular.push(p);
+      rest.push(p);
     }
   });
 
-  return interleaveBoostedProfiles(regular, boosted, NEW_PROFILE_BOOST_GAP);
+  return [...applyBoostAndShuffle(sameUf), ...applyBoostAndShuffle(rest)];
 };
 
 // ─── Swipes & Matches ─────────────────────────────────────
@@ -300,6 +342,13 @@ interface SuperLikeUsage {
   month: number;
   count: number;
 }
+
+// S35-A — o que estava visível no card no momento do like/superlike, como
+// REFERÊNCIA (índice da foto ou id do prompt), nunca a URL/texto em si.
+// Coexiste com likedPhotoURL (S35, já em produção) — ver decisão registrada
+// no relatório da tarefa; a consolidação dos dois fica pra uma etapa futura.
+export type SwipeContext =
+  { type: 'photo'; photoIndex: number } | { type: 'prompt'; promptId: string };
 
 // Lançado por recordSwipe quando o superlike estouraria o limite mensal —
 // tipado por 'code' (padrão de erro do Firebase) pra a UI distinguir essa
@@ -318,6 +367,7 @@ export const recordSwipe = async (
   toUid: string,
   direction: 'like' | 'nope' | 'superlike',
   likedPhotoURL?: string,
+  context?: SwipeContext,
 ): Promise<boolean> => {
   const swipeRef = doc(db, 'swipes', `${fromUid}_${toUid}`);
   const swipeData = {
@@ -328,6 +378,9 @@ export const recordSwipe = async (
     // Contexto pra "Curtiram você" (S35): só grava em like/superlike — nope
     // é sempre anônimo pro alvo, então nunca deve carregar essa informação.
     ...(direction !== 'nope' && likedPhotoURL ? { likedPhotoURL } : {}),
+    // S35-A: mesma regra de direction do likedPhotoURL acima, mas como
+    // referência (photoIndex/promptId) em vez de URL — ver SwipeContext.
+    ...(direction !== 'nope' && context ? { context } : {}),
   };
 
   if (direction === 'superlike') {

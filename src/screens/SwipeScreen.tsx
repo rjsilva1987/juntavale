@@ -4,7 +4,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -37,6 +36,7 @@ import {
   recordSwipe,
   undoSwipe,
   SuperLikeQuotaExceededError,
+  SwipeContext,
   UserProfile,
 } from '@/services/firestoreService';
 import { getSharedInterestSet } from '@/utils/interests';
@@ -78,15 +78,17 @@ export default function SwipeScreen() {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
-  // Índice da foto visível no card atual do carrossel — usado só na hora do
-  // swipe (S35), não precisa de state/render. Reseta a cada card novo pra
-  // não vazar o índice do card anterior.
-  const photoIndexRef = useRef(0);
+  // O que está visível no card atual (S35-A) — usado só na hora do swipe,
+  // não precisa de state/render. Reseta a cada card novo pra não vazar o
+  // contexto do card anterior. Prompts (S34) são renderizados numa seção
+  // fixa fora do carrossel nesta tela (não como página do PagerView), então
+  // eles não geram contexto aqui — só o índice de foto visível.
+  const visibleContextRef = useRef<SwipeContext>({ type: 'photo', photoIndex: 0 });
   useEffect(() => {
-    photoIndexRef.current = 0;
+    visibleContextRef.current = { type: 'photo', photoIndex: 0 };
   }, [currentIndex]);
   const handlePhotoIndexChange = (index: number) => {
-    photoIndexRef.current = index;
+    visibleContextRef.current = { type: 'photo', photoIndex: index };
   };
 
   const translateX = useSharedValue(0);
@@ -120,18 +122,7 @@ export default function SwipeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      let currentLocation = profile?.location;
-      if (!currentLocation) {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const position = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-        }
-      }
-
-      const data = await getDiscoverProfiles(user.uid, filters, currentLocation, profile?.blockedUsers);
+      const data = await getDiscoverProfiles(user.uid, filters, profile?.uf, profile?.blockedUsers);
       setProfiles(data);
       setCurrentIndex(0);
       setLastSwipedProfile(null);
@@ -142,7 +133,7 @@ export default function SwipeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.location, profile?.blockedUsers, filters, translateX, translateY]);
+  }, [user, profile?.uf, profile?.blockedUsers, filters, translateX, translateY]);
 
   useFocusEffect(
     useCallback(() => {
@@ -158,7 +149,9 @@ export default function SwipeScreen() {
       : target?.photoURL
         ? [target.photoURL]
         : [];
-    const likedPhotoURL = targetPhotos[photoIndexRef.current] ?? target?.photoURL ?? undefined;
+    const visibleContext = visibleContextRef.current;
+    const photoIndex = visibleContext.type === 'photo' ? visibleContext.photoIndex : 0;
+    const likedPhotoURL = targetPhotos[photoIndex] ?? target?.photoURL ?? undefined;
     translateX.value = 0;
     translateY.value = 0;
     setCurrentIndex((i) => i + 1);
@@ -177,6 +170,7 @@ export default function SwipeScreen() {
       target.uid,
       dir === 'right' ? 'like' : dir === 'super' ? 'superlike' : 'nope',
       likedPhotoURL,
+      dir !== 'left' ? visibleContext : undefined,
     )
       .then((isMatch) => {
         if (isMatch) {
@@ -553,6 +547,12 @@ function ProfileCard({
             </TouchableOpacity>
           )}
         </View>
+        {profile.uf && (
+          <View style={pcStyles.ufRow} pointerEvents="none">
+            <Ionicons name="location-outline" size={14} color={theme.colors.white} />
+            <Text style={pcStyles.ufText}>{profile.uf}</Text>
+          </View>
+        )}
         <Text style={pcStyles.bio} numberOfLines={2}>
           {profile.bio || 'Sem bio ainda…'}
         </Text>
@@ -791,6 +791,8 @@ const pcStyles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.white,
   },
+  ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  ufText: { fontSize: theme.fontSize.xs, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
   bio: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
   lookingForBadge: {
     alignSelf: 'flex-start',

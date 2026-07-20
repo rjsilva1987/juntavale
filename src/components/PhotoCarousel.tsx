@@ -1,6 +1,6 @@
 // src/components/PhotoCarousel.tsx
 import { Image } from 'expo-image';
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import PagerView from 'react-native-pager-view';
 
@@ -22,6 +22,14 @@ export const PhotoCarousel = forwardRef<PhotoCarouselHandle, PhotoCarouselProps>
   function PhotoCarousel({ photos, style, onIndexChange }, ref) {
     const [activeIndex, setActiveIndex] = useState(0);
     const pagerRef = useRef<PagerView>(null);
+
+    // S35-A: onIndexChange também dispara no mount (índice inicial 0), não
+    // só em troca de página — quem consome (SwipeScreen) precisa saber qual
+    // foto está visível mesmo se o usuário nunca arrastar o carrossel.
+    useEffect(() => {
+      onIndexChange?.(activeIndex);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Edge-stop mora só aqui: quem chama só pede "próxima/anterior", o
     // carrossel decide sozinho quando é no-op (sem loop nas pontas).

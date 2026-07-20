@@ -17,6 +17,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
+import { UF, UFS, UF_NAMES } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 
@@ -45,6 +46,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [password, setPassword] = useState('');
   const [age, setAge] = useState('');
   const [bio, setBio] = useState('');
+  const [uf, setUf] = useState<UF | undefined>(undefined);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(undefined);
   const [loading, setLoading] = useState(false);
@@ -64,6 +66,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       Alert.alert('Busca obrigatória', 'Selecione o que você está buscando no app.');
       return;
     }
+    if (!uf) {
+      Alert.alert('Estado obrigatório', 'Selecione o estado onde você mora.');
+      return;
+    }
     const ageNum = Number(age);
     if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
       Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
@@ -79,6 +85,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         bio.trim(),
         selectedInterests,
         lookingFor,
+        uf,
       );
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Não foi possível criar a conta.';
@@ -193,8 +200,27 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               />
               <Text style={styles.charCount}>{bio.length}/160</Text>
 
+              <Text style={styles.label}>Estado onde você mora</Text>
+              <View style={styles.ufList}>
+                {UFS.map((item) => {
+                  const active = uf === item;
+                  return (
+                    <AnimatedPressable
+                      key={item}
+                      style={[styles.ufOption, active && styles.ufOptionActive]}
+                      onPress={() => setUf(item)}
+                    >
+                      <Text style={[styles.ufText, active && styles.ufTextActive]}>
+                        {item} — {UF_NAMES[item]}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
               <AnimatedPressable
-                style={styles.btnPrimary}
+                style={[styles.btnPrimary, !uf && { opacity: 0.7 }]}
+                disabled={!uf}
                 onPress={() => {
                   const ageNum = Number(age);
                   if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
@@ -328,6 +354,22 @@ const styles = StyleSheet.create({
     color: theme.colors.textLight,
     marginTop: 4,
   },
+
+  ufList: { gap: 8, marginTop: 8 },
+  ufOption: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: theme.colors.surface,
+  },
+  ufOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  ufText: { fontSize: theme.fontSize.sm, color: theme.colors.text, fontWeight: '600' },
+  ufTextActive: { color: theme.colors.onPrimary },
 
   btnPrimary: {
     backgroundColor: theme.colors.secondary,
