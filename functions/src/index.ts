@@ -443,3 +443,225 @@ export const staleMatchReminder = onSchedule(
     );
   },
 );
+
+const PENDING_LIKES_QUERY_LIMIT = 50;
+
+// Gatilho A do reengagementPush (S44b) — MESMA definição de "curtida
+// pendente" do client (src/hooks/useLikers.ts): swipes recebidos (to==uid)
+// com direction like/superlike, menos quem eu já swipei de volta (em
+// qualquer direção, match ou não). O client resolve isso com uma segunda
+// query (from==uid, sem limite) e um Set em memória; aqui isso escalaria mal
+// pra contas antigas com milhares de swipes enviados, então em vez disso
+// faz um .get() pontual por doc `swipes/{uid}_{likerId}` pra cada
+// candidato a curtida — mesmo padrão do reverseSnap já usado em
+// onSuperLikeReceived. .limit() é defensivo pra perfis com volume anômalo de
+// curtidas recebidas; ver relatório da sessão pro custo estimado.
+async function countPendingLikes(uid: string): Promise<number> {
+  const incomingSnap = await db
+    .collection('swipes')
+    .where('to', '==', uid)
+    .where('direction', 'in', ['like', 'superlike'])
+    .limit(PENDING_LIKES_QUERY_LIMIT)
+    .get();
+  if (incomingSnap.empty) return 0;
+
+  const reverseSnaps = await Promise.all(
+    incomingSnap.docs.map((d) => db.doc(`swipes/${uid}_${d.data().from as string}`).get()),
+  );
+  return reverseSnaps.filter((s) => !s.exists).length;
+}
+
+const MATCHES_QUERY_LIMIT = 200;
+
+interface PendingReplyMatch {
+  matchId: string;
+  otherUid: string;
+}
+
+// Gatilho B do reengagementPush (S44b) — primeiro match do candidato (na
+// ordem retornada pela query, sem orderBy específico) onde a ÚLTIMA
+// mensagem foi do OUTRO lado e já passou de 2 dias sem resposta. Mesmo
+// filtro de blockedBy do staleMatchReminder (S42): não cutuca resposta numa
+// conversa arquivada por bloqueio. .limit() é defensivo — não esperado
+// truncar a maioria das rodadas.
+async function findPendingReplyMatch(
+  uid: string,
+  twoDaysAgo: Timestamp,
+): Promise<PendingReplyMatch | null> {
+  const matchesSnap = await db
+    .collection('matches')
+    .where('users', 'array-contains', uid)
+    .limit(MATCHES_QUERY_LIMIT)
+    .get();
+
+  for (const matchDoc of matchesSnap.docs) {
+    const match = matchDoc.data() as {
+      users?: string[];
+      lastMessage?: { senderId: string; createdAt: Timestamp };
+      blockedBy?: string[];
+    };
+    if (match.blockedBy && match.blockedBy.length > 0) continue;
+    if (!match.lastMessage) continue;
+    if (match.lastMessage.senderId === uid) continue;
+    if (match.lastMessage.createdAt.toMillis() > twoDaysAgo.toMillis()) continue;
+
+    const otherUid = match.users?.find((u) => u !== uid);
+    if (!otherUid) continue;
+
+    return { matchId: matchDoc.id, otherUid };
+  }
+  return null;
+}
+
+// Segunda scheduled function do projeto (S44b), complementar ao
+// staleMatchReminder (S42): enquanto aquela cutuca matches sem NENHUMA
+// mensagem, esta cutuca usuários inativos há 3+ dias com um de dois
+// gatilhos — curtidas pendentes (prioridade) ou match com resposta devida.
+// Roda às 20h, deslocada de propósito da hora do staleMatchReminder (19h)
+// pra não empilhar dois pushes no mesmo minuto pro mesmo usuário.
+export const reengagementPush = onSchedule(
+  { schedule: 'every day 20:00', timeZone: 'America/Sao_Paulo', region: REGION },
+  async () => {
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Timestamp.now();
+    const threeDaysAgo = Timestamp.fromMillis(now.toMillis() - 3 * ONE_DAY_MS);
+    const sevenDaysAgo = Timestamp.fromMillis(now.toMillis() - 7 * ONE_DAY_MS);
+    const twoDaysAgo = Timestamp.fromMillis(now.toMillis() - 2 * ONE_DAY_MS);
+
+    // Range num único campo (lastActiveAt) — mesmo raciocínio do
+    // staleMatchReminder pro campo createdAt: usa o índice single-field
+    // automático (não deveria pedir índice composto no deploy) e, por
+    // construção, um range filter nunca retorna docs onde o campo está
+    // ausente — contas pré-S44a (sem lastActiveAt) já ficam de fora aqui,
+    // sem precisar de um filtro em código à parte.
+    const candidatesSnap = await db
+      .collection('users')
+      .where('lastActiveAt', '<=', threeDaysAgo)
+      .get();
+
+    let sentA = 0;
+    let sentB = 0;
+    let skippedOptOut = 0;
+    let skippedNoToken = 0;
+    let skippedFrequency = 0;
+    let skippedGaveUp = 0;
+    let skippedNothingToSay = 0;
+
+    for (const userDoc of candidatesSnap.docs) {
+      const uid = userDoc.id;
+      try {
+        const user = userDoc.data() as {
+          reengagementOptOut?: boolean;
+          lastActiveAt: Timestamp;
+        };
+
+        // Filtros de graça (sem read extra) antes de qualquer coisa que
+        // custe leitura.
+        if (user.reengagementOptOut === true) {
+          skippedOptOut++;
+          continue;
+        }
+
+        const token = await getPushToken(uid);
+        if (!token) {
+          skippedNoToken++;
+          continue;
+        }
+
+        const reengagementRef = db.doc(`users/${uid}/private/reengagement`);
+        const reengagementSnap = await reengagementRef.get();
+        const reengagement = reengagementSnap.data() as
+          | { lastPushAt?: Timestamp; streak?: number }
+          | undefined;
+
+        let effectiveStreak = 0;
+        if (reengagement?.lastPushAt) {
+          // Frequência: no máximo 1 push de re-engajamento por 7 dias.
+          if (reengagement.lastPushAt.toMillis() >= sevenDaysAgo.toMillis()) {
+            skippedFrequency++;
+            continue;
+          }
+
+          // "Voltou" = lastActiveAt mais recente que o último push -> reseta
+          // o contador de desistência. Senão, carrega o streak existente e
+          // desiste depois de 4 pushes consecutivos sem retorno.
+          if (user.lastActiveAt.toMillis() > reengagement.lastPushAt.toMillis()) {
+            effectiveStreak = 0;
+          } else {
+            const streak = reengagement.streak ?? 0;
+            if (streak >= 4) {
+              skippedGaveUp++;
+              continue;
+            }
+            effectiveStreak = streak;
+          }
+        }
+
+        let message: ExpoPushMessage | null = null;
+
+        // Gatilho A (prioridade): curtidas pendentes.
+        const pendingCount = await countPendingLikes(uid);
+        if (pendingCount > 0) {
+          const title =
+            pendingCount === 1
+              ? '1 pessoa curtiu você 👀'
+              : `${pendingCount} pessoas curtiram você 👀`;
+          message = {
+            to: token,
+            sound: 'default',
+            title,
+            body: 'Abra o app para ver quem foi!',
+            // Reaproveita o type 'superlike' (já navega pra tela de Curtidas
+            // em useNotifications.ts) — nenhuma mudança no client nesta
+            // sprint, então não dá pra introduzir um type novo.
+            data: { type: 'superlike' },
+          };
+          sentA++;
+        } else {
+          // Gatilho B: match com resposta devida há 2+ dias.
+          const pendingReply = await findPendingReplyMatch(uid, twoDaysAgo);
+          if (pendingReply) {
+            const other = await getUserBasicInfo(pendingReply.otherUid);
+            message = {
+              to: token,
+              sound: 'default',
+              title: 'Tem alguém esperando sua resposta 💬',
+              body: 'Sua conversa está parada. Que tal continuar o papo?',
+              data: {
+                // Reaproveita o type 'match_reminder' e o MESMO shape de
+                // payload do staleMatchReminder/onMessageCreated — abre a
+                // conversa direto (ver useNotifications.ts).
+                type: 'match_reminder',
+                matchId: pendingReply.matchId,
+                otherUid: pendingReply.otherUid,
+                otherName: other?.name ?? 'Usuário',
+                otherPhoto: other?.photoURL ?? '',
+              },
+            };
+            sentB++;
+          }
+        }
+
+        if (!message) {
+          skippedNothingToSay++;
+          continue;
+        }
+
+        await sendExpoNotifications([message]);
+        await reengagementRef.set({ lastPushAt: now, streak: effectiveStreak + 1 });
+      } catch (error) {
+        console.error('[reengagementPush] falha ao processar candidato:', uid, error);
+      }
+    }
+
+    const skippedTotal = skippedOptOut + skippedFrequency + skippedGaveUp + skippedNoToken;
+    console.log(
+      `[reengagementPush] candidatos: ${candidatesSnap.size} | enviados A: ${sentA} | enviados B: ${sentB} | pulados (optOut/freq/desistência/sem-token): ${skippedTotal}`,
+    );
+    if (skippedNothingToSay > 0) {
+      console.log(
+        `[reengagementPush] elegíveis sem gatilho (nenhum dos dois aplicou): ${skippedNothingToSay}`,
+      );
+    }
+  },
+);
