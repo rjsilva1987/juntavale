@@ -190,6 +190,11 @@ export default function SwipeScreen() {
           setCurrentIndex(swipedIndex);
           setLastSwipedProfile(null);
           showSuperLikeQuotaAlert();
+        } else {
+          // S49 — o deck não deve interromper o usuário com um Alert por um
+          // swipe que falhou em background (ele já viu o card sair da tela);
+          // só para de esconder o erro, que antes era engolido em silêncio.
+          console.error('[SwipeScreen] recordSwipe falhou:', error);
         }
       });
   };

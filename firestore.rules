@@ -1,4 +1,4 @@
-// rules-stamp: S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
+// rules-stamp: S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -255,9 +255,31 @@ service cloud.firestore {
     // Leitura liberada para from==me OU to==me (decisão consciente: a tela
     // "Quem curtiu você" depende de ler swipes onde to==me, antes do match).
     // Ninguém lê swipes de terceiros nem consegue "vasculhar" quem curtiu quem.
+    //
+    // S49 — null-guard: quando o doc NÃO existe, `resource` é null, e
+    // dereferenciar resource.data.from/to nesse caso é avaliado como negado
+    // (não como "passa livre") — isso derrubava com permission-denied tanto
+    // o getDoc() do swipe recíproco em recordSwipe (firestoreService.ts, lido
+    // logo após gravar o próprio swipe com sucesso: todo like sem
+    // reciprocidade lançava aqui) quanto o getDoc() do próprio swipe do
+    // usuário em MatchProfileScreen (S49, "já curtiu esse perfil?"), mesmo
+    // sendo, nos dois casos, "ainda não existe" — uma resposta legítima, não
+    // um erro. O ramo `resource == null` abaixo só libera quando o swipeId
+    // identifica, pela ESTRUTURA do id (nunca pelo conteúdo, que não
+    // existe), um doc onde eu sou uma das duas partes: sufixo `_{eu}` (o
+    // recíproco {outro}_{eu} que recordSwipe lê) OU prefixo `{eu}_` (o meu
+    // próprio swipe {eu}_{outro} que MatchProfileScreen lê) — exatamente o
+    // mesmo escopo do ramo "doc existe" logo abaixo (from==me || to==me),
+    // nunca um oráculo de existência pra swipe de terceiros.
     match /swipes/{swipeId} {
       allow read: if isSignedIn()
-        && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+        && (
+          (resource != null
+            && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid))
+          || (resource == null
+              && (swipeId.matches('.+_' + request.auth.uid)
+                  || swipeId.matches(request.auth.uid + '_.+')))
+        );
 
       allow create: if isSignedIn()
         && request.resource.data.from == request.auth.uid

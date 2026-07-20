@@ -369,6 +369,23 @@ export class SuperLikeQuotaExceededError extends Error {
   }
 }
 
+// S49 — leitura pontual de um swipe já registrado (ou não), sem depender
+// do read-after-write dentro de recordSwipe. Usado pelo MatchProfileScreen
+// pra saber, no mount, se o usuário já curtiu este perfil (evita reoferecer
+// o botão de curtir e tentar um create/update duplicado, que as rules
+// negam — swipe é imutável) e no catch de handleSwipeAction pra distinguir
+// "negado por já existir" de um erro real. Depende do null-guard de
+// firestore.rules (match /swipes/{swipeId}) pra não estourar
+// permission-denied quando o doc ainda não existe.
+export interface SwipeRecord {
+  direction: 'like' | 'nope' | 'superlike';
+}
+
+export const getSwipe = async (fromUid: string, toUid: string): Promise<SwipeRecord | null> => {
+  const snap = await getDoc(doc(db, 'swipes', `${fromUid}_${toUid}`));
+  return snap.exists() ? (snap.data() as SwipeRecord) : null;
+};
+
 export const recordSwipe = async (
   fromUid: string,
   toUid: string,

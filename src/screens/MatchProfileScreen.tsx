@@ -22,13 +22,19 @@ import { UF_NAMES } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
-import { getUserProfile, recordSwipe, UserProfile } from '@/services/firestoreService';
+import {
+  getSwipe,
+  getUserProfile,
+  recordSwipe,
+  SwipeContext,
+  UserProfile,
+} from '@/services/firestoreService';
 import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
 export default function MatchProfileScreen({ route, navigation }: MatchProfileScreenProps) {
-  const { uid, matchId, name, photoURL, fromLikes, alreadyLiked } = route.params;
+  const { uid, matchId, name, photoURL, fromLikes, alreadyLiked: alreadyLikedParam } = route.params;
   const isPreview = !matchId;
   const { user, profile: myProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -38,6 +44,12 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   const [matchVisible, setMatchVisible] = useState(false);
   const [photoAreaWidth, setPhotoAreaWidth] = useState(0);
   const [photoIndex, setPhotoIndex] = useState(0);
+  // S49 — semeado pelo param de navegação (evita flash do botão de curtir
+  // enquanto o getDoc abaixo não resolve) e depois confirmado/corrigido pela
+  // leitura real do próprio swipe — o param é só um retrato do momento em
+  // que a lista de curtidas foi carregada, não a fonte de verdade.
+  const [alreadyLiked, setAlreadyLiked] = useState(!!alreadyLikedParam);
+  const [isSuperLike, setIsSuperLike] = useState(false);
   const carouselRef = useRef<PhotoCarouselHandle>(null);
 
   // Sem Pan concorrendo aqui (diferente do card da Descobrir) — o tap só
@@ -82,6 +94,32 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     loadProfile();
   }, [loadProfile]);
 
+  // S49 — confirma/corrige alreadyLiked com o swipe real (não confia só no
+  // param de navegação): evita reoferecer "Curtir" pra um perfil já curtido,
+  // que a rules nega (swipe é imutável, sem allow update). Cancelamento por
+  // flag simples (não AbortController — getSwipe não aceita signal) evita
+  // setState depois de desmontar caso a tela feche antes do getDoc resolver.
+  useEffect(() => {
+    if (!user || !uid) return;
+    let cancelled = false;
+    getSwipe(user.uid, uid)
+      .then((swipe) => {
+        if (cancelled) return;
+        const liked = !!swipe && swipe.direction !== 'nope';
+        setAlreadyLiked(liked);
+        setIsSuperLike(liked && swipe?.direction === 'superlike');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[MatchProfile] Erro ao checar swipe existente:', err);
+        setAlreadyLiked(false);
+        setIsSuperLike(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, uid]);
+
   const handleBlock = () => {
     if (!user) return;
     Alert.alert(
@@ -119,14 +157,37 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     setActionPending(true);
     try {
       const likedPhotoURL = photos[photoIndex] ?? profile?.photoURL ?? photoURL ?? undefined;
-      const isMatch = await recordSwipe(user.uid, uid, direction, likedPhotoURL);
+      // S45 — mesmo padrão do SwipeScreen: registra o que estava visível no
+      // card como referência (nunca a foto em si). Só 'like' porque esta
+      // tela não tem botão de superlike.
+      const context: SwipeContext | undefined =
+        direction === 'like' ? { type: 'photo', photoIndex } : undefined;
+      const isMatch = await recordSwipe(user.uid, uid, direction, likedPhotoURL, context);
       if (isMatch) {
         setMatchVisible(true);
       } else {
         navigation.goBack();
       }
-    } catch {
-      Alert.alert('Erro', 'Não foi possível registrar sua ação. Tente novamente.');
+    } catch (error) {
+      console.error('[MatchProfile] recordSwipe falhou:', error);
+      // S49 — permission-denied aqui costuma ser o create/update negado por
+      // já existir um swipe meu pra este uid (rules: swipe é imutável, sem
+      // allow update). Confirma com uma leitura real antes de alertar: se o
+      // swipe já existe, a tela se corrige sozinha (mostra o chip) em vez de
+      // dizer "não foi possível" pra uma ação que, na prática, já tinha sido
+      // registrada antes.
+      const isPermissionDenied =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: unknown }).code === 'permission-denied';
+      const existing = isPermissionDenied ? await getSwipe(user.uid, uid).catch(() => null) : null;
+      if (existing && existing.direction !== 'nope') {
+        setAlreadyLiked(true);
+        setIsSuperLike(existing.direction === 'superlike');
+      } else {
+        Alert.alert('Erro', 'Não foi possível registrar sua ação. Tente novamente.');
+      }
     } finally {
       setActionPending(false);
     }
@@ -305,6 +366,9 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 </AnimatedPressable>
                 {alreadyLiked ? (
                   <View style={styles.alreadyLikedChip}>
+                    {isSuperLike && (
+                      <Ionicons name="star" size={14} color={theme.colors.onSecondary} />
+                    )}
                     <Text style={styles.alreadyLikedChipText}>Curtida enviada ✓</Text>
                   </View>
                 ) : (
@@ -444,8 +508,10 @@ const styles = StyleSheet.create({
   nopeBtn: { borderColor: theme.colors.nope },
   likeBtn: { borderColor: theme.colors.like },
   alreadyLikedChip: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
     paddingHorizontal: 18,
     height: 56,
     borderRadius: theme.borderRadius.full,
