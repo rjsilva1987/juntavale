@@ -1,3 +1,7 @@
+// rules-stamp: S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
+// Atualize este carimbo a cada sprint que alterar este arquivo: ele
+// força o upload no deploy (evita "skipping upload" silencioso) e
+// identifica no console do Firebase qual versão está ativa.
 // firestore.rules
 // Regras de PRODUÇÃO — deny by default: toda collection sem regra explícita é bloqueada
 // (ver o "catch-all" no final do arquivo).
