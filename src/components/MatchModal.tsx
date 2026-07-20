@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Animated, { BounceIn } from 'react-native-reanimated';
 
+import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { getIcebreakers, IcebreakerProfile } from '@/utils/icebreakers';
@@ -18,6 +19,12 @@ interface MatchModalProps {
   matchedUserName: string;
   myProfile?: IcebreakerProfile | null;
   theirProfile?: IcebreakerProfile | null;
+  // S47 — props separadas de IcebreakerProfile de propósito: `verified` não
+  // tem nada a ver com geração de icebreaker, então não faz sentido inchar
+  // aquela interface (compartilhada com utils/icebreakers.ts) só por causa
+  // de um reforço visual no modal de match.
+  myVerified?: boolean;
+  theirVerified?: boolean;
   onSendMessage: () => void;
   onUseIcebreaker?: (message: string) => void;
   onContinue: () => void;
@@ -30,6 +37,8 @@ export function MatchModal({
   matchedUserName,
   myProfile,
   theirProfile,
+  myVerified,
+  theirVerified,
   onSendMessage,
   onUseIcebreaker,
   onContinue,
@@ -60,6 +69,16 @@ export function MatchModal({
             <Avatar uri={currentUserPhoto} />
             <Avatar uri={matchedUserPhoto} />
           </View>
+
+          {/* S47 — sussurro de segurança, não banner: só aparece quando os
+              DOIS lados são verificados; nenhuma variação negativa se algum
+              não for (o momento do match não é lugar de ressalva). */}
+          {myVerified === true && theirVerified === true && (
+            <View style={styles.verifiedRow}>
+              <VerifiedBadge size={14} />
+              <Text style={styles.verifiedRowText}>Vocês dois são perfis verificados</Text>
+            </View>
+          )}
 
           {icebreaker && onUseIcebreaker && (
             <View style={styles.icebreakerCard}>
@@ -155,6 +174,22 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // rgba(255,255,255,…) em vez de theme.colors.textSecondary de propósito:
+  // o modal inteiro é um gradiente colorido (primary->secondary, ver `card`
+  // acima), então um cinza de texto padrão ficaria ilegível aqui — mesmo
+  // recurso já usado em `subtitle`/`continueText` neste arquivo pra texto
+  // atenuado sobre o gradiente.
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: theme.spacing.md,
+  },
+  verifiedRowText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
   },
   icebreakerCard: {
     width: '100%',

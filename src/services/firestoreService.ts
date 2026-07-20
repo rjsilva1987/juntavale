@@ -83,6 +83,13 @@ export interface UserProfile {
   // Nomeado como opt-out de propósito: contas existentes sem o campo
   // continuam elegíveis sem precisar de migração.
   reengagementOptOut?: boolean;
+  // S48 — "Meus lugares", texto livre, até 5 tags. Opcional: não entra no
+  // cadastro (RegisterScreen), só editável depois via ProfileScreen; contas
+  // sem o campo não têm migração, simplesmente não renderizam nada.
+  places?: string[];
+  // S48 — "No meu radar", texto livre, até 3 tags. Mesmo padrão de places
+  // acima (opcional, sem migração, só editável no ProfileScreen).
+  events?: string[];
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client

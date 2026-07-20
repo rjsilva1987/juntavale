@@ -78,6 +78,15 @@ const INTERESTS = [
   'Fitness',
 ];
 
+// S48 — "Meus lugares" e "No meu radar": texto livre, sem catálogo (ver
+// TagEditor abaixo). Limites batem com firestore.rules (isValidProfile):
+// tamanho de lista validado no servidor, tamanho de cada tag só no client.
+const MAX_PLACES = 5;
+const MAX_EVENTS = 3;
+const MAX_PLACE_LENGTH = 40;
+const MAX_EVENT_LENGTH = 60;
+const MIN_TAG_LENGTH = 2;
+
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
@@ -86,6 +95,8 @@ export default function ProfileScreen() {
   const [age, setAge] = useState(String(profile?.age ?? ''));
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
+  const [places, setPlaces] = useState<string[]>(profile?.places ?? []);
+  const [events, setEvents] = useState<string[]>(profile?.events ?? []);
   const [gender, setGender] = useState<Gender | undefined>(profile?.gender);
   // S44 — contas legadas sem uf conseguem definir pela 1ª vez aqui; uma vez
   // setado, não há botão de "limpar" (só troca entre as 27), então nunca
@@ -137,6 +148,8 @@ export default function ProfileScreen() {
         age: Number(age),
         bio,
         interests,
+        places,
+        events,
         gender,
         // Omitido quando ainda indefinido (conta legada que não escolheu um
         // estado nesta edição) — Firestore rejeita valor `undefined` num
@@ -526,6 +539,26 @@ export default function ProfileScreen() {
               })}
             </View>
 
+            <TagEditor
+              label="Meus lugares"
+              values={places}
+              maxItems={MAX_PLACES}
+              maxLength={MAX_PLACE_LENGTH}
+              placeholder="Ex: Praia do Forte"
+              onAdd={(value) => setPlaces((prev) => [...prev, value])}
+              onRemove={(value) => setPlaces((prev) => prev.filter((p) => p !== value))}
+            />
+
+            <TagEditor
+              label="No meu radar"
+              values={events}
+              maxItems={MAX_EVENTS}
+              maxLength={MAX_EVENT_LENGTH}
+              placeholder="Ex: Show do Jorge & Mateus"
+              onAdd={(value) => setEvents((prev) => [...prev, value])}
+              onRemove={(value) => setEvents((prev) => prev.filter((e) => e !== value))}
+            />
+
             <AnimatedPressable
               style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
               onPress={handleSave}
@@ -550,6 +583,32 @@ export default function ProfileScreen() {
                 <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Interesses</Text>
                 <View style={styles.tags}>
                   {profile?.interests?.map((item) => (
+                    <View key={item} style={styles.tagActive}>
+                      <Text style={styles.tagTextActive}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {(profile?.places?.length ?? 0) > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Meus lugares</Text>
+                <View style={styles.tags}>
+                  {profile?.places?.map((item) => (
+                    <View key={item} style={styles.tagActive}>
+                      <Text style={styles.tagTextActive}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {(profile?.events?.length ?? 0) > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>No meu radar</Text>
+                <View style={styles.tags}>
+                  {profile?.events?.map((item) => (
                     <View key={item} style={styles.tagActive}>
                       <Text style={styles.tagTextActive}>{item}</Text>
                     </View>
@@ -816,6 +875,89 @@ function Field({ label, value, onChange, multiline, keyboardType }: FieldProps) 
   );
 }
 
+// S48 — editor de tags de texto livre (sem catálogo), reaproveitado pelas
+// duas seções novas ("Meus lugares" e "No meu radar"): cada instância guarda
+// seu próprio rascunho, o pai só recebe onAdd/onRemove já com a tag
+// aparada (trim). Mesmo padrão visual dos chips de Interesses (tag/tagActive)
+// + contador de chars igual ao dos prompts (promptCounter/promptCounterError).
+interface TagEditorProps {
+  label: string;
+  values: string[];
+  maxItems: number;
+  maxLength: number;
+  placeholder: string;
+  onAdd: (value: string) => void;
+  onRemove: (value: string) => void;
+}
+
+function TagEditor({
+  label,
+  values,
+  maxItems,
+  maxLength,
+  placeholder,
+  onAdd,
+  onRemove,
+}: TagEditorProps) {
+  const [draft, setDraft] = useState('');
+  const trimmed = draft.trim();
+  const canAdd =
+    values.length < maxItems && trimmed.length >= MIN_TAG_LENGTH && trimmed.length <= maxLength;
+
+  const handleAdd = () => {
+    if (!canAdd) return;
+    onAdd(trimmed);
+    setDraft('');
+  };
+
+  return (
+    <>
+      <Text style={styles.fieldLabel}>
+        {label} ({values.length}/{maxItems})
+      </Text>
+      {values.length > 0 && (
+        <View style={styles.tags}>
+          {values.map((item) => (
+            <AnimatedPressable key={item} style={styles.tagActive} onPress={() => onRemove(item)}>
+              <Text style={styles.tagTextActive}>{item} ✕</Text>
+            </AnimatedPressable>
+          ))}
+        </View>
+      )}
+      {values.length < maxItems && (
+        <>
+          <View style={styles.tagInputRow}>
+            <TextInput
+              style={[styles.input, styles.tagInput]}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={placeholder}
+              placeholderTextColor={theme.colors.textLight}
+              maxLength={maxLength}
+              onSubmitEditing={handleAdd}
+            />
+            <AnimatedPressable
+              style={[styles.tagAddBtn, !canAdd && styles.tagAddBtnDisabled]}
+              onPress={handleAdd}
+              disabled={!canAdd}
+            >
+              <Ionicons name="add" size={20} color={theme.colors.white} />
+            </AnimatedPressable>
+          </View>
+          <Text
+            style={[
+              styles.promptCounter,
+              trimmed.length > 0 && trimmed.length < MIN_TAG_LENGTH && styles.promptCounterError,
+            ]}
+          >
+            {draft.length}/{maxLength}
+          </Text>
+        </>
+      )}
+    </>
+  );
+}
+
 interface StatCardProps {
   label: string;
   value: string | number;
@@ -1052,6 +1194,18 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   tagTextActive: { fontSize: theme.fontSize.sm, color: theme.colors.white, fontWeight: '600' },
+
+  tagInputRow: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' },
+  tagInput: { flex: 1 },
+  tagAddBtn: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.full,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagAddBtnDisabled: { opacity: 0.4 },
 
   saveBtn: {
     backgroundColor: theme.colors.secondary,

@@ -7,6 +7,10 @@ export interface IcebreakerProfile {
   interests?: string[] | null;
   lookingFor?: LookingFor;
   prompts?: { id: string; answer: string }[];
+  // S48 — "Meus lugares"/"No meu radar", texto livre. Categoria #2 (abaixo
+  // de prompts, acima do resto) — ver bloco (a1) abaixo.
+  places?: string[] | null;
+  events?: string[] | null;
 }
 
 // Mensagem vira draft de chat — não pode ficar gigante. Trunca dentro da
@@ -44,6 +48,16 @@ const LOOKING_FOR_TEMPLATES: Record<LookingFor, string> = {
 
 const FALLBACK_ICEBREAKER = 'Oi! Adorei seu perfil, deu match por algum motivo né? 😄';
 
+// S48 — categoria #2 (abaixo de prompts, acima de interesses em comum).
+// Cita só a 1ª tag de cada campo do perfil ALVO (mesmo padrão de firstPrompt
+// abaixo, que só usa prompts[0]) — sem looping por todas as tags como faz o
+// bloco de interesses compartilhados logo depois.
+const placeIcebreakerTemplate = (tag: string): string =>
+  `Vi que você curte ${tag}. Topa me mostrar por quê?`;
+
+const eventIcebreakerTemplate = (tag: string): string =>
+  `${tag} também tá no meu radar! Vamos juntos?`;
+
 // Casos cobertos (sem framework de teste, checagem mental):
 // - myProfile/theirProfile undefined ou sem interests/lookingFor/prompts -> retorna só [FALLBACK_ICEBREAKER]
 // - theirProfile com prompts[0] + 2 interesses em comum + mesmo lookingFor -> 1 de prompt + 2 de interesse + 1 de lookingFor + fallback = 5 itens, prompt sempre em [0]
@@ -63,6 +77,18 @@ export function getIcebreakers(
     const templateIndex = (catalogIndex >= 0 ? catalogIndex : 0) % PROMPT_ANSWER_TEMPLATES.length;
     const quoted = truncatePromptAnswer(firstPrompt.answer);
     suggestions.push(PROMPT_ANSWER_TEMPLATES[templateIndex](quoted));
+  }
+
+  // (a1) "Meus lugares" / "No meu radar" do perfil ALVO — se o alvo não tem
+  // o campo (ou ele está vazio), simplesmente não concorre, igual firstPrompt
+  // acima.
+  const firstPlace = theirProfile?.places?.[0];
+  if (firstPlace) {
+    suggestions.push(placeIcebreakerTemplate(firstPlace));
+  }
+  const firstEvent = theirProfile?.events?.[0];
+  if (firstEvent) {
+    suggestions.push(eventIcebreakerTemplate(firstEvent));
   }
 
   const shared = getSharedInterestSet(myProfile?.interests, theirProfile?.interests);

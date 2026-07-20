@@ -136,12 +136,12 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                 <Text style={styles.title}>
                   {verification?.status === 'rejected'
                     ? 'Sua última selfie não foi aprovada'
-                    : 'Verifique seu perfil'}
+                    : 'Aqui, todo mundo é quem diz ser'}
                 </Text>
                 <Text style={styles.description}>
-                  Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto
-                  visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente —
-                  isso costuma levar até 48h. A selfie nunca fica pública.
+                  {verification?.status === 'rejected'
+                    ? 'Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente — isso costuma levar até 48h. A selfie nunca fica pública.'
+                    : 'No JuntaVale, só perfis verificados podem conversar. Cada selfie é revisada individualmente pela nossa equipe — nada de robô aprovando fake. A sua verificação protege você e todo mundo que cruzar seu caminho.'}
                 </Text>
                 {needsChaveF && (
                   <View style={styles.chaveFWrap}>
@@ -158,6 +158,9 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                     />
                   </View>
                 )}
+                <Text style={styles.supportLine}>
+                  Leva menos de um minuto. Seu selo ✓ aparece pra quem te vê.
+                </Text>
                 <AnimatedPressable
                   style={styles.actionBtn}
                   onPress={handleTakeSelfie}
@@ -233,6 +236,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: theme.spacing.xl,
+  },
+
+  supportLine: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+    marginBottom: theme.spacing.md,
   },
 
   chaveFWrap: { width: '100%', maxWidth: 260, marginBottom: theme.spacing.lg },

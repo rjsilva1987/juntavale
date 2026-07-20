@@ -1,5 +1,11 @@
 // src/utils/interests.ts
 
+// S48 — places/events não têm matching entre perfis nesta versão (só
+// interests tem, via getSharedInterestSet abaixo). Reaproveitado por
+// SwipeScreen e MatchProfileScreen pra passar pro InterestChips sem marcar
+// nenhuma tag como "em comum".
+export const EMPTY_INTEREST_SET: Set<string> = new Set();
+
 export function normalizeInterest(s: string): string {
   return s.trim().toLowerCase();
 }

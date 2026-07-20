@@ -11,6 +11,7 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
+import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { PromptCard } from '@/components/PromptCard';
 import { ReportModal } from '@/components/ReportModal';
@@ -22,7 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { getUserProfile, recordSwipe, UserProfile } from '@/services/firestoreService';
-import { getSharedInterestSet } from '@/utils/interests';
+import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
@@ -213,11 +214,11 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
 
             <View style={styles.infoCard}>
               <View style={styles.nameRow}>
-                <Text style={styles.name}>
+                <Text style={styles.name} numberOfLines={1}>
                   {profile?.name ?? name}
                   {profile?.age ? `, ${profile.age}` : ''}
                 </Text>
-                {profile?.verified && <VerifiedBadge size={18} />}
+                {profile?.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
               </View>
 
               {profile?.uf && (
@@ -248,6 +249,30 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                   <InterestChips
                     interests={profile?.interests ?? []}
                     sharedSet={sharedInterestSet}
+                    maxVisible={100}
+                    variant="surface"
+                  />
+                </>
+              )}
+
+              {(profile?.places?.length ?? 0) > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Meus lugares</Text>
+                  <InterestChips
+                    interests={profile?.places ?? []}
+                    sharedSet={EMPTY_INTEREST_SET}
+                    maxVisible={100}
+                    variant="surface"
+                  />
+                </>
+              )}
+
+              {(profile?.events?.length ?? 0) > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>No meu radar</Text>
+                  <InterestChips
+                    interests={profile?.events ?? []}
+                    sharedSet={EMPTY_INTEREST_SET}
                     maxVisible={100}
                     variant="surface"
                   />
@@ -321,6 +346,8 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
         matchedUserName={profile?.name ?? name}
         myProfile={myProfile}
         theirProfile={profile}
+        myVerified={myProfile?.verified}
+        theirVerified={profile?.verified}
         onSendMessage={handleSendMessage}
         onUseIcebreaker={handleUseIcebreaker}
         onContinue={handleContinueAfterMatch}
@@ -367,7 +394,12 @@ const styles = StyleSheet.create({
     ...theme.shadows.medium,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+  name: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: '700',
+    color: theme.colors.text,
+    flexShrink: 1,
+  },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   ufText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   lookingForBadge: {

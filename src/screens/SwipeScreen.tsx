@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
+import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { PromptCard } from '@/components/PromptCard';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
@@ -39,7 +40,7 @@ import {
   SwipeContext,
   UserProfile,
 } from '@/services/firestoreService';
-import { getSharedInterestSet } from '@/utils/interests';
+import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -420,6 +421,8 @@ export default function SwipeScreen() {
         matchedUserName={matchedProfile?.name ?? ''}
         myProfile={profile}
         theirProfile={matchedProfile}
+        myVerified={profile?.verified}
+        theirVerified={matchedProfile?.verified}
         onSendMessage={() => {
           if (user && matchedProfile) {
             const matchId = [user.uid, matchedProfile.uid].sort().join('_');
@@ -503,6 +506,10 @@ function ProfileCard({
   // Lista de interesses é pequena — calcular o conjunto compartilhado por
   // card a cada render é mais barato que memoizar por perfil.
   const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
+  // S48 — places e events juntos, places primeiro, no máximo 3 no total (sem
+  // matching entre perfis nesta versão, por isso reaproveita InterestChips
+  // com EMPTY_INTEREST_SET em vez de sharedInterests).
+  const placesAndEvents = [...(profile.places ?? []), ...(profile.events ?? [])].slice(0, 3);
   const firstPrompt = profile.prompts?.[0];
   // Com prompt no card, o overlay (chips + pergunta/resposta) fica alto
   // demais com os 6 chips de antes — reduz pra 4 só quando há prompt pra
@@ -527,7 +534,7 @@ function ProfileCard({
             <Text style={pcStyles.name} numberOfLines={1}>
               {profile.name}, {profile.age}
             </Text>
-            {profile.verified && <VerifiedBadge size={18} />}
+            {profile.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
             {photos.length > 1 && (
               <View style={pcStyles.photoCountBadge} pointerEvents="none">
                 <Ionicons name="camera" size={13} color={theme.colors.white} />
@@ -589,6 +596,15 @@ function ProfileCard({
                 />
               </View>
             )}
+          </View>
+        )}
+        {placesAndEvents.length > 0 && (
+          <View style={pcStyles.placesEventsWrap} pointerEvents="none">
+            <InterestChips
+              interests={placesAndEvents}
+              sharedSet={EMPTY_INTEREST_SET}
+              maxVisible={3}
+            />
           </View>
         )}
       </View>
@@ -810,4 +826,5 @@ const pcStyles = StyleSheet.create({
   interestsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
   interestsLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.white },
   promptWrap: { marginTop: 8 },
+  placesEventsWrap: { marginTop: 8 },
 });

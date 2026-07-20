@@ -88,7 +88,13 @@ service cloud.firestore {
         && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
         && (!('filters' in data) || data.filters is map)
-        && (!('prompts' in data) || isValidPrompts(data.prompts));
+        && (!('prompts' in data) || isValidPrompts(data.prompts))
+        // S48 — "Meus lugares"/"No meu radar": texto livre, opcionais, sem
+        // catálogo. Mesmo precedente de rigor de `interests` (data.interests
+        // is list && size cap, sem validar cada elemento) — só tipo da lista
+        // e teto de tamanho; conteúdo de cada string é validado no client.
+        && (!('places' in data) || (data.places is list && data.places.size() <= 5))
+        && (!('events' in data) || (data.events is list && data.events.size() <= 3));
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -133,7 +139,8 @@ service cloud.firestore {
               'RS', 'SC', 'SE', 'SP', 'TO']
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts'])
+              'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts',
+              'places', 'events'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -167,7 +174,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'location', 'filters', 'prompts', 'lastActiveAt',
-              'reengagementOptOut'])
+              'reengagementOptOut', 'places', 'events'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.
