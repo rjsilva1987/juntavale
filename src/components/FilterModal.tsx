@@ -4,9 +4,10 @@ import Slider from '@react-native-community/slider';
 import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
 
+import { UfPicker } from '@/components/UfPicker';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
-import { UF, UFS } from '@/constants/ufs';
+import { UF } from '@/constants/ufs';
 import { DiscoverFilters, Gender } from '@/services/firestoreService';
 
 interface FilterModalProps {
@@ -27,11 +28,6 @@ const GENDER_OPTIONS: { label: string; value: Gender | 'all' }[] = [
 const LOOKING_FOR_FILTER_OPTIONS: { label: string; value: LookingFor | 'all' }[] = [
   { label: 'Todos', value: 'all' },
   ...LOOKING_FOR_OPTIONS.map((option) => ({ label: option.label, value: option.value })),
-];
-
-const UF_FILTER_OPTIONS: { label: string; value: UF | 'all' }[] = [
-  { label: 'Todos os estados', value: 'all' },
-  ...UFS.map((uf) => ({ label: uf, value: uf })),
 ];
 
 export function FilterModal({
@@ -95,20 +91,11 @@ export function FilterModal({
 
           {/* Estado */}
           <Text style={styles.label}>Estado</Text>
-          <View style={styles.ufGrid}>
-            {UF_FILTER_OPTIONS.map((option) => {
-              const active = draft.uf === option.value;
-              return (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[styles.ufOption, active && styles.ufOptionActive]}
-                  onPress={() => setDraft((prev) => ({ ...prev, uf: option.value }))}
-                >
-                  <Text style={[styles.ufText, active && styles.ufTextActive]}>{option.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <UfPicker
+            value={draft.uf}
+            includeAll
+            onChange={(item) => setDraft((prev) => ({ ...prev, uf: item as UF | 'all' }))}
+          />
 
           {/* Gender */}
           <Text style={styles.label}>Gênero</Text>
@@ -267,36 +254,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   lookingForTextActive: { color: theme.colors.onPrimary },
-
-  // Grade compacta pra caber as 27 siglas + "Todos os estados" sem depender
-  // de um ScrollView próprio — mesmo padrão visual do lookingForRow acima,
-  // com flexBasis menor (mais colunas) por causa do volume de opções.
-  ufGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.xs,
-  },
-  ufOption: {
-    flexBasis: '22%',
-    flexGrow: 1,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.full,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-  },
-  ufOptionActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  ufText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  ufTextActive: { color: theme.colors.onPrimary },
 
   verifiedRow: {
     flexDirection: 'row',

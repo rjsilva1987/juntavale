@@ -15,9 +15,10 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { UfPicker } from '@/components/UfPicker';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
-import { UF, UFS, UF_NAMES } from '@/constants/ufs';
+import { UF } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 
@@ -201,22 +202,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <Text style={styles.charCount}>{bio.length}/160</Text>
 
               <Text style={styles.label}>Estado onde você mora</Text>
-              <View style={styles.ufList}>
-                {UFS.map((item) => {
-                  const active = uf === item;
-                  return (
-                    <AnimatedPressable
-                      key={item}
-                      style={[styles.ufOption, active && styles.ufOptionActive]}
-                      onPress={() => setUf(item)}
-                    >
-                      <Text style={[styles.ufText, active && styles.ufTextActive]}>
-                        {item} — {UF_NAMES[item]}
-                      </Text>
-                    </AnimatedPressable>
-                  );
-                })}
-              </View>
+              <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
 
               <AnimatedPressable
                 style={[styles.btnPrimary, !uf && { opacity: 0.7 }]}
@@ -354,22 +340,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textLight,
     marginTop: 4,
   },
-
-  ufList: { gap: 8, marginTop: 8 },
-  ufOption: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: theme.colors.surface,
-  },
-  ufOptionActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  ufText: { fontSize: theme.fontSize.sm, color: theme.colors.text, fontWeight: '600' },
-  ufTextActive: { color: theme.colors.onPrimary },
 
   btnPrimary: {
     backgroundColor: theme.colors.secondary,

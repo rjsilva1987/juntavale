@@ -66,3 +66,9 @@ export const UF_NAMES: Record<UF, string> = {
   SP: 'São Paulo',
   TO: 'Tocantins',
 };
+
+// Mesmas 27 UFs, ordenadas por nome por extenso — usado pelo UfPicker (S46)
+// pra listar as opções em ordem alfabética de nome em vez de sigla.
+export const UF_OPTIONS: { sigla: UF; nome: string }[] = [...UFS]
+  .map((sigla) => ({ sigla, nome: UF_NAMES[sigla] }))
+  .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
