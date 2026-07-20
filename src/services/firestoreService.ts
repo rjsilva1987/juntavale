@@ -70,6 +70,11 @@ export interface UserProfile {
   createdAt?: Timestamp;
   blockedUsers?: string[];
   verified?: boolean;
+  // Selo fundador (S51) — atribuído SÓ por Cloud Function (assignFounderNumber,
+  // Admin SDK); o client nunca escreve este campo, ver firestore.rules
+  // (users/{userId} não tem 'founderNumber' na hasOnly() de create/update).
+  // Ausente = sem selo (contador desligado, admin, ou vaga esgotada).
+  founderNumber?: number;
   // Prompts estilo Hinge (S33) — até 3, ordem = ordem de exibição escolhida
   // pelo usuário. Opcional: docs legados sem o campo = sem prompts, toda
   // leitura precisa tolerar undefined. Ver src/constants/prompts.ts.

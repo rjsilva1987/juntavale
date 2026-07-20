@@ -19,6 +19,7 @@ import Animated, {
 
 import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
+import { FounderBadge } from '@/components/FounderBadge';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
@@ -540,6 +541,7 @@ function ProfileCard({
               {profile.name}, {profile.age}
             </Text>
             {profile.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
+            {profile.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
             {photos.length > 1 && (
               <View style={pcStyles.photoCountBadge} pointerEvents="none">
                 <Ionicons name="camera" size={13} color={theme.colors.white} />

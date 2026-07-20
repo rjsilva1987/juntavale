@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { FounderBadge } from '@/components/FounderBadge';
 import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
@@ -280,6 +281,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                   {profile?.age ? `, ${profile.age}` : ''}
                 </Text>
                 {profile?.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
+                {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
 
               {profile?.uf && (

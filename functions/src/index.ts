@@ -750,3 +750,57 @@ export const weeklyPromptPush = onSchedule(
     );
   },
 );
+
+// Décima primeira Cloud Function do projeto (S51): "Selo fundador", 100 vagas
+// numeradas 1..100 pela ordem de criação de conta. founderNumber é escrito
+// SÓ aqui (Admin SDK) — o client nunca consegue setá-lo, ver firestore.rules
+// (users/{userId} não tem 'founderNumber' na hasOnly() de create/update, e
+// config/founders cai no catch-all de negação — nenhum dos dois é acessível
+// ao client).
+//
+// Shape esperado de config/founders (doc criado manualmente pelo Raphael no
+// console, esta function nunca o cria):
+//   { enabled: boolean, count: number }
+// O contador nasce ausente/enabled:false de propósito — contas de teste
+// atuais não recebem número; Raphael liga manualmente (enabled: true) no dia
+// do lançamento.
+export const assignFounderNumber = onDocumentCreated(
+  { document: 'users/{uid}', region: REGION },
+  async (event) => {
+    const { uid } = event.params;
+
+    // Admin nunca recebe número, mesmo com o contador ligado — checado antes
+    // da transação pra não gastar uma leitura/escrita à toa.
+    if (uid === ADMIN_UID) {
+      console.log('[assignFounderNumber] uid admin, ignorado:', uid);
+      return;
+    }
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const configRef = db.doc('config/founders');
+        const configSnap = await transaction.get(configRef);
+        const config = configSnap.data() as { enabled?: boolean; count?: number } | undefined;
+
+        if (!config || config.enabled !== true) {
+          console.log('[assignFounderNumber] desligado');
+          return;
+        }
+
+        const count = config.count ?? 0;
+        if (count >= 100) {
+          console.log('[assignFounderNumber] vagas esgotadas');
+          return;
+        }
+
+        const founderNumber = count + 1;
+        transaction.update(configRef, { count: founderNumber });
+        transaction.update(db.doc(`users/${uid}`), { founderNumber });
+
+        console.log(`[assignFounderNumber] #${founderNumber} atribuído a ${uid}`);
+      });
+    } catch (error) {
+      console.error('[assignFounderNumber] falha na transação:', uid, error);
+    }
+  },
+);

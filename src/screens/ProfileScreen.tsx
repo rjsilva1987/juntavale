@@ -20,6 +20,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { FounderBadge } from '@/components/FounderBadge';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { UfPicker } from '@/components/UfPicker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -408,6 +409,7 @@ export default function ProfileScreen() {
               <View style={styles.nameRow}>
                 <Text style={styles.profileName}>{profile?.name}</Text>
                 {profile?.verified && <VerifiedBadge size={18} />}
+                {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
               <Text style={styles.profileAge}>{profile?.age} anos</Text>
               {profile?.lookingFor && (
@@ -1067,7 +1069,12 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: { fontSize: 44 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  profileName: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+  profileName: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: '700',
+    color: theme.colors.text,
+    flexShrink: 1,
+  },
   profileAge: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 2 },
   lookingForBadge: {
     backgroundColor: theme.colors.primaryLight,
