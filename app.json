@@ -19,7 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Para enviar fotos no chat e tirar sua selfie de verificação de perfil.",
         "NSPhotoLibraryUsageDescription": "Para usar sua foto de perfil.",
-        "NSLocationWhenInUseUsageDescription": "Para encontrar pessoas próximas."
+        "NSLocationWhenInUseUsageDescription": "Para compartilhar sua localização em uma conversa, quando você escolher."
       }
     },
     "android": {
@@ -35,9 +35,9 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,7 +48,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#2563EB"
         }
       ],
