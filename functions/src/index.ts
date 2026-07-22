@@ -1,16 +1,25 @@
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+import {
+  FieldValue,
+  getFirestore,
+  Timestamp,
+  type DocumentReference,
+} from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import {
   onDocumentCreated,
   onDocumentDeleted,
   onDocumentUpdated,
 } from 'firebase-functions/v2/firestore';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 initializeApp();
 
 const db = getFirestore();
+const bucket = getStorage().bucket();
 const expo = new Expo();
 const REGION = 'southamerica-east1';
 
@@ -275,6 +284,20 @@ export const onVerificationReviewed = onDocumentUpdated(
       await db.doc(`users/${event.params.uid}`).update({ verified: true });
     } else if (after.status === 'rejected') {
       await db.doc(`users/${event.params.uid}`).update({ verified: false });
+    }
+
+    // S53 — a selfie só serve pra decidir o status; uma vez decidido
+    // (approved OU rejected), o arquivo não tem mais função e é apagado do
+    // Storage. O doc verifications/{uid} permanece (status, selfieUrl morto,
+    // createdAt, reviewedAt, reviewedBy) — só o arquivo em si some.
+    try {
+      await bucket.deleteFiles({ prefix: `verifications/${event.params.uid}/` });
+    } catch (error) {
+      console.error(
+        '[onVerificationReviewed] falha ao apagar a selfie:',
+        event.params.uid,
+        error,
+      );
     }
   },
 );
@@ -802,5 +825,142 @@ export const assignFounderNumber = onDocumentCreated(
     } catch (error) {
       console.error('[assignFounderNumber] falha na transação:', uid, error);
     }
+  },
+);
+
+// Décima segunda Cloud Function do projeto (S53) — exclusão de conta,
+// exigida pela Play Store (Data Safety: apps com cadastro precisam
+// oferecer exclusão dentro do próprio app, não só por e-mail). O client não
+// consegue fazer isso sozinho: firestore.rules/storage.rules não liberam
+// apagar em cascata os dados de outra coleção, e só o Admin SDK consegue
+// apagar a conta em si no Firebase Auth. Por isso roda como callable com
+// Admin SDK, que ignora as rules.
+const DELETE_ACCOUNT_BATCH_LIMIT = 400;
+
+// writeBatch tem limite de 500 operações; 400 dá folga sem precisar
+// calcular o tamanho exato de cada delete.
+async function deleteDocsInBatches(refs: DocumentReference[]): Promise<void> {
+  for (let i = 0; i < refs.length; i += DELETE_ACCOUNT_BATCH_LIMIT) {
+    const batch = db.batch();
+    refs.slice(i, i + DELETE_ACCOUNT_BATCH_LIMIT).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
+export const deleteAccount = onCall(
+  { region: REGION, memory: '512MiB', timeoutSeconds: 300 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Você precisa estar autenticado.');
+    }
+
+    // uid vem SEMPRE do token verificado pelo Admin SDK (request.auth.uid),
+    // nunca de request.data — um uid vindo do client poderia apagar a
+    // conta de outra pessoa.
+    const uid = request.auth.uid;
+    console.log('[deleteAccount] iniciando exclusão:', uid);
+
+    // a) matches — recursiveDelete apaga o doc do match E a subcoleção
+    // messages junto; as fotos de chat desse match, num prefixo próprio no
+    // Storage, são apagadas à parte logo em seguida.
+    try {
+      const matchesSnap = await db
+        .collection('matches')
+        .where('users', 'array-contains', uid)
+        .get();
+      console.log(`[deleteAccount] matches encontrados: ${matchesSnap.size}`);
+      for (const matchDoc of matchesSnap.docs) {
+        await db.recursiveDelete(matchDoc.ref);
+        await bucket.deleteFiles({ prefix: `images/chats/${matchDoc.id}/` });
+      }
+      console.log(`[deleteAccount] matches apagados: ${matchesSnap.size}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar matches:', uid, error);
+    }
+
+    // b) swipes — dois lados: os que o usuário enviou (from) e os que
+    // recebeu (to).
+    try {
+      const [fromSnap, toSnap] = await Promise.all([
+        db.collection('swipes').where('from', '==', uid).get(),
+        db.collection('swipes').where('to', '==', uid).get(),
+      ]);
+      const refs = [...fromSnap.docs, ...toSnap.docs].map((d) => d.ref);
+      console.log(`[deleteAccount] swipes encontrados: ${refs.length}`);
+      await deleteDocsInBatches(refs);
+      console.log(`[deleteAccount] swipes apagados: ${refs.length}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar swipes:', uid, error);
+    }
+
+    // c) blocks — dois lados: quem o usuário bloqueou (blocker) e quem o
+    // bloqueou (blocked).
+    try {
+      const [blockerSnap, blockedSnap] = await Promise.all([
+        db.collection('blocks').where('blocker', '==', uid).get(),
+        db.collection('blocks').where('blocked', '==', uid).get(),
+      ]);
+      const refs = [...blockerSnap.docs, ...blockedSnap.docs].map((d) => d.ref);
+      console.log(`[deleteAccount] blocks encontrados: ${refs.length}`);
+      await deleteDocsInBatches(refs);
+      console.log(`[deleteAccount] blocks apagados: ${refs.length}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar blocks:', uid, error);
+    }
+
+    // d) support — tickets abertos pelo usuário; recursiveDelete leva a
+    // subcoleção messages de cada ticket junto.
+    try {
+      const ticketsSnap = await db.collection('support').where('uid', '==', uid).get();
+      console.log(`[deleteAccount] tickets de suporte encontrados: ${ticketsSnap.size}`);
+      for (const ticketDoc of ticketsSnap.docs) {
+        await db.recursiveDelete(ticketDoc.ref);
+      }
+      console.log(`[deleteAccount] tickets de suporte apagados: ${ticketsSnap.size}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar tickets de suporte:', uid, error);
+    }
+
+    // e) verifications/{uid} — doc de revisão + selfie no Storage (se ainda
+    // não tiver sido apagada por onVerificationReviewed).
+    try {
+      await db.doc(`verifications/${uid}`).delete();
+      await bucket.deleteFiles({ prefix: `verifications/${uid}/` });
+      console.log('[deleteAccount] verification apagada');
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar verification:', uid, error);
+    }
+
+    // f) Storage do perfil — avatares.
+    try {
+      await bucket.deleteFiles({ prefix: `avatars/${uid}/` });
+      console.log('[deleteAccount] avatares apagados');
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar avatares:', uid, error);
+    }
+
+    // g) users/{uid} — recursiveDelete leva junto as subcoleções privadas
+    // (private/registration, private/push, private/reengagement) e
+    // superLikes/usage.
+    try {
+      await db.recursiveDelete(db.doc(`users/${uid}`));
+      console.log('[deleteAccount] doc users apagado');
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar doc users:', uid, error);
+    }
+
+    // NÃO apaga a coleção `reports`: denúncias feitas pelo usuário
+    // (reporterId) ou recebidas por ele (reportedId) são registro de
+    // moderação e permanecem por decisão de produto, mesmo após a exclusão
+    // da conta.
+
+    // h) Auth — por último, e de propósito FORA do padrão try/catch-e-loga
+    // das etapas acima: se apagar a conta em si falhar, o erro precisa
+    // propagar pro client — senão a conta continua logável mesmo com todo
+    // o resto já apagado, o que seria pior que abortar cedo.
+    await getAuth().deleteUser(uid);
+
+    console.log('[deleteAccount] concluído:', uid);
+    return { success: true };
   },
 );

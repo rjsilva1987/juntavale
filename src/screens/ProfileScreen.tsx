@@ -20,6 +20,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { FounderBadge } from '@/components/FounderBadge';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { UfPicker } from '@/components/UfPicker';
@@ -108,6 +109,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // Prompts (S33) — editados via modais próprios, fora do form de
   // nome/idade/bio/gênero/interesses acima. Sempre grava o array completo
@@ -785,7 +787,23 @@ export default function ProfileScreen() {
           <Ionicons name="log-out-outline" size={20} color={theme.colors.nope} />
           <Text style={styles.logoutText}>Sair da conta</Text>
         </AnimatedPressable>
+
+        {/* Exclusão de conta (S53) — exigência da Play Store. Deliberadamente
+            discreta (sem borda/card, fonte menor) e separada do botão de
+            logout: é uma ação destrutiva e irreversível, não deve competir
+            visualmente com "Sair da conta". */}
+        <AnimatedPressable
+          style={styles.deleteAccountBtn}
+          onPress={() => setDeleteModalVisible(true)}
+        >
+          <Text style={styles.deleteAccountText}>Excluir minha conta</Text>
+        </AnimatedPressable>
       </ScrollView>
+
+      <DeleteAccountModal
+        visible={deleteModalVisible}
+        onClose={() => setDeleteModalVisible(false)}
+      />
 
       {/* Catálogo de prompts — só exibido pra adicionar um novo (prompts já
           usados ficam desabilitados/acinzentados). Editar um já respondido
@@ -1327,6 +1345,18 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   logoutText: { color: theme.colors.nope, fontSize: theme.fontSize.md, fontWeight: '600' },
+
+  deleteAccountBtn: {
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    paddingVertical: 8,
+  },
+  deleteAccountText: {
+    color: theme.colors.error,
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+  },
 
   weeklyPromptCard: {
     borderWidth: 1.5,

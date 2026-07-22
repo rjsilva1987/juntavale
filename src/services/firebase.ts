@@ -6,6 +6,7 @@ import { initializeAuth } from 'firebase/auth';
 // .d.ts file doesn't declare it since types aren't platform-conditioned.
 import { getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -24,4 +25,7 @@ export const auth = initializeAuth(app, {
 });
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// Região precisa bater com REGION em functions/src/index.ts — só afeta
+// callables (onCall); os triggers do Firestore usam a região deles própria.
+export const functions = getFunctions(app, 'southamerica-east1');
 export default app;
