@@ -19,6 +19,7 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth, functions } from '@/services/firebase';
+import { clearSessionSwipes } from '@/services/firestoreService';
 
 // S53 — exigência da Play Store: exclusão de conta precisa ser possível
 // dentro do app. Palavra de confirmação em maiúsculas de propósito (mesmo
@@ -78,6 +79,9 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
       // órfão ou falharia por permission-denied (dono não existe mais nas
       // rules). O token de push já morreu junto com o doc.
       await signOut(auth);
+      // S57 — mesmo motivo do logout() no AuthContext: a próxima conta a
+      // logar neste device não pode herdar os uids decididos por esta.
+      clearSessionSwipes();
     } catch (error) {
       console.error('[DeleteAccountModal] falha ao excluir a conta:', error);
       Alert.alert('Erro', 'Não foi possível excluir sua conta agora. Tente novamente mais tarde.');

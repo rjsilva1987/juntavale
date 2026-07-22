@@ -1,8 +1,8 @@
 # JuntaVale — convenções do projeto
 
 ## Ambiente
-- Diretório do projeto: D:\vscode\juntavale — SEMPRE confira o cwd antes
-  de qualquer comando; o diretório pai (D:\vscode) é outro repositório.
+- Diretório do projeto: C:\Users\Raphael\vscode\juntavale — SEMPRE confira
+  o cwd antes de qualquer comando.
 - Stack: Expo 54, React Native 0.81, React 19, TypeScript,
   Firebase (projeto bbmatch-9ede5; Firestore/Functions em
   southamerica-east1, Node 22). Windows + PowerShell.

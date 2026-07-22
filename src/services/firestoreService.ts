@@ -374,6 +374,28 @@ export class SuperLikeQuotaExceededError extends Error {
   }
 }
 
+// S57 — registro em memória (não persiste, não é Firestore) dos uids
+// decididos (like/nope/superlike) NESTA sessão do app. O SwipeScreen usa isso
+// pra reconciliar o deck localmente (sem refetch) quando volta de outra tela
+// (MatchProfileScreen) onde um swipe pode ter sido gravado. Módulo é
+// singleton em toda a app — por isso o Set não é exportado diretamente, só
+// as funções de acesso abaixo, pra centralizar quem pode ler/escrever nele.
+const sessionSwipedUids = new Set<string>();
+
+export const markSwiped = (uid: string): void => {
+  sessionSwipedUids.add(uid);
+};
+
+export const unmarkSwiped = (uid: string): void => {
+  sessionSwipedUids.delete(uid);
+};
+
+export const getSessionSwipedUids = (): ReadonlySet<string> => sessionSwipedUids;
+
+export const clearSessionSwipes = (): void => {
+  sessionSwipedUids.clear();
+};
+
 // S49 — leitura pontual de um swipe já registrado (ou não), sem depender
 // do read-after-write dentro de recordSwipe. Usado pelo MatchProfileScreen
 // pra saber, no mount, se o usuário já curtiu este perfil (evita reoferecer
@@ -438,6 +460,11 @@ export const recordSwipe = async (
     await setDoc(swipeRef, swipeData);
   }
 
+  // S57 — marca como decidido só depois do write ter dado certo (like, nope
+  // OU superlike): o SwipeScreen usa isso pra reconciliar o deck sem refetch
+  // quando o swipe é gravado a partir de outra tela (MatchProfileScreen).
+  markSwiped(toUid);
+
   if (direction === 'nope') return false;
 
   // Check if other person already liked me → it's a match!
@@ -459,6 +486,9 @@ export const undoSwipe = async (
   isMatch: boolean,
 ): Promise<void> => {
   await deleteDoc(doc(db, 'swipes', `${fromUid}_${toUid}`));
+  // S57 — desfaz a marca de sessão: sem isso, a reconciliação do SwipeScreen
+  // continuaria filtrando esse perfil do deck mesmo depois do undo.
+  unmarkSwiped(toUid);
   if (isMatch) {
     const matchId = [fromUid, toUid].sort().join('_');
     await deleteDoc(doc(db, 'matches', matchId));

@@ -35,6 +35,7 @@ import { useSuperLikeQuota } from '@/hooks/useSuperLikeQuota';
 import { RootStackParamList } from '@/navigation';
 import {
   getDiscoverProfiles,
+  getSessionSwipedUids,
   recordSwipe,
   undoSwipe,
   SuperLikeQuotaExceededError,
@@ -68,6 +69,18 @@ export default function SwipeScreen() {
   // Interesses do usuário logado, memoizados pra não recalcular a cada
   // render — só muda quando o profile (e portanto profile.interests) muda.
   const myInterests = useMemo(() => profile?.interests ?? [], [profile?.interests]);
+
+  // S57 — ARMADILHA: profile vem de um onSnapshot (AuthContext), que entrega
+  // um objeto (e um array blockedUsers) NOVO a cada emissão, mesmo quando o
+  // conteúdo não mudou (ex.: lastActiveAt sendo tocado por outro hook). Usar
+  // profile?.blockedUsers direto como dependência do loadProfiles abaixo
+  // faria esse useCallback (e o useEffect que o dispara) recriar a cada
+  // snapshot, virando um loop de recarga. Reduzir a um primitivo (string)
+  // resolve: strings são comparadas por valor, não por referência.
+  const blockedUsersKey = useMemo(
+    () => (profile?.blockedUsers ?? []).join(','),
+    [profile?.blockedUsers],
+  );
 
   // Refs mirroring state so the JS-thread callback fired from a worklet
   // (via runOnJS) always reads the latest profile, not a stale closure.
@@ -135,12 +148,62 @@ export default function SwipeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.uf, profile?.blockedUsers, filters, translateX, translateY]);
+    // blockedUsersKey (string) no lugar de profile?.blockedUsers (array) —
+    // ver comentário da ARMADILHA acima, na definição de blockedUsersKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile?.uf, blockedUsersKey, filters, translateX, translateY]);
 
+  // S57 — carga completa (com reembaralhamento) só no mount e quando uma
+  // dependência REAL muda (usuário, UF, filtros, blockedUsers) — não mais a
+  // cada foco da tela. O botão "Atualizar" do EmptyState (mais abaixo,
+  // onButtonPress={loadProfiles}) continua sendo o caminho manual de recarga
+  // completa.
+  useEffect(() => {
+    loadProfiles();
+  }, [loadProfiles]);
+
+  // S57 — reconciliação LOCAL ao reganhar foco: sem rede, sem reembaralhar.
+  // O card do topo só muda se ELE MESMO foi decidido (like/nope/superlike)
+  // em outra tela (MatchProfileScreen) durante a ausência; só abrir o "i" e
+  // voltar sem decidir nada não deve alterar nada, nem re-renderizar à toa.
   useFocusEffect(
     useCallback(() => {
-      loadProfiles();
-    }, [loadProfiles]),
+      const swiped = getSessionSwipedUids();
+      if (swiped.size === 0) return;
+
+      const currentProfiles = profilesRef.current;
+      const hasAnySwiped = currentProfiles.some((p) => swiped.has(p.uid));
+      if (!hasAnySwiped) return;
+
+      const activeProfile = currentProfiles[currentIndexRef.current];
+      const remaining = currentProfiles.filter((p) => !swiped.has(p.uid));
+
+      let nextIndex: number;
+      if (!activeProfile) {
+        // Deck já tinha acabado antes desta reconciliação rodar.
+        nextIndex = remaining.length;
+      } else if (!swiped.has(activeProfile.uid)) {
+        // O card do topo continua elegível — ele PERMANECE no topo.
+        nextIndex = remaining.findIndex((p) => p.uid === activeProfile.uid);
+      } else {
+        // O card do topo foi decidido em outra tela: conta quantos perfis
+        // elegíveis existiam ANTES dele na ordem original — é essa contagem
+        // que diz quem assume o topo agora.
+        nextIndex = currentProfiles
+          .slice(0, currentIndexRef.current)
+          .filter((p) => !swiped.has(p.uid)).length;
+      }
+
+      setProfiles(remaining);
+      setCurrentIndex(Math.max(0, Math.min(nextIndex, remaining.length)));
+      // S57 — algum perfil foi de fato removido aqui (só chegamos até este
+      // ponto porque hasAnySwiped é true, ou seja, remaining é mais curto que
+      // currentProfiles). lastSwipedProfile guarda um índice/perfil da forma
+      // ANTIGA do array; sem limpar, "desfazer" reaplicaria esse índice
+      // desatualizado sobre o array já reconciliado, restaurando/afetando o
+      // perfil errado.
+      setLastSwipedProfile(null);
+    }, []),
   );
 
   const completeSwipe = (dir: 'left' | 'right' | 'super') => {

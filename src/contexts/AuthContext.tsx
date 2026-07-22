@@ -13,7 +13,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { LookingFor } from '@/constants/lookingFor';
 import { UF } from '@/constants/ufs';
 import { auth, db } from '@/services/firebase';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { clearSessionSwipes, getUserProfile, UserProfile } from '@/services/firestoreService';
 import { removePushToken } from '@/services/notifications';
 
 interface AuthContextType {
@@ -131,6 +131,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     await signOut(auth);
     setProfile(null);
+    // S57 — a próxima conta a logar neste device não pode herdar os uids
+    // decididos pela conta anterior.
+    clearSessionSwipes();
   };
 
   const refreshProfile = async () => {

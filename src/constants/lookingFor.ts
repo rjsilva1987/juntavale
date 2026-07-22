@@ -8,10 +8,10 @@
 export type LookingFor = 'relacionamento_serio' | 'casual' | 'amizade' | 'descobrindo';
 
 export const LOOKING_FOR_OPTIONS: { value: LookingFor; label: string }[] = [
-  { value: 'relacionamento_serio', label: 'Relacionamento sério' },
-  { value: 'casual', label: 'Algo casual' },
-  { value: 'amizade', label: 'Amizade' },
-  { value: 'descobrindo', label: 'Ainda descobrindo' },
+  { value: 'relacionamento_serio', label: 'Namoro pra valer' },
+  { value: 'casual', label: 'Deixa rolar' },
+  { value: 'amizade', label: 'Só amizade' },
+  { value: 'descobrindo', label: 'Vim ver no que dá' },
 ];
 
 export const LOOKING_FOR_LABELS: Record<LookingFor, string> = LOOKING_FOR_OPTIONS.reduce(
