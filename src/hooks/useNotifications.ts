@@ -53,6 +53,8 @@ export function useNotifications() {
             navigationRef.navigate('SupportThread', { ticketId: data.ticketId });
           } else if (data.type === 'weekly_prompt') {
             navigationRef.navigate('Main', { screen: 'Perfil' });
+          } else if (data.type === 'verification_reviewed') {
+            navigationRef.navigate('Verification');
           }
         },
       );

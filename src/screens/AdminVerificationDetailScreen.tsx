@@ -8,7 +8,9 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { RejectVerificationModal } from '@/components/RejectVerificationModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
+import { RejectionReason } from '@/constants/rejectionReasons';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -40,6 +42,7 @@ export default function AdminVerificationDetailScreen({
   const [registration, setRegistration] = useState<RegistrationPrivate | null>(null);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(false);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
 
   useEffect(() => {
     Promise.all([getUserProfile(uid), getVerificationStatus(uid), getRegistrationPrivate(uid)]).then(
@@ -52,22 +55,23 @@ export default function AdminVerificationDetailScreen({
     );
   }, [uid]);
 
-  const handleDecide = (status: 'approved' | 'rejected') => {
+  // S58 — aprovar continua exatamente como antes (Alert de confirmação, sem
+  // motivo). Rejeitar não cabe mais num Alert (precisa de seleção de motivo
+  // do catálogo fixo) — ver handleConfirmReject e RejectVerificationModal.
+  const handleApprove = () => {
     if (!user) return;
     Alert.alert(
-      status === 'approved' ? 'Aprovar verificação?' : 'Rejeitar verificação?',
-      status === 'approved'
-        ? `${profile?.name ?? 'Este usuário'} vai receber o selo de verificado.`
-        : `${profile?.name ?? 'Este usuário'} vai poder reenviar uma nova selfie.`,
+      'Aprovar verificação?',
+      `${profile?.name ?? 'Este usuário'} vai receber o selo de verificado.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: status === 'approved' ? 'Aprovar' : 'Rejeitar',
-          style: status === 'approved' ? 'default' : 'destructive',
+          text: 'Aprovar',
+          style: 'default',
           onPress: async () => {
             setDeciding(true);
             try {
-              await reviewVerification(uid, status, user.uid);
+              await reviewVerification(uid, { status: 'approved' }, user.uid);
               if (navigation.canGoBack()) navigation.goBack();
             } catch {
               Alert.alert('Erro', 'Não foi possível registrar a decisão.');
@@ -78,6 +82,20 @@ export default function AdminVerificationDetailScreen({
         },
       ],
     );
+  };
+
+  const handleConfirmReject = async (reason: RejectionReason) => {
+    if (!user) return;
+    setDeciding(true);
+    try {
+      await reviewVerification(uid, { status: 'rejected', rejectionReason: reason }, user.uid);
+      setRejectModalVisible(false);
+      if (navigation.canGoBack()) navigation.goBack();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível registrar a decisão.');
+    } finally {
+      setDeciding(false);
+    }
   };
 
   const photos = profile?.photos?.length
@@ -150,7 +168,7 @@ export default function AdminVerificationDetailScreen({
             <View style={styles.actionsRow}>
               <AnimatedPressable
                 style={[styles.actionBtn, styles.rejectBtn]}
-                onPress={() => handleDecide('rejected')}
+                onPress={() => setRejectModalVisible(true)}
                 disabled={deciding}
               >
                 <Ionicons name="close" size={20} color={theme.colors.error} />
@@ -158,7 +176,7 @@ export default function AdminVerificationDetailScreen({
               </AnimatedPressable>
               <AnimatedPressable
                 style={[styles.actionBtn, styles.approveBtn]}
-                onPress={() => handleDecide('approved')}
+                onPress={handleApprove}
                 disabled={deciding}
               >
                 {deciding ? (
@@ -174,6 +192,12 @@ export default function AdminVerificationDetailScreen({
           </ScrollView>
         )}
       </SafeAreaView>
+
+      <RejectVerificationModal
+        visible={rejectModalVisible}
+        onClose={() => setRejectModalVisible(false)}
+        onSubmit={handleConfirmReject}
+      />
     </Animated.View>
   );
 }

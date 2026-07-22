@@ -299,6 +299,38 @@ export const onVerificationReviewed = onDocumentUpdated(
         error,
       );
     }
+
+    // S58 — push de resultado. Transacional (resultado direto de uma ação
+    // do próprio usuário — enviar a selfie), por isso NÃO passa pelo filtro
+    // de reengagementOptOut (esse existe só pra campanhas de reengajamento,
+    // ver skippedOptOut em staleMatchReminder mais abaixo). O motivo da
+    // rejeição fica de fora do texto de propósito (privacidade na tela de
+    // bloqueio) — quem quiser saber qual foi, abre o app. Falha de push não
+    // pode derrubar a function nem a atualização de verified acima, mesmo
+    // padrão do catch da selfie logo em cima.
+    try {
+      const token = await getPushToken(event.params.uid);
+      if (token) {
+        const { title, body } =
+          after.status === 'approved'
+            ? { title: 'Verificação aprovada!', body: 'Seu selo ✓ já está no seu perfil.' }
+            : {
+                title: 'Sua verificação não passou',
+                body: 'Toque para ver o motivo e reenviar sua selfie.',
+              };
+        await sendExpoNotifications([
+          {
+            to: token,
+            sound: 'default',
+            title,
+            body,
+            data: { type: 'verification_reviewed' },
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('[onVerificationReviewed] falha ao enviar push:', event.params.uid, error);
+    }
   },
 );
 

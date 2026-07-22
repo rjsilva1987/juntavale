@@ -1,4 +1,4 @@
-// rules-stamp: S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-20
+// rules-stamp: S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-22
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -512,7 +512,7 @@ service cloud.firestore {
 
       // Dono cria/reenvia: só como 'pending', com selfieUrl e createdAt —
       // nunca consegue setar status já aprovado/rejeitado nem escrever
-      // reviewedAt/reviewedBy (hasOnly bloqueia por padrão).
+      // reviewedAt/reviewedBy/rejectionReason (hasOnly bloqueia por padrão).
       allow create, update: if isOwner(uid)
         && request.resource.data.status == 'pending'
         && request.resource.data.selfieUrl is string
@@ -520,15 +520,28 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly(['status', 'selfieUrl', 'createdAt']);
 
-      // Admin revisa: só pode mexer em status/reviewedAt/reviewedBy, e só pra
-      // aprovar ou rejeitar — nunca reescreve selfieUrl/createdAt do usuário,
-      // então não dá pra forjar uma aprovação por essa via nem pela do dono.
+      // Admin revisa: só pode mexer em status/reviewedAt/reviewedBy/
+      // rejectionReason, e só pra aprovar ou rejeitar — nunca reescreve
+      // selfieUrl/createdAt do usuário, então não dá pra forjar uma
+      // aprovação por essa via nem pela do dono.
+      //
+      // S58 — rejectionReason é obrigatório (e precisa ser um dos 6 motivos
+      // do catálogo) quando status é 'rejected', e PROIBIDO quando é
+      // 'approved' (a chave nem pode aparecer em request.resource.data) —
+      // mesmos 6 values de src/constants/rejectionReasons.ts, sincronia
+      // manual igual ao padrão já usado pra lookingFor/uf acima.
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+             .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason'])
         && request.resource.data.status in ['approved', 'rejected']
         && request.resource.data.reviewedAt == request.time
-        && request.resource.data.reviewedBy == request.auth.uid;
+        && request.resource.data.reviewedBy == request.auth.uid
+        && (request.resource.data.status == 'approved'
+              ? !('rejectionReason' in request.resource.data)
+              : 'rejectionReason' in request.resource.data
+                  && request.resource.data.rejectionReason in
+                       ['chave_f_invalida', 'selfie_ilegivel', 'rosto_nao_confere',
+                        'nao_e_ao_vivo', 'varias_pessoas', 'requisitos_gerais']);
 
       allow delete: if false;
     }

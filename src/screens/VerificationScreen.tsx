@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { CHAVEF_REGEX } from '@/constants/chaveF';
+import { REJECTION_REASON_LABELS } from '@/constants/rejectionReasons';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -101,7 +102,15 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       }
       await submitVerification(user.uid, result.assets[0].uri);
       await Promise.all([load(), refreshProfile()]);
-    } catch {
+    } catch (error) {
+      // TEMPORÁRIO — DIAGNÓSTICO
+      const err = error as { code?: string; message?: string };
+      console.error(
+        '[VerificationScreen] handleTakeSelfie falhou:',
+        error,
+        err?.code,
+        err?.message,
+      );
       Alert.alert('Erro', 'Não foi possível enviar a selfie. Tente novamente.');
     } finally {
       setSubmitting(false);
@@ -155,6 +164,27 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                       ? 'Sua última selfie não foi aprovada'
                       : 'Aqui, todo mundo é quem diz ser'}
                   </Text>
+                  {/* S58 — motivo em destaque, tom acolhedor (fundo
+                      secondaryLight, não error): rejeições de antes desta
+                      sprint não têm rejectionReason gravado, então este
+                      bloco some silenciosamente e sobra só o texto genérico
+                      de sempre (verification.rejectionReason abaixo cobre
+                      esse caso, já que undefined é falsy). */}
+                  {verification?.status === 'rejected' && verification.rejectionReason && (
+                    <View style={styles.reasonCard}>
+                      <View style={styles.reasonHeader}>
+                        <Ionicons
+                          name="information-circle"
+                          size={18}
+                          color={theme.colors.secondaryDark}
+                        />
+                        <Text style={styles.reasonLabel}>Motivo</Text>
+                      </View>
+                      <Text style={styles.reasonText}>
+                        {REJECTION_REASON_LABELS[verification.rejectionReason]}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={styles.description}>
                     {verification?.status === 'rejected'
                       ? 'Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente — isso costuma levar até 48h. A selfie nunca fica pública.'
@@ -259,6 +289,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: theme.spacing.xl,
+  },
+
+  reasonCard: {
+    width: '100%',
+    backgroundColor: theme.colors.secondaryLight,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  reasonHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  reasonLabel: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.secondaryDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reasonText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '600',
+    color: theme.colors.text,
+    lineHeight: 21,
   },
 
   supportLine: {
