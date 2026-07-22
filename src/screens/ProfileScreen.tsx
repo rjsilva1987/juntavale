@@ -28,7 +28,7 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { UfPicker } from '@/components/UfPicker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
-import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
+import { LOOKING_FOR_LABELS, LOOKING_FOR_OPTIONS, LookingFor } from '@/constants/lookingFor';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import {
   PROMPTS_CATALOG,
@@ -108,6 +108,10 @@ export default function ProfileScreen() {
   // setado, não há botão de "limpar" (só troca entre as 27), então nunca
   // fica vazio de novo depois de definido.
   const [uf, setUf] = useState<UF | undefined>(profile?.uf);
+  // S56 — mesmo padrão de uf acima: contas legadas sem lookingFor conseguem
+  // definir pela 1ª vez aqui; uma vez setado, só troca entre as 4 opções
+  // (rules não permitem remover depois de definido).
+  const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(profile?.lookingFor);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
@@ -167,6 +171,7 @@ export default function ProfileScreen() {
         // estado nesta edição) — Firestore rejeita valor `undefined` num
         // update, e as rules toleram a chave ausente igual antes.
         ...(uf ? { uf } : {}),
+        ...(lookingFor ? { lookingFor } : {}),
       });
       await refreshProfile();
       setEditing(false);
@@ -550,6 +555,24 @@ export default function ProfileScreen() {
 
             <Text style={styles.fieldLabel}>Estado onde você mora</Text>
             <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
+
+            <Text style={styles.fieldLabel}>O que você busca?</Text>
+            <View style={styles.lookingForGrid}>
+              {LOOKING_FOR_OPTIONS.map((option) => {
+                const active = lookingFor === option.value;
+                return (
+                  <AnimatedPressable
+                    key={option.value}
+                    style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                    onPress={() => setLookingFor(option.value)}
+                  >
+                    <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
+                      {option.label}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
 
             <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
             <View style={styles.tags}>
@@ -1262,6 +1285,29 @@ const styles = StyleSheet.create({
   },
   genderText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   genderTextActive: { color: theme.colors.onPrimary },
+
+  lookingForGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  lookingForOption: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  lookingForOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  lookingForText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  lookingForTextActive: { color: theme.colors.onPrimary },
 
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   tag: {
