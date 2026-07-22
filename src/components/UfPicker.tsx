@@ -1,7 +1,17 @@
 // src/components/UfPicker.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { theme } from '@/constants/theme';
 import { UF_OPTIONS } from '@/constants/ufs';
@@ -90,42 +100,47 @@ export function UfPicker({
       </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={closePicker}>
-        <View style={styles.modalContainer}>
-          <Pressable style={styles.backdrop} onPress={closePicker} />
-          <View style={styles.sheet}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar estado ou sigla"
-              placeholderTextColor={theme.colors.textLight}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            <FlatList
-              data={filteredOptions}
-              keyExtractor={(item) => item.sigla}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const active = item.sigla === value;
-                return (
-                  <Pressable
-                    style={[styles.option, active && styles.optionActive]}
-                    onPress={() => handleSelect(item.sigla)}
-                  >
-                    <Text style={[styles.optionText, active && styles.optionTextActive]}>
-                      {item.sigla === 'all' ? item.nome : `${item.nome} (${item.sigla})`}
-                    </Text>
-                    {active && (
-                      <Ionicons name="checkmark" size={18} color={theme.colors.onSecondary} />
-                    )}
-                  </Pressable>
-                );
-              }}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-            />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
+          <View style={styles.modalContainer}>
+            <Pressable style={styles.backdrop} onPress={closePicker} />
+            <View style={styles.sheet}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar estado ou sigla"
+                placeholderTextColor={theme.colors.textLight}
+                value={query}
+                onChangeText={setQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              <FlatList
+                data={filteredOptions}
+                keyExtractor={(item) => item.sigla}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => {
+                  const active = item.sigla === value;
+                  return (
+                    <Pressable
+                      style={[styles.option, active && styles.optionActive]}
+                      onPress={() => handleSelect(item.sigla)}
+                    >
+                      <Text style={[styles.optionText, active && styles.optionTextActive]}>
+                        {item.sigla === 'all' ? item.nome : `${item.nome} (${item.sigla})`}
+                      </Text>
+                      {active && (
+                        <Ionicons name="checkmark" size={18} color={theme.colors.onSecondary} />
+                      )}
+                    </Pressable>
+                  );
+                }}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
+              />
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

@@ -13,7 +13,9 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Switch,
   type TextInputProps,
 } from 'react-native';
@@ -375,7 +377,13 @@ export default function ProfileScreen() {
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Meu Perfil</Text>
@@ -851,63 +859,73 @@ export default function ProfileScreen() {
         transparent
         onRequestClose={closeAnswerModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editingPromptId ? getPromptText(editingPromptId) : ''}
-            </Text>
-            <TextInput
-              style={styles.promptInput}
-              value={answerDraft}
-              onChangeText={setAnswerDraft}
-              multiline
-              maxLength={MAX_ANSWER_LENGTH}
-              placeholder="Sua resposta..."
-              placeholderTextColor={theme.colors.textLight}
-            />
-            <Text
-              style={[
-                styles.promptCounter,
-                answerDraft.trim().length === 0 && styles.promptCounterError,
-              ]}
-            >
-              {answerDraft.length}/{MAX_ANSWER_LENGTH}
-            </Text>
-
-            <AnimatedPressable
-              style={[
-                styles.saveBtn,
-                (promptSaving || answerDraft.trim().length === 0) && styles.saveBtnDisabled,
-              ]}
-              onPress={handleSavePromptAnswer}
-              disabled={promptSaving || answerDraft.trim().length === 0}
-            >
-              {promptSaving ? (
-                <ActivityIndicator color={theme.colors.onSecondary} />
-              ) : (
-                <Text style={styles.saveBtnText}>Salvar</Text>
-              )}
-            </AnimatedPressable>
-
-            {editingPromptId && userPrompts.some((p) => p.id === editingPromptId) && (
-              <AnimatedPressable
-                style={styles.removePromptBtn}
-                onPress={handleRemovePrompt}
-                disabled={promptSaving}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.answerScrollContent}
               >
-                <Text style={styles.removePromptText}>Remover prompt</Text>
-              </AnimatedPressable>
-            )}
+                <Text style={styles.modalTitle}>
+                  {editingPromptId ? getPromptText(editingPromptId) : ''}
+                </Text>
+                <TextInput
+                  style={styles.promptInput}
+                  value={answerDraft}
+                  onChangeText={setAnswerDraft}
+                  multiline
+                  maxLength={MAX_ANSWER_LENGTH}
+                  placeholder="Sua resposta..."
+                  placeholderTextColor={theme.colors.textLight}
+                />
+                <Text
+                  style={[
+                    styles.promptCounter,
+                    answerDraft.trim().length === 0 && styles.promptCounterError,
+                  ]}
+                >
+                  {answerDraft.length}/{MAX_ANSWER_LENGTH}
+                </Text>
 
-            <AnimatedPressable
-              style={styles.cancelPromptBtn}
-              onPress={closeAnswerModal}
-              disabled={promptSaving}
-            >
-              <Text style={styles.cancelPromptText}>Cancelar</Text>
-            </AnimatedPressable>
+                <AnimatedPressable
+                  style={[
+                    styles.saveBtn,
+                    (promptSaving || answerDraft.trim().length === 0) && styles.saveBtnDisabled,
+                  ]}
+                  onPress={handleSavePromptAnswer}
+                  disabled={promptSaving || answerDraft.trim().length === 0}
+                >
+                  {promptSaving ? (
+                    <ActivityIndicator color={theme.colors.onSecondary} />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Salvar</Text>
+                  )}
+                </AnimatedPressable>
+
+                {editingPromptId && userPrompts.some((p) => p.id === editingPromptId) && (
+                  <AnimatedPressable
+                    style={styles.removePromptBtn}
+                    onPress={handleRemovePrompt}
+                    disabled={promptSaving}
+                  >
+                    <Text style={styles.removePromptText}>Remover prompt</Text>
+                  </AnimatedPressable>
+                )}
+
+                <AnimatedPressable
+                  style={styles.cancelPromptBtn}
+                  onPress={closeAnswerModal}
+                  disabled={promptSaving}
+                >
+                  <Text style={styles.cancelPromptText}>Cancelar</Text>
+                </AnimatedPressable>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Animated.View>
   );
@@ -1457,6 +1475,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.borderRadius.xl,
     padding: theme.spacing.md,
     maxHeight: '80%',
+  },
+  answerScrollContent: {
+    paddingBottom: 0,
   },
   modalHeader: {
     flexDirection: 'row',

@@ -27,6 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1E3A8A"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.juntavale.app",
       "googleServicesFile": "./google-services.json",
       "versionCode": 1,

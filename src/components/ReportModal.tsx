@@ -1,7 +1,17 @@
 // src/components/ReportModal.tsx
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Text, StyleSheet, Modal, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import {
+  Text,
+  StyleSheet,
+  Modal,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
@@ -41,59 +51,73 @@ export function ReportModal({ visible, onClose, onSubmit }: ReportModalProps) {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>Denunciar usuário</Text>
-          <Text style={styles.subtitle}>Selecione o motivo da denúncia</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <Pressable style={styles.backdrop} onPress={handleClose}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
+            >
+              <Text style={styles.title}>Denunciar usuário</Text>
+              <Text style={styles.subtitle}>Selecione o motivo da denúncia</Text>
 
-          {REASONS.map((r) => {
-            const active = reason === r;
-            return (
+              {REASONS.map((r) => {
+                const active = reason === r;
+                return (
+                  <AnimatedPressable
+                    key={r}
+                    style={styles.reasonRow}
+                    onPress={() => setReason(r)}
+                    disabled={submitting}
+                  >
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={20}
+                      color={active ? theme.colors.primary : theme.colors.textLight}
+                    />
+                    <Text style={styles.reasonText}>{REPORT_REASON_LABELS[r]}</Text>
+                  </AnimatedPressable>
+                );
+              })}
+
+              <Text style={styles.fieldLabel}>Detalhes (opcional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Conte mais sobre o ocorrido…"
+                placeholderTextColor={theme.colors.textLight}
+                value={details}
+                onChangeText={setDetails}
+                multiline
+                maxLength={500}
+                editable={!submitting}
+              />
+
               <AnimatedPressable
-                key={r}
-                style={styles.reasonRow}
-                onPress={() => setReason(r)}
+                style={[styles.submitBtn, (!reason || submitting) && styles.submitBtnDisabled]}
+                onPress={handleSubmit}
+                disabled={!reason || submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.submitBtnText}>Enviar denúncia</Text>
+                )}
+              </AnimatedPressable>
+
+              <AnimatedPressable
+                style={styles.cancelBtn}
+                onPress={handleClose}
                 disabled={submitting}
               >
-                <Ionicons
-                  name={active ? 'radio-button-on' : 'radio-button-off'}
-                  size={20}
-                  color={active ? theme.colors.primary : theme.colors.textLight}
-                />
-                <Text style={styles.reasonText}>{REPORT_REASON_LABELS[r]}</Text>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
               </AnimatedPressable>
-            );
-          })}
-
-          <Text style={styles.fieldLabel}>Detalhes (opcional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Conte mais sobre o ocorrido…"
-            placeholderTextColor={theme.colors.textLight}
-            value={details}
-            onChangeText={setDetails}
-            multiline
-            maxLength={500}
-            editable={!submitting}
-          />
-
-          <AnimatedPressable
-            style={[styles.submitBtn, (!reason || submitting) && styles.submitBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={!reason || submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color={theme.colors.white} />
-            ) : (
-              <Text style={styles.submitBtnText}>Enviar denúncia</Text>
-            )}
-          </AnimatedPressable>
-
-          <AnimatedPressable style={styles.cancelBtn} onPress={handleClose} disabled={submitting}>
-            <Text style={styles.cancelBtnText}>Cancelar</Text>
-          </AnimatedPressable>
+            </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -110,6 +134,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.borderRadius.lg,
     padding: theme.spacing.md,
     paddingBottom: 32,
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    paddingBottom: 0,
   },
   title: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   subtitle: {
@@ -153,5 +181,9 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { opacity: 0.5 },
   submitBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.white },
   cancelBtn: { alignItems: 'center', paddingVertical: 16 },
-  cancelBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.textSecondary },
+  cancelBtnText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
 });

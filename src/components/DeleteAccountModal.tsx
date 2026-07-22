@@ -6,7 +6,9 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -86,56 +88,61 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Ionicons name="warning" size={32} color={theme.colors.error} style={styles.icon} />
-          <Text style={styles.title}>Excluir sua conta</Text>
-          <Text style={styles.body}>
-            Isso vai apagar permanentemente seu perfil, fotos, matches e conversas. Essa ação não
-            pode ser desfeita.
-          </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <Pressable style={styles.backdrop} onPress={handleClose}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+            <Ionicons name="warning" size={32} color={theme.colors.error} style={styles.icon} />
+            <Text style={styles.title}>Excluir sua conta</Text>
+            <Text style={styles.body}>
+              Isso vai apagar permanentemente seu perfil, fotos, matches e conversas. Essa ação não
+              pode ser desfeita.
+            </Text>
 
-          <Text style={styles.fieldLabel}>Digite {CONFIRM_WORD} para confirmar</Text>
-          <TextInput
-            style={styles.input}
-            value={confirmText}
-            onChangeText={setConfirmText}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            editable={!submitting}
-            placeholder={CONFIRM_WORD}
-            placeholderTextColor={theme.colors.textLight}
-          />
+            <Text style={styles.fieldLabel}>Digite {CONFIRM_WORD} para confirmar</Text>
+            <TextInput
+              style={styles.input}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!submitting}
+              placeholder={CONFIRM_WORD}
+              placeholderTextColor={theme.colors.textLight}
+            />
 
-          <Text style={styles.fieldLabel}>Confirme sua senha</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            editable={!submitting}
-            placeholder="Senha"
-            placeholderTextColor={theme.colors.textLight}
-          />
+            <Text style={styles.fieldLabel}>Confirme sua senha</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              editable={!submitting}
+              placeholder="Senha"
+              placeholderTextColor={theme.colors.textLight}
+            />
 
-          <AnimatedPressable
-            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
-            onPress={handleDelete}
-            disabled={!canSubmit}
-          >
-            {submitting ? (
-              <ActivityIndicator color={theme.colors.white} />
-            ) : (
-              <Text style={styles.submitBtnText}>Excluir permanentemente</Text>
-            )}
-          </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+              onPress={handleDelete}
+              disabled={!canSubmit}
+            >
+              {submitting ? (
+                <ActivityIndicator color={theme.colors.white} />
+              ) : (
+                <Text style={styles.submitBtnText}>Excluir permanentemente</Text>
+              )}
+            </AnimatedPressable>
 
-          <AnimatedPressable style={styles.cancelBtn} onPress={handleClose} disabled={submitting}>
-            <Text style={styles.cancelBtnText}>Cancelar</Text>
-          </AnimatedPressable>
+            <AnimatedPressable style={styles.cancelBtn} onPress={handleClose} disabled={submitting}>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </AnimatedPressable>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

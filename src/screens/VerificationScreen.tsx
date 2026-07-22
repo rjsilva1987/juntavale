@@ -3,7 +3,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -112,85 +121,94 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
           <View style={styles.backBtn} />
         </View>
 
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        ) : (
-          <View style={styles.content}>
-            {isApproved ? (
-              <>
-                <View style={styles.iconWrap}>
-                  <VerifiedBadge size={48} />
-                </View>
-                <Text style={styles.title}>Perfil verificado!</Text>
-                <Text style={styles.description}>
-                  Seu selo de verificação já aparece no seu perfil e no card de Descobrir.
-                </Text>
-              </>
-            ) : !verification || verification.status === 'rejected' ? (
-              <>
-                <View style={styles.iconWrap}>
-                  <Ionicons name="shield-checkmark-outline" size={48} color={theme.colors.secondary} />
-                </View>
-                <Text style={styles.title}>
-                  {verification?.status === 'rejected'
-                    ? 'Sua última selfie não foi aprovada'
-                    : 'Aqui, todo mundo é quem diz ser'}
-                </Text>
-                <Text style={styles.description}>
-                  {verification?.status === 'rejected'
-                    ? 'Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente — isso costuma levar até 48h. A selfie nunca fica pública.'
-                    : 'No JuntaVale, só perfis verificados podem conversar. Cada selfie é revisada individualmente pela nossa equipe — nada de robô aprovando fake. A sua verificação protege você e todo mundo que cruzar seu caminho.'}
-                </Text>
-                {needsChaveF && (
-                  <View style={styles.chaveFWrap}>
-                    <Text style={styles.chaveFLabel}>Chave F</Text>
-                    <TextInput
-                      style={styles.chaveFInput}
-                      placeholder="F1234567"
-                      placeholderTextColor={theme.colors.textLight}
-                      value={chaveF}
-                      onChangeText={(t) => setChaveF(t.toUpperCase())}
-                      autoCapitalize="characters"
-                      maxLength={8}
-                      editable={!submitting}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          {loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : (
+            <View style={styles.content}>
+              {isApproved ? (
+                <>
+                  <View style={styles.iconWrap}>
+                    <VerifiedBadge size={48} />
+                  </View>
+                  <Text style={styles.title}>Perfil verificado!</Text>
+                  <Text style={styles.description}>
+                    Seu selo de verificação já aparece no seu perfil e no card de Descobrir.
+                  </Text>
+                </>
+              ) : !verification || verification.status === 'rejected' ? (
+                <>
+                  <View style={styles.iconWrap}>
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={48}
+                      color={theme.colors.secondary}
                     />
                   </View>
-                )}
-                <Text style={styles.supportLine}>
-                  Leva menos de um minuto. Seu selo ✓ aparece pra quem te vê.
-                </Text>
-                <AnimatedPressable
-                  style={styles.actionBtn}
-                  onPress={handleTakeSelfie}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color={theme.colors.onSecondary} />
-                  ) : (
-                    <Text style={styles.actionBtnText}>
-                      {verification?.status === 'rejected' ? 'Reenviar selfie' : 'Tirar selfie'}
-                    </Text>
+                  <Text style={styles.title}>
+                    {verification?.status === 'rejected'
+                      ? 'Sua última selfie não foi aprovada'
+                      : 'Aqui, todo mundo é quem diz ser'}
+                  </Text>
+                  <Text style={styles.description}>
+                    {verification?.status === 'rejected'
+                      ? 'Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente — isso costuma levar até 48h. A selfie nunca fica pública.'
+                      : 'No JuntaVale, só perfis verificados podem conversar. Cada selfie é revisada individualmente pela nossa equipe — nada de robô aprovando fake. A sua verificação protege você e todo mundo que cruzar seu caminho.'}
+                  </Text>
+                  {needsChaveF && (
+                    <View style={styles.chaveFWrap}>
+                      <Text style={styles.chaveFLabel}>Chave F</Text>
+                      <TextInput
+                        style={styles.chaveFInput}
+                        placeholder="F1234567"
+                        placeholderTextColor={theme.colors.textLight}
+                        value={chaveF}
+                        onChangeText={(t) => setChaveF(t.toUpperCase())}
+                        autoCapitalize="characters"
+                        maxLength={8}
+                        editable={!submitting}
+                      />
+                    </View>
                   )}
-                </AnimatedPressable>
-              </>
-            ) : (
-              // Só sobra 'pending' aqui: 'rejected'/sem pedido já caiu no
-              // branch acima, 'approved' já caiu em isApproved.
-              <>
-                <View style={styles.iconWrap}>
-                  <Ionicons name="time-outline" size={48} color={theme.colors.secondary} />
-                </View>
-                <Text style={styles.title}>Em análise</Text>
-                <Text style={styles.description}>
-                  Recebemos sua selfie e nossa equipe vai revisar em breve. Você não precisa fazer
-                  mais nada por enquanto.
-                </Text>
-              </>
-            )}
-          </View>
-        )}
+                  <Text style={styles.supportLine}>
+                    Leva menos de um minuto. Seu selo ✓ aparece pra quem te vê.
+                  </Text>
+                  <AnimatedPressable
+                    style={styles.actionBtn}
+                    onPress={handleTakeSelfie}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator color={theme.colors.onSecondary} />
+                    ) : (
+                      <Text style={styles.actionBtnText}>
+                        {verification?.status === 'rejected' ? 'Reenviar selfie' : 'Tirar selfie'}
+                      </Text>
+                    )}
+                  </AnimatedPressable>
+                </>
+              ) : (
+                // Só sobra 'pending' aqui: 'rejected'/sem pedido já caiu no
+                // branch acima, 'approved' já caiu em isApproved.
+                <>
+                  <View style={styles.iconWrap}>
+                    <Ionicons name="time-outline" size={48} color={theme.colors.secondary} />
+                  </View>
+                  <Text style={styles.title}>Em análise</Text>
+                  <Text style={styles.description}>
+                    Recebemos sua selfie e nossa equipe vai revisar em breve. Você não precisa fazer
+                    mais nada por enquanto.
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Animated.View>
   );
@@ -213,7 +231,12 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, width: 34 },
   headerTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text },
 
-  content: { flex: 1, alignItems: 'center', padding: theme.spacing.lg, paddingTop: theme.spacing.xl },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+  },
   iconWrap: {
     width: 88,
     height: 88,
@@ -271,5 +294,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 200,
   },
-  actionBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.onSecondary },
+  actionBtnText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.onSecondary,
+  },
 });
