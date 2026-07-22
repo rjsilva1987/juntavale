@@ -30,7 +30,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.juntavale.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 1,
+      "versionCode": 2,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
