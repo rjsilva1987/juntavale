@@ -1,8 +1,9 @@
 # JuntaVale — convenções do projeto
 
 ## Ambiente
-- Diretório do projeto: C:\Users\Raphael\vscode\juntavale — SEMPRE confira
-  o cwd antes de qualquer comando.
+- Diretório do projeto: varia por máquina. Acer = D:\vscode\juntavale; Dell = C:\Users\Raphael\vscode\juntavale
+- O shell abre na pasta PAI. SEMPRE comece com Set-Location no caminho da máquina em uso e confirme com Get-Location antes de qualquer comando
+- Se o Set-Location falhar, PARE e reporte — não tente adivinhar o caminho
 - Stack: Expo 54, React Native 0.81, React 19, TypeScript,
   Firebase (projeto bbmatch-9ede5; Firestore/Functions em
   southamerica-east1, Node 22). Windows + PowerShell.
