@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { getAuthErrorMessage } from '@/constants/authErrors';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth, functions } from '@/services/firebase';
@@ -61,11 +62,25 @@ export function DeleteAccountModal({ visible, onClose }: DeleteAccountModalProps
       await reauthenticateWithCredential(user, credential);
     } catch (error) {
       console.error('[DeleteAccountModal] falha na reautenticação:', error);
-      Alert.alert('Senha incorreta', 'Confira sua senha e tente novamente.');
+      // S62 — catálogo em vez de mensagem fixa: antes, QUALQUER falha aqui
+      // (inclusive rede) aparecia como "Senha incorreta". Contexto 'reauth'
+      // não generaliza como 'login' (usuário já está logado, confirmando a
+      // própria senha — sem risco de enumeração de e-mail aqui).
+      //
+      // S62 (correção) — título trocado de 'Senha incorreta' fixo pra um
+      // neutro: o corpo já vem do catálogo e pode ser "Sem conexão...",
+      // "Muitas tentativas..." etc., que contradiziam aquele título. Mesmo
+      // padrão de título "Não foi possível X" já usado em Login/Register.
+      Alert.alert('Não foi possível confirmar', getAuthErrorMessage(error, 'reauth'));
       setSubmitting(false);
       return;
     }
 
+    // S62 — este catch NÃO foi tocado: cobre só a chamada da Cloud Function
+    // deleteAccount (+ signOut/clearSessionSwipes do sucesso), nunca a
+    // reautenticação acima (que já retornou antes de chegar aqui em caso de
+    // erro). Mensagem genérica mantida de propósito — erro de exclusão em si
+    // não é um erro de autenticação, não faz parte do catálogo desta sprint.
     try {
       const deleteAccount = httpsCallable(functions, 'deleteAccount');
       await deleteAccount();

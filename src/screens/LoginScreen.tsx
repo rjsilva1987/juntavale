@@ -16,6 +16,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { getAuthErrorMessage } from '@/constants/authErrors';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
@@ -37,8 +38,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     try {
       await login(email.trim(), password);
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Não foi possível entrar.';
-      Alert.alert('Erro', errorMsg);
+      // S62 — mensagem em português via catálogo (nunca e.message cru).
+      // Contexto 'login': erro de credencial vira mensagem genérica de
+      // propósito (proteção contra enumeração de e-mail) — ver authErrors.ts.
+      Alert.alert('Não foi possível entrar', getAuthErrorMessage(e, 'login'));
     } finally {
       setLoading(false);
     }

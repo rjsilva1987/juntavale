@@ -16,6 +16,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { UfPicker } from '@/components/UfPicker';
+import { getAuthErrorMessage } from '@/constants/authErrors';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
@@ -89,8 +90,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         uf,
       );
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Não foi possível criar a conta.';
-      Alert.alert('Erro', errorMsg);
+      // S62 — mensagem em português via catálogo (nunca e.message cru).
+      // Contexto 'register': aqui pode ser específico (ex.: e-mail já em
+      // uso), diferente do login — ver authErrors.ts.
+      Alert.alert('Não foi possível criar a conta', getAuthErrorMessage(e, 'register'));
     } finally {
       setLoading(false);
     }
