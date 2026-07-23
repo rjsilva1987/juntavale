@@ -7,16 +7,16 @@ export type PromptId =
   'p01' | 'p02' | 'p03' | 'p04' | 'p05' | 'p06' | 'p07' | 'p08' | 'p09' | 'p10';
 
 export const PROMPTS_CATALOG: { id: PromptId; text: string }[] = [
-  { id: 'p01', text: 'Meu domingo perfeito é...' },
-  { id: 'p02', text: 'Não vivo sem...' },
-  { id: 'p03', text: 'A comida que me conquista é...' },
-  { id: 'p04', text: 'Meu lugar favorito no mundo é...' },
-  { id: 'p05', text: 'Uma coisa que pouca gente sabe sobre mim...' },
-  { id: 'p06', text: 'Meu hobby do momento é...' },
-  { id: 'p07', text: 'A música que não sai da minha cabeça...' },
-  { id: 'p08', text: 'Se eu pudesse jantar com qualquer pessoa...' },
-  { id: 'p09', text: 'Meu maior orgulho é...' },
-  { id: 'p10', text: 'Topo qualquer plano que envolva...' },
+  { id: 'p01', text: 'O que me trouxe pro banco foi...' },
+  { id: 'p02', text: 'Na semana da minha posse, eu não fazia ideia de que...' },
+  { id: 'p03', text: 'Lidar com gente todo dia me ensinou que...' },
+  { id: 'p04', text: 'Meu plano pra aposentadoria (já tem planilha)...' },
+  { id: 'p05', text: 'Fora do expediente, você me encontra...' },
+  { id: 'p06', text: 'Tenho paciência infinita pra ___ e nenhuma pra ___' },
+  { id: 'p07', text: 'Comigo você pode contar quando...' },
+  { id: 'p08', text: 'Domingo perfeito, na minha régua, é...' },
+  { id: 'p09', text: 'Me ganha na hora quem...' },
+  { id: 'p10', text: 'Uma coisa que eu levo a sério mais do que deveria...' },
 ];
 
 // S50 — bumped de 3 para 4: o prompt da semana grava no MESMO array
@@ -45,18 +45,18 @@ export type WeeklyPromptId =
   'w01' | 'w02' | 'w03' | 'w04' | 'w05' | 'w06' | 'w07' | 'w08' | 'w09' | 'w10' | 'w11' | 'w12';
 
 export const WEEKLY_PROMPTS: { id: WeeklyPromptId; text: string }[] = [
-  { id: 'w01', text: 'Qual foi o maior mico que você já pagou num encontro?' },
-  { id: 'w02', text: 'Se dinheiro não fosse problema, seu sábado perfeito seria...' },
-  { id: 'w03', text: 'Qual música você defende com a vida mesmo todo mundo zoando?' },
-  { id: 'w04', text: 'Comida que você julgava antes de provar e hoje ama?' },
-  { id: 'w05', text: 'Qual talento inútil você tem orgulho de ter?' },
-  { id: 'w06', text: 'O que te faz rir sozinho só de lembrar?' },
-  { id: 'w07', text: 'Praia lotada ou cachoeira escondida? Defenda.' },
-  { id: 'w08', text: 'Qual série você já maratonou mais de uma vez?' },
-  { id: 'w09', text: "Seu 'red flag' mais inofensivo?" },
-  { id: 'w10', text: 'Se sua vida tivesse trilha sonora, qual seria a de abertura?' },
-  { id: 'w11', text: 'Qual é a sua opinião impopular mais forte?' },
-  { id: 'w12', text: 'O que você faria num domingo de chuva perfeito?' },
+  { id: 'w01', text: 'A pior fila que eu já enfrentei — e não vale falar do trabalho' },
+  { id: 'w02', text: 'Sistema fora do ar. Eu aproveito pra...' },
+  { id: 'w03', text: 'Se a minha vida tivesse extrato, meu maior gasto seria...' },
+  { id: 'w04', text: 'A melhor dica de dinheiro que eu dou de graça pra amigo' },
+  { id: 'w05', text: 'Uma coisa que eu juntei meses pra comprar' },
+  { id: 'w06', text: 'Feriado prolongado: praia, serra ou sofá?' },
+  { id: 'w07', text: 'O que toca no meu trajeto pro trabalho' },
+  { id: 'w08', text: 'Meta que eu bati essa semana (não precisa ser do trabalho)' },
+  { id: 'w09', text: 'Melhor lugar da cidade pra um primeiro encontro' },
+  { id: 'w10', text: 'Meu talento mais inútil' },
+  { id: 'w11', text: 'O que me faz rir sozinho no meio do expediente' },
+  { id: 'w12', text: 'Café: como, quando e quantos' },
 ];
 
 // EPOCH fixa: segunda-feira 2026-01-05T00:00:00-03:00 (America/Sao_Paulo) =

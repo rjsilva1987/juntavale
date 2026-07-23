@@ -727,18 +727,18 @@ export const reengagementPush = onSchedule(
 // aquele arquivo (mesmo padrão do ADMIN_UID/SUPPORT_CATEGORY_LABELS acima).
 // manter em sincronia com src/constants/prompts.ts
 const WEEKLY_PROMPTS: { id: string; text: string }[] = [
-  { id: 'w01', text: 'Qual foi o maior mico que você já pagou num encontro?' },
-  { id: 'w02', text: 'Se dinheiro não fosse problema, seu sábado perfeito seria...' },
-  { id: 'w03', text: 'Qual música você defende com a vida mesmo todo mundo zoando?' },
-  { id: 'w04', text: 'Comida que você julgava antes de provar e hoje ama?' },
-  { id: 'w05', text: 'Qual talento inútil você tem orgulho de ter?' },
-  { id: 'w06', text: 'O que te faz rir sozinho só de lembrar?' },
-  { id: 'w07', text: 'Praia lotada ou cachoeira escondida? Defenda.' },
-  { id: 'w08', text: 'Qual série você já maratonou mais de uma vez?' },
-  { id: 'w09', text: "Seu 'red flag' mais inofensivo?" },
-  { id: 'w10', text: 'Se sua vida tivesse trilha sonora, qual seria a de abertura?' },
-  { id: 'w11', text: 'Qual é a sua opinião impopular mais forte?' },
-  { id: 'w12', text: 'O que você faria num domingo de chuva perfeito?' },
+  { id: 'w01', text: 'A pior fila que eu já enfrentei — e não vale falar do trabalho' },
+  { id: 'w02', text: 'Sistema fora do ar. Eu aproveito pra...' },
+  { id: 'w03', text: 'Se a minha vida tivesse extrato, meu maior gasto seria...' },
+  { id: 'w04', text: 'A melhor dica de dinheiro que eu dou de graça pra amigo' },
+  { id: 'w05', text: 'Uma coisa que eu juntei meses pra comprar' },
+  { id: 'w06', text: 'Feriado prolongado: praia, serra ou sofá?' },
+  { id: 'w07', text: 'O que toca no meu trajeto pro trabalho' },
+  { id: 'w08', text: 'Meta que eu bati essa semana (não precisa ser do trabalho)' },
+  { id: 'w09', text: 'Melhor lugar da cidade pra um primeiro encontro' },
+  { id: 'w10', text: 'Meu talento mais inútil' },
+  { id: 'w11', text: 'O que me faz rir sozinho no meio do expediente' },
+  { id: 'w12', text: 'Café: como, quando e quantos' },
 ];
 
 // manter em sincronia com src/constants/prompts.ts
