@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   setDoc,
@@ -79,6 +80,14 @@ export interface UserProfile {
   // pelo usuário. Opcional: docs legados sem o campo = sem prompts, toda
   // leitura precisa tolerar undefined. Ver src/constants/prompts.ts.
   prompts?: { id: string; answer: string }[];
+  // S59 — Prompt da semana (id wXX do pool rotativo em src/constants/prompts.ts)
+  // ganha campo próprio, fora de prompts[]/MAX_PROMPTS: slot único, a resposta
+  // de uma semana nova SOBRESCREVE a anterior (não acumula, diferente dos 4
+  // prompts normais). Ausente = nunca respondeu (ou removeu, via
+  // removeWeeklyPromptAnswer abaixo). Contas de antes do S59 podem ter um item
+  // wXX preso dentro de prompts[] — legado intencionalmente não migrado, ver
+  // relatório da sprint.
+  weeklyPromptAnswer?: { id: string; answer: string };
   // S44a — gravado por useActivityTracker (mount + volta ao foreground, com
   // throttle de 1h). Opcional: contas existentes não têm até o primeiro
   // foreground pós-deploy; base pro re-engajamento (S44b).
@@ -227,6 +236,17 @@ export const setPrincipalPhoto = async (
   const nextPhotos = [url, ...photos.filter((p) => p !== url)];
   await updateUserProfile(uid, { photos: nextPhotos, photoURL: nextPhotos[0] });
   return nextPhotos;
+};
+
+// ─── Weekly prompt (S59) ────────────────────────────────────
+//
+// Salvar usa updateUserProfile normalmente (weeklyPromptAnswer é um campo
+// opcional comum em UserProfile). Remover precisa de deleteField(): passar
+// `undefined` em updateDoc não apaga a chave, deixa como está — mesmo padrão
+// já usado em reviewVerification (verificationService.ts) pra rejectionReason.
+
+export const removeWeeklyPromptAnswer = async (uid: string): Promise<void> => {
+  await updateDoc(doc(db, 'users', uid), { weeklyPromptAnswer: deleteField() });
 };
 
 // ─── Discovery ────────────────────────────────────────────

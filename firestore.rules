@@ -1,4 +1,4 @@
-// rules-stamp: S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-22
+// rules-stamp: S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -86,6 +86,22 @@ service cloud.firestore {
                                         && list[2].id != list[3].id))))))));
     }
 
+    // S59 — Prompt da semana ganhou campo próprio (weeklyPromptAnswer),
+    // FORA de prompts[]/isValidPrompts acima (que fica intocada: continua
+    // size() <= 4, só prompts normais do catálogo p01-p10). Slot único (não é
+    // lista) — id restrito ao pool w01-w12 de src/constants/prompts.ts (ao
+    // contrário de isValidPromptItem, que aceita qualquer string em item.id,
+    // porque prompts[] também tolera ids de catálogo futuro; aqui o pool é
+    // fechado, então validamos contra a lista). Mesmo limite de tamanho de
+    // resposta de isValidPromptItem (MAX_ANSWER_LENGTH = 150 no app).
+    function isValidWeeklyPromptAnswer(item) {
+      return item is map && item.keys().hasOnly(['id', 'answer'])
+        && item.id in ['w01', 'w02', 'w03', 'w04', 'w05', 'w06',
+                        'w07', 'w08', 'w09', 'w10', 'w11', 'w12']
+        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 150
+        && item.answer.matches('.*\\S.*');
+    }
+
     // Campos que o dono do perfil pode criar/editar. Qualquer campo fora desta
     // lista (ex: um futuro "isAdmin" ou "verified") NUNCA pode ser escrito pelo
     // client, mesmo que alguém adicione o campo no app no futuro e esqueça de
@@ -101,6 +117,8 @@ service cloud.firestore {
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
         && (!('filters' in data) || data.filters is map)
         && (!('prompts' in data) || isValidPrompts(data.prompts))
+        // S59 — slot único do prompt da semana, separado de prompts[] acima.
+        && (!('weeklyPromptAnswer' in data) || isValidWeeklyPromptAnswer(data.weeklyPromptAnswer))
         // S48 — "Meus lugares"/"No meu radar": texto livre, opcionais, sem
         // catálogo. Mesmo precedente de rigor de `interests` (data.interests
         // is list && size cap, sem validar cada elemento) — só tipo da lista
@@ -152,7 +170,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts',
-              'places', 'events'])
+              'places', 'events', 'weeklyPromptAnswer'])
         && isValidProfile(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -186,7 +204,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'location', 'filters', 'prompts', 'lastActiveAt',
-              'reengagementOptOut', 'places', 'events'])
+              'reengagementOptOut', 'places', 'events', 'weeklyPromptAnswer'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.

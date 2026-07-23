@@ -579,7 +579,10 @@ function ProfileCard({
   // matching entre perfis nesta versão, por isso reaproveita InterestChips
   // com EMPTY_INTEREST_SET em vez de sharedInterests).
   const placesAndEvents = [...(profile.places ?? []), ...(profile.events ?? [])].slice(0, 3);
-  const firstPrompt = profile.prompts?.[0];
+  // S59 — só 1 prompt cabe no overlay (ver comentário abaixo sobre altura);
+  // prompt da semana tem prioridade quando existe (decisão da sprint), senão
+  // cai pro primeiro item de prompts[] (comportamento anterior ao S59).
+  const firstPrompt = profile.weeklyPromptAnswer ?? profile.prompts?.[0];
   // Com prompt no card, o overlay (chips + pergunta/resposta) fica alto
   // demais com os 6 chips de antes — reduz pra 4 só quando há prompt pra
   // mostrar junto, mantendo 6 no caso comum (sem prompt).

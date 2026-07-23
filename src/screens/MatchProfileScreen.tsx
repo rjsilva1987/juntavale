@@ -342,9 +342,24 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 </>
               )}
 
-              {(profile?.prompts?.length ?? 0) > 0 && (
+              {((profile?.prompts?.length ?? 0) > 0 || profile?.weeklyPromptAnswer) && (
                 <>
                   <Text style={styles.sectionTitle}>Perguntas</Text>
+                  {/* S59 — prompt da semana em destaque primeiro (mesmo
+                      PromptCard dos demais, sem componente novo), seguido dos
+                      itens de prompts[]. Perfis de teste anteriores ao S59
+                      podem ter um item com id wXX preso dentro de prompts[]
+                      — continua renderizando normalmente aqui (getPromptText
+                      já resolve id de WEEKLY_PROMPTS), sem tratamento
+                      especial nem deduplicação com weeklyPromptAnswer. */}
+                  {profile?.weeklyPromptAnswer && (
+                    <PromptCard
+                      key={`weekly-${profile.weeklyPromptAnswer.id}`}
+                      promptId={profile.weeklyPromptAnswer.id}
+                      answer={profile.weeklyPromptAnswer.answer}
+                      variant="surface"
+                    />
+                  )}
                   {profile?.prompts?.map((item, index) => (
                     <PromptCard
                       key={`${item.id}-${index}`}

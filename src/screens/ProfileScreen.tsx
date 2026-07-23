@@ -49,6 +49,7 @@ import {
   updateUserProfile,
   addProfilePhoto,
   removeProfilePhoto,
+  removeWeeklyPromptAnswer,
   setPrincipalPhoto,
   uploadProfilePhoto,
   MAX_PROFILE_PHOTOS,
@@ -124,13 +125,26 @@ export default function ProfileScreen() {
   const [catalogModalVisible, setCatalogModalVisible] = useState(false);
   const [answerModalVisible, setAnswerModalVisible] = useState(false);
   const [editingPromptId, setEditingPromptId] = useState<PromptId | WeeklyPromptId | null>(null);
+  // S59 — distingue os dois caminhos de escrita/remoção do mesmo modal:
+  // true ⇒ editingPromptId se refere ao slot único weeklyPromptAnswer; false
+  // ⇒ se refere a um item de prompts[] (catálogo normal OU, no caso de
+  // contas legadas, um wXX que ficou preso no array de antes do S59 — esse
+  // continua tratado como item comum do array, nunca do campo novo).
+  const [editingWeeklySlot, setEditingWeeklySlot] = useState(false);
   const [answerDraft, setAnswerDraft] = useState('');
   const [promptSaving, setPromptSaving] = useState(false);
 
-  // Prompt da semana (S50) — mesmo array `prompts[]` de cima, rotação
-  // automática por data (getWeeklyPrompt), sem estado próprio na tela.
+  // Prompt da semana (S59) — campo próprio `weeklyPromptAnswer`, fora de
+  // prompts[]. Só é considerado "respondido" quando o id salvo bate com o da
+  // semana vigente (getWeeklyPrompt); se a semana virou e o usuário ainda não
+  // respondeu de novo, o campo pode ter uma resposta antiga parada ali (slot
+  // único, sobrescrita só acontece ao salvar) — nesse caso o card mostra o
+  // CTA "Responder", igual ao comportamento anterior (S50) com prompts[].
   const currentWeeklyPrompt = getWeeklyPrompt(new Date());
-  const weeklyPromptEntry = userPrompts.find((p) => p.id === currentWeeklyPrompt.id);
+  const weeklyPromptEntry =
+    profile?.weeklyPromptAnswer?.id === currentWeeklyPrompt.id
+      ? profile.weeklyPromptAnswer
+      : undefined;
 
   // Card "Curtidas" — mesma query de LikesScreen, via hook compartilhado.
   const { likers, loading: likersLoading } = useLikers();
@@ -276,6 +290,7 @@ export default function ProfileScreen() {
 
   const handlePickPrompt = (id: PromptId) => {
     setEditingPromptId(id);
+    setEditingWeeklySlot(false);
     setAnswerDraft('');
     setCatalogModalVisible(false);
     setAnswerModalVisible(true);
@@ -283,15 +298,19 @@ export default function ProfileScreen() {
 
   const handleOpenExistingPrompt = (item: { id: string; answer: string }) => {
     setEditingPromptId(item.id as PromptId | WeeklyPromptId);
+    setEditingWeeklySlot(false);
     setAnswerDraft(item.answer);
     setAnswerModalVisible(true);
   };
 
-  // Prompt da semana (S50) — mesmo fluxo de edição de handleOpenExistingPrompt
-  // acima, só que aceita o caso "ainda não respondido" (weeklyPromptEntry
-  // undefined ⇒ draft vazio, handleSavePromptAnswer grava como item novo).
+  // Prompt da semana (S59) — mesmo modal de handleOpenExistingPrompt acima,
+  // mas grava em weeklyPromptAnswer (editingWeeklySlot = true), nunca em
+  // prompts[]. Sem checar MAX_PROMPTS: o slot semanal é independente do cap
+  // das 4 perguntas normais. Aceita o caso "ainda não respondido nesta
+  // semana" (weeklyPromptEntry undefined ⇒ draft vazio).
   const openWeeklyPrompt = () => {
     setEditingPromptId(currentWeeklyPrompt.id);
+    setEditingWeeklySlot(true);
     setAnswerDraft(weeklyPromptEntry?.answer ?? '');
     setAnswerModalVisible(true);
   };
@@ -299,6 +318,7 @@ export default function ProfileScreen() {
   const closeAnswerModal = () => {
     setAnswerModalVisible(false);
     setEditingPromptId(null);
+    setEditingWeeklySlot(false);
     setAnswerDraft('');
   };
 
@@ -308,14 +328,22 @@ export default function ProfileScreen() {
     if (trimmed.length < 1 || trimmed.length > MAX_ANSWER_LENGTH) return;
     setPromptSaving(true);
     try {
-      const existingIndex = userPrompts.findIndex((p) => p.id === editingPromptId);
-      const nextPrompts =
-        existingIndex >= 0
-          ? userPrompts.map((p, i) =>
-              i === existingIndex ? { id: editingPromptId, answer: trimmed } : p,
-            )
-          : [...userPrompts, { id: editingPromptId, answer: trimmed }];
-      await updateUserProfile(user.uid, { prompts: nextPrompts });
+      if (editingWeeklySlot) {
+        // S59 — slot único: a resposta nova SOBRESCREVE inteira a anterior,
+        // nunca acumula em prompts[] (ao contrário do fluxo abaixo).
+        await updateUserProfile(user.uid, {
+          weeklyPromptAnswer: { id: editingPromptId, answer: trimmed },
+        });
+      } else {
+        const existingIndex = userPrompts.findIndex((p) => p.id === editingPromptId);
+        const nextPrompts =
+          existingIndex >= 0
+            ? userPrompts.map((p, i) =>
+                i === existingIndex ? { id: editingPromptId, answer: trimmed } : p,
+              )
+            : [...userPrompts, { id: editingPromptId, answer: trimmed }];
+        await updateUserProfile(user.uid, { prompts: nextPrompts });
+      }
       await refreshProfile();
       closeAnswerModal();
     } catch {
@@ -329,8 +357,12 @@ export default function ProfileScreen() {
     if (!user || !editingPromptId) return;
     setPromptSaving(true);
     try {
-      const nextPrompts = userPrompts.filter((p) => p.id !== editingPromptId);
-      await updateUserProfile(user.uid, { prompts: nextPrompts });
+      if (editingWeeklySlot) {
+        await removeWeeklyPromptAnswer(user.uid);
+      } else {
+        const nextPrompts = userPrompts.filter((p) => p.id !== editingPromptId);
+        await updateUserProfile(user.uid, { prompts: nextPrompts });
+      }
       await refreshProfile();
       closeAnswerModal();
     } catch {
@@ -670,11 +702,13 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Prompt da semana (S50) — rotação automática por data, destacada no
-            topo da área de prompts. Resposta grava no MESMO array `prompts[]`
-            de baixo (decisão fechada): quando a semana vira, o convite
-            rotaciona, mas a resposta antiga permanece no perfil como um
-            prompt normal (sem tratamento especial). */}
+        {/* Prompt da semana (S59) — rotação automática por data, destacada no
+            topo da área de prompts. Resposta grava no campo próprio
+            `weeklyPromptAnswer` (fora de `prompts[]`/MAX_PROMPTS, decisão
+            fechada): slot único, a resposta de uma semana nova SOBRESCREVE a
+            anterior, não acumula. Por isso este card nunca aparece de novo
+            na lista "Perguntas" abaixo — as duas seções leem campos
+            diferentes do perfil. */}
         {!editing && (
           <View style={[styles.card, styles.weeklyPromptCard]}>
             <View style={styles.weeklyPromptHeader}>
@@ -928,15 +962,18 @@ export default function ProfileScreen() {
                   )}
                 </AnimatedPressable>
 
-                {editingPromptId && userPrompts.some((p) => p.id === editingPromptId) && (
-                  <AnimatedPressable
-                    style={styles.removePromptBtn}
-                    onPress={handleRemovePrompt}
-                    disabled={promptSaving}
-                  >
-                    <Text style={styles.removePromptText}>Remover prompt</Text>
-                  </AnimatedPressable>
-                )}
+                {editingPromptId &&
+                  (editingWeeklySlot
+                    ? !!weeklyPromptEntry
+                    : userPrompts.some((p) => p.id === editingPromptId)) && (
+                    <AnimatedPressable
+                      style={styles.removePromptBtn}
+                      onPress={handleRemovePrompt}
+                      disabled={promptSaving}
+                    >
+                      <Text style={styles.removePromptText}>Remover prompt</Text>
+                    </AnimatedPressable>
+                  )}
 
                 <AnimatedPressable
                   style={styles.cancelPromptBtn}
