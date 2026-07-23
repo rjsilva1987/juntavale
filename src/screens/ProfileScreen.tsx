@@ -135,14 +135,26 @@ export default function ProfileScreen() {
   const [promptSaving, setPromptSaving] = useState(false);
 
   // Prompt da semana (S59) — campo próprio `weeklyPromptAnswer`, fora de
-  // prompts[]. Só é considerado "respondido" quando o id salvo bate com o da
-  // semana vigente (getWeeklyPrompt); se a semana virou e o usuário ainda não
-  // respondeu de novo, o campo pode ter uma resposta antiga parada ali (slot
-  // único, sobrescrita só acontece ao salvar) — nesse caso o card mostra o
-  // CTA "Responder", igual ao comportamento anterior (S50) com prompts[].
+  // prompts[]. weeklyPromptEntry só existe quando o id salvo bate com o da
+  // semana vigente (getWeeklyPrompt) — usado pro bloco "responder/editar
+  // esta semana" (topo do card) e pra prefill do modal em openWeeklyPrompt;
+  // nos dois casos o significado "é a resposta da semana vigente" continua
+  // correto, porque o modal só é aberto a partir desse bloco (nunca a partir
+  // do bloco de resposta expirada abaixo — ver 2.3 no relatório do S61).
   const currentWeeklyPrompt = getWeeklyPrompt(new Date());
   const weeklyPromptEntry =
     profile?.weeklyPromptAnswer?.id === currentWeeklyPrompt.id
+      ? profile.weeklyPromptAnswer
+      : undefined;
+  // S61 — resposta guardada de uma semana ANTERIOR à vigente. Continua
+  // pública (SwipeScreen/MatchProfileScreen exibem normalmente, sem mudança
+  // nenhuma nelas — ver relatório): antes desta sprint, o dono via essa
+  // situação como "não respondido" e perdia o botão de remover assim que a
+  // semana virava, sem conseguir nem ver nem apagar o que os outros viam.
+  // Exibida à parte no card (bloco próprio, somente leitura + remover — não
+  // abre o modal de edição, que só entende o slot da semana vigente).
+  const staleWeeklyAnswer =
+    profile?.weeklyPromptAnswer && profile.weeklyPromptAnswer.id !== currentWeeklyPrompt.id
       ? profile.weeklyPromptAnswer
       : undefined;
 
@@ -370,6 +382,40 @@ export default function ProfileScreen() {
     } finally {
       setPromptSaving(false);
     }
+  };
+
+  // S61 — remove a resposta de uma semana anterior direto do card, sem passar
+  // pelo modal de edição (handleRemovePrompt acima depende de editingPromptId/
+  // editingWeeklySlot, que só existem depois de abrir o modal — aqui não
+  // abrimos nada, então usa o mesmo removeWeeklyPromptAnswer isoladamente).
+  // Depois de remover, staleWeeklyAnswer e weeklyPromptEntry ficam undefined
+  // (profile.weeklyPromptAnswer sumiu de vez), então o card acima volta
+  // sozinho ao estado "responder a pergunta desta semana", sem código extra.
+  //
+  // Confirmação antes de apagar (mesmo padrão de handleRemovePhoto acima):
+  // este botão fica solto no card, sem passar pelo modal — diferente do
+  // "Remover prompt" (que já exige abrir o modal antes, então não ganhou
+  // confirmação extra aqui). Cancelar não chama removeWeeklyPromptAnswer.
+  const handleRemoveStaleWeeklyAnswer = () => {
+    if (!user) return;
+    Alert.alert('Remover resposta?', 'Essa ação não pode ser desfeita.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: async () => {
+          setPromptSaving(true);
+          try {
+            await removeWeeklyPromptAnswer(user.uid);
+            await refreshProfile();
+          } catch {
+            Alert.alert('Erro', 'Não foi possível remover a resposta.');
+          } finally {
+            setPromptSaving(false);
+          }
+        },
+      },
+    ]);
   };
 
   if (!profile) {
@@ -726,6 +772,28 @@ export default function ProfileScreen() {
               <AnimatedPressable style={styles.weeklyPromptCta} onPress={openWeeklyPrompt}>
                 <Text style={styles.weeklyPromptCtaText}>Responder</Text>
               </AnimatedPressable>
+            )}
+
+            {/* S61 — resposta de uma semana anterior: continua pública (quem
+                vê o perfil pelo Descobrir/Match enxerga normalmente, sem
+                mudança nessas telas), mas até esta sprint o dono não via nem
+                conseguia apagar depois que a semana virava. Bloco só leitura
+                + remover — nunca abre o modal de edição (handleOpenExisting/
+                openWeeklyPrompt não são chamados aqui), porque resposta
+                expirada não é editável, só removível (decisão fechada). */}
+            {staleWeeklyAnswer && (
+              <View style={styles.weeklyPromptStaleBlock}>
+                <Text style={styles.weeklyPromptStaleLabel}>Resposta de uma semana anterior</Text>
+                <Text style={styles.promptQuestion}>{getPromptText(staleWeeklyAnswer.id)}</Text>
+                <Text style={styles.promptAnswer}>{staleWeeklyAnswer.answer}</Text>
+                <AnimatedPressable
+                  style={styles.removePromptBtn}
+                  onPress={handleRemoveStaleWeeklyAnswer}
+                  disabled={promptSaving}
+                >
+                  <Text style={styles.removePromptText}>Remover resposta</Text>
+                </AnimatedPressable>
+              </View>
             )}
           </View>
         )}
@@ -1506,6 +1574,18 @@ const styles = StyleSheet.create({
     color: theme.colors.onSecondary,
     fontWeight: '700',
     fontSize: theme.fontSize.sm,
+  },
+  weeklyPromptStaleBlock: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  weeklyPromptStaleLabel: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
 
   promptsSubtitle: {
