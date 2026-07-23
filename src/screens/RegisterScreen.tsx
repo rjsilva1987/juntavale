@@ -46,6 +46,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [age, setAge] = useState('');
   const [bio, setBio] = useState('');
   const [uf, setUf] = useState<UF | undefined>(undefined);
@@ -156,13 +157,28 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 secureTextEntry
               />
 
+              <Text style={styles.label}>Confirmar senha</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Digite a senha novamente"
+                placeholderTextColor={theme.colors.textLight}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
+
               <AnimatedPressable
                 style={styles.btnPrimary}
                 onPress={() => {
-                  if (!name || !email || !password)
+                  if (!name || !email || !password || !confirmPassword)
                     return Alert.alert('Atenção', 'Preencha todos os campos.');
                   if (password.length < 6)
                     return Alert.alert('Atenção', 'Senha deve ter ao menos 6 caracteres.');
+                  if (password !== confirmPassword)
+                    return Alert.alert(
+                      'Atenção',
+                      'As senhas não são iguais. Confira e tente de novo.',
+                    );
                   setStep(2);
                 }}
               >
