@@ -51,7 +51,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Header */}
@@ -108,7 +108,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.white },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: theme.spacing.lg },
+  scroll: { flexGrow: 1, padding: theme.spacing.lg, paddingTop: theme.spacing.xl },
 
   header: { alignItems: 'center', marginBottom: theme.spacing.xl },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
