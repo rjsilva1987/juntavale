@@ -47,10 +47,11 @@ export function useMyLikes(): UseMyLikesReturn {
       const matchedUids = new Set(
         matches.map((m) => m.users.find((u) => u !== user.uid)).filter((u): u is string => !!u),
       );
-      // blockedUsers é propagado pra ambos os lados por onBlockCreated (Cloud
-      // Function), então checar só o meu próprio profile.blockedUsers já
-      // cobre "eu bloqueei" e "fui bloqueado" — não existe campo blockedBy
-      // em users/{uid} (só em matches/{matchId}).
+      // Sentido "eu bloqueei" — mesmo padrão explícito do getDiscoverProfiles
+      // (recebe blockedUsers do próprio perfil). O sentido "ele me bloqueou"
+      // é checado à parte, com o profile.blockedUsers de cada entrada (ver
+      // filtro em `valid` abaixo) — não depende de onBlockCreated (Cloud
+      // Function) já ter propagado pro meu lado.
       const blockedUids = new Set(profile?.blockedUsers ?? []);
 
       const entries = snap.docs
@@ -92,7 +93,12 @@ export function useMyLikes(): UseMyLikesReturn {
         console.warn(`[useMyLikes] ${rejectedCount} perfis falharam ao carregar`);
       }
 
-      const valid = withProfiles.filter((entry): entry is MyLike => entry.profile !== null);
+      // Sentido "ele me bloqueou" — checado direto no blockedUsers do perfil
+      // do outro (já carregado acima), sem depender de propagação pro meu lado.
+      const valid = withProfiles.filter(
+        (entry): entry is MyLike =>
+          entry.profile !== null && !entry.profile.blockedUsers?.includes(user.uid),
+      );
       // Super-likes primeiro; sort é estável (ES2019+), então a ordem por
       // recência dentro de cada grupo (já aplicada acima) se mantém.
       valid.sort((a, b) => Number(b.isSuperLike) - Number(a.isSuperLike));

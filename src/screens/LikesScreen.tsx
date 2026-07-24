@@ -5,18 +5,21 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Modal, Pressable, Alert } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { ReportModal } from '@/components/ReportModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLikers } from '@/hooks/useLikers';
 import { useMyLikes } from '@/hooks/useMyLikes';
 import { RootStackParamList } from '@/navigation';
+import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { UserProfile } from '@/services/firestoreService';
 
 type Tab = 'received' | 'sent';
@@ -26,11 +29,12 @@ interface LikeCardProps {
   isSuperLike: boolean;
   likedPhotoURL?: string;
   onPress: () => void;
+  onMenuPress: () => void;
 }
 
 // Compartilhado pelas duas abas — mesmo visual do grid original (borda
 // amarela + badge estrela pra superlike, badge coração sempre visível).
-function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress }: LikeCardProps) {
+function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress, onMenuPress }: LikeCardProps) {
   // Se a foto curtida falhar ao carregar (ex: deletada do Storage), some
   // com a faixa inteira em vez de mostrar um quadrado quebrado (S35).
   const [likedPhotoFailed, setLikedPhotoFailed] = useState(false);
@@ -56,11 +60,16 @@ function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress }: LikeCardProp
         </View>
       )}
       <View style={styles.likerInfo}>
-        <View style={styles.likerNameRow}>
-          <Text style={styles.likerName} numberOfLines={1}>
-            {profile.name}, {profile.age}
-          </Text>
-          {profile.verified === true && <VerifiedBadge size={14} />}
+        <View style={styles.likerTopRow}>
+          <View style={styles.likerNameRow}>
+            <Text style={styles.likerName} numberOfLines={1}>
+              {profile.name}, {profile.age}
+            </Text>
+            {profile.verified === true && <VerifiedBadge size={14} />}
+          </View>
+          <AnimatedPressable style={styles.menuBtn} onPress={onMenuPress} hitSlop={8}>
+            <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.white} />
+          </AnimatedPressable>
         </View>
         {showLikedPhotoContext && (
           <View style={styles.likedPhotoRow}>
@@ -90,20 +99,63 @@ function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress }: LikeCardProp
 
 export default function LikesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('received');
   const { likers, loading: loadingReceived, reload: reloadReceived } = useLikers();
   const { profiles: myLikes, loading: loadingSent, reload: reloadSent } = useMyLikes();
+
+  // Menu (denunciar/bloquear) do card — compartilhado pelas duas abas porque
+  // o LikeCard também é compartilhado (ver comentário acima do componente).
+  const [menuTarget, setMenuTarget] = useState<UserProfile | null>(null);
+  const [reportTarget, setReportTarget] = useState<UserProfile | null>(null);
+
+  const openMenu = (profile: UserProfile) => setMenuTarget(profile);
+  const closeMenu = () => setMenuTarget(null);
+
+  const reloadAll = useCallback(() => {
+    reloadReceived();
+    reloadSent();
+  }, [reloadReceived, reloadSent]);
+
+  const handleReport = async (reason: ReportReason, details: string) => {
+    if (!user || !reportTarget) return;
+    await reportUser(user.uid, reportTarget.uid, reason, details);
+    setReportTarget(null);
+    Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
+    reloadAll();
+  };
+
+  const handleBlock = () => {
+    if (!user || !menuTarget) return;
+    const target = menuTarget;
+    closeMenu();
+    Alert.alert(
+      'Bloquear usuário?',
+      `Você deixará de ver ${target.name}. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Bloquear',
+          style: 'destructive',
+          onPress: async () => {
+            await blockUser(user.uid, target.uid);
+            reloadAll();
+          },
+        },
+      ],
+    );
+  };
 
   // useLikers/useMyLikes fazem fetch único (getDocs), não onSnapshot — sem
   // isso, quem foi retribuído/dispensado/bloqueado no preview continuaria
   // aparecendo aqui até um remount da tela. Recarrega as duas abas juntas
   // (mais simples do que só a ativa, e o custo de mais uma leitura por
-  // focus é aceitável aqui).
+  // focus é aceitável aqui). Mesmo reloadAll usado depois de denunciar/
+  // bloquear pelo menu do card.
   useFocusEffect(
     useCallback(() => {
-      reloadReceived();
-      reloadSent();
-    }, [reloadReceived, reloadSent]),
+      reloadAll();
+    }, [reloadAll]),
   );
 
   const goToProfile = (profile: UserProfile, alreadyLiked?: boolean) => {
@@ -181,6 +233,7 @@ export default function LikesScreen() {
                   isSuperLike={item.isSuperLike}
                   likedPhotoURL={item.likedPhotoURL}
                   onPress={() => goToProfile(item.profile)}
+                  onMenuPress={() => openMenu(item.profile)}
                 />
               )}
             />
@@ -204,10 +257,46 @@ export default function LikesScreen() {
               profile={item.profile}
               isSuperLike={item.isSuperLike}
               onPress={() => goToProfile(item.profile, true)}
+              onMenuPress={() => openMenu(item.profile)}
             />
           )}
         />
       )}
+
+      {/* Menu do card (denunciar/bloquear) — mesmo padrão visual do options
+          action sheet do ChatScreen. */}
+      <Modal visible={!!menuTarget} transparent animationType="slide" onRequestClose={closeMenu}>
+        <Pressable style={styles.sheetBackdrop} onPress={closeMenu}>
+          <View style={styles.sheet}>
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                const target = menuTarget;
+                closeMenu();
+                if (target) setReportTarget(target);
+              }}
+            >
+              <Ionicons name="flag-outline" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Denunciar</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable style={styles.sheetOption} onPress={handleBlock}>
+              <Ionicons name="ban-outline" size={22} color={theme.colors.nope} />
+              <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>Bloquear</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetGap} />
+            <AnimatedPressable style={styles.sheetCancel} onPress={closeMenu}>
+              <Text style={styles.sheetCancelText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <ReportModal
+        visible={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        onSubmit={handleReport}
+      />
     </Animated.View>
   );
 }
@@ -305,12 +394,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     padding: 10,
   },
-  likerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  likerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  likerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 },
   likerName: {
     color: theme.colors.white,
     fontWeight: '600',
     fontSize: theme.fontSize.sm,
     flexShrink: 1,
+  },
+  menuBtn: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
   likedPhotoRow: {
     flexDirection: 'row',
@@ -350,4 +447,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    paddingBottom: 32,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+  },
+  sheetOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  sheetDivider: { height: 0.5, backgroundColor: theme.colors.border },
+  sheetGap: { height: 8 },
+  sheetCancel: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  sheetCancelText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.nope },
 });

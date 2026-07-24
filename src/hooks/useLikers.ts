@@ -23,7 +23,7 @@ interface UseLikersReturn {
 // swipei de volta), compartilhada com o card "Curtidas" do ProfileScreen
 // pra não duplicar as duas queries em swipes.
 export function useLikers(): UseLikersReturn {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [likers, setLikers] = useState<Liker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -47,6 +47,12 @@ export function useLikers(): UseLikersReturn {
       );
       const swipedByMe = new Set(mySwipesSnap.docs.map((d) => d.data().to));
 
+      // Sentido "eu bloqueei" — mesmo padrão explícito do getDiscoverProfiles
+      // (recebe blockedUsers do próprio perfil). O sentido "ele me bloqueou"
+      // só dá pra confirmar depois, com o profile.blockedUsers de cada
+      // entrada (ver filtro em `valid` abaixo) — não depende de propagação.
+      const blockedByMeUids = new Set(profile?.blockedUsers ?? []);
+
       const entries = snap.docs
         .map((d) => ({
           uid: d.data().from as string,
@@ -54,7 +60,7 @@ export function useLikers(): UseLikersReturn {
           // Legado (swipe antigo sem o campo) fica undefined — tolerado.
           likedPhotoURL: d.data().likedPhotoURL as string | undefined,
         }))
-        .filter((entry) => !swipedByMe.has(entry.uid));
+        .filter((entry) => !swipedByMe.has(entry.uid) && !blockedByMeUids.has(entry.uid));
 
       const settled = await Promise.allSettled(
         entries.map(async (entry) => ({
@@ -90,7 +96,12 @@ export function useLikers(): UseLikersReturn {
         console.warn(`[useLikers] ${rejectedCount} perfis falharam ao carregar`);
       }
 
-      const valid = withProfiles.filter((entry): entry is Liker => entry.profile !== null);
+      // Sentido "ele me bloqueou" — checado direto no blockedUsers do perfil
+      // do outro (já carregado acima), sem depender de propagação pro meu lado.
+      const valid = withProfiles.filter(
+        (entry): entry is Liker =>
+          entry.profile !== null && !entry.profile.blockedUsers?.includes(user.uid),
+      );
       // Super-likers primeiro; sort é estável (ES2019+), então a ordem
       // relativa dentro de cada grupo (a que já vinha do snapshot) se mantém.
       valid.sort((a, b) => Number(b.isSuperLike) - Number(a.isSuperLike));
@@ -100,7 +111,7 @@ export function useLikers(): UseLikersReturn {
       setError(err instanceof Error ? err : new Error('Unknown error'));
     }
     setLoading(false);
-  }, [user]);
+  }, [user, profile?.blockedUsers]);
 
   useEffect(() => {
     if (!user) return;
