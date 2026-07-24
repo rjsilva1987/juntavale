@@ -22,19 +22,19 @@ interface Slide {
 
 const SLIDES: Slide[] = [
   {
-    icon: 'flame',
-    title: 'Descubra pessoas',
-    description: 'Deslize pelos perfis de quem está por perto e compartilha seus interesses.',
+    icon: 'shield-checkmark',
+    title: 'Só entre Funci',
+    description: 'Aqui todo mundo é Funci — e a gente confere um por um.',
   },
   {
-    icon: 'heart',
-    title: 'Dê match',
-    description: 'Curtiu alguém que também curtiu você? É um match — a conversa pode começar.',
+    icon: 'flame',
+    title: 'Descubra pessoas',
+    description: 'Perfis de quem está por perto e tem a ver com você.',
   },
   {
     icon: 'chatbubbles',
     title: 'Converse',
-    description: 'Puxe assunto, combine um encontro e deixe a conexão acontecer.',
+    description: 'Match é quando os dois se curtem. Aí a conversa começa — o resto é com vocês.',
   },
 ];
 
