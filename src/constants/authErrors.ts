@@ -7,9 +7,9 @@
 // (fora do nosso controle), não de um catálogo que nós definimos.
 import { FirebaseError } from 'firebase/app';
 
-export type AuthErrorContext = 'login' | 'register' | 'reauth';
+export type AuthErrorContext = 'login' | 'register' | 'reauth' | 'reset';
 
-// Mensagens iguais nos três contextos — evita repetir a mesma string 3x.
+// Mensagens iguais nos quatro contextos — evita repetir a mesma string 3x.
 const SHARED_AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-email': 'E-mail inválido. Confira o endereço digitado.',
   'auth/network-request-failed': 'Sem conexão. Verifique sua internet e tente de novo.',
@@ -48,10 +48,21 @@ const REAUTH_AUTH_ERRORS: Record<string, string> = {
   'auth/wrong-password': 'Senha incorreta. Confira e tente de novo.',
 };
 
+// Reset de senha (ForgotPasswordModal, S69) — 'auth/user-not-found' NÃO é
+// mapeado aqui de propósito: o modal trata esse código como sucesso (mesmo
+// Alert de "verifique seu e-mail"), não como erro deste catálogo. Mesma
+// proteção contra enumeração de e-mail do S62, aplicada no nível da chamada
+// em vez de aqui.
+const RESET_AUTH_ERRORS: Record<string, string> = {
+  ...SHARED_AUTH_ERRORS,
+  'auth/missing-email': 'Informe o e-mail cadastrado.',
+};
+
 const AUTH_ERROR_CATALOG: Record<AuthErrorContext, Record<string, string>> = {
   login: LOGIN_AUTH_ERRORS,
   register: REGISTER_AUTH_ERRORS,
   reauth: REAUTH_AUTH_ERRORS,
+  reset: RESET_AUTH_ERRORS,
 };
 
 // Usado quando o código não está mapeado acima OU o erro nem é um
@@ -61,6 +72,7 @@ const FALLBACK_MESSAGES: Record<AuthErrorContext, string> = {
   login: 'Não foi possível entrar. Tente de novo.',
   register: 'Não foi possível criar a conta. Tente de novo.',
   reauth: 'Não foi possível confirmar sua senha. Tente de novo.',
+  reset: 'Não foi possível enviar o e-mail. Tente de novo.',
 };
 
 // Recebe o erro capturado no catch (tipo unknown — este projeto não roda com

@@ -16,6 +16,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
 import { getAuthErrorMessage } from '@/constants/authErrors';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +29,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotVisible, setForgotVisible] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -94,6 +96,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
               )}
             </AnimatedPressable>
 
+            <AnimatedPressable onPress={() => setForgotVisible(true)}>
+              <Text style={[styles.linkText, styles.linkBold]}>Esqueci minha senha</Text>
+            </AnimatedPressable>
+
             <AnimatedPressable onPress={() => navigation.navigate('Register')}>
               <Text style={styles.linkText}>
                 Ainda não tem conta? <Text style={styles.linkBold}>Cadastre-se</Text>
@@ -102,6 +108,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ForgotPasswordModal
+        visible={forgotVisible}
+        onClose={() => setForgotVisible(false)}
+        initialEmail={email}
+      />
     </Animated.View>
   );
 }

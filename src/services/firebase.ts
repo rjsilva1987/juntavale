@@ -23,6 +23,8 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
+// Idioma dos e-mails automáticos do Firebase Auth (ex.: redefinição de senha).
+auth.languageCode = 'pt-BR';
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 // Região precisa bater com REGION em functions/src/index.ts — só afeta
