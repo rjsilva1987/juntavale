@@ -114,16 +114,26 @@ export const onMatchCreated = onDocumentCreated(
 // decisão de produto: só o match revela quem foi). Se o superlike já virou
 // match nesta mesma escrita (swipe reverso existente e != 'nope'),
 // onMatchCreated já notifica os dois lados — não duplicar aqui.
+//
+// S68 — o doc de swipe (evento onDocumentCreated) já traz `note` (S67,
+// bilhete opcional anexado à super curtida) no mesmo snap.data() acima,
+// sem precisar de nenhuma leitura extra. Quando presente, o texto do push
+// só SINALIZA que veio um recado — nunca mostra o conteúdo de `note` nem
+// nada que identifique quem mandou (from não entra no `data` do push, igual
+// antes desta sprint): mesmo grau de anonimato de hoje, só a variação de
+// título/corpo. Sem bilhete, título e corpo ficam byte a byte iguais ao
+// texto anterior a esta sprint.
 export const onSuperLikeReceived = onDocumentCreated(
   { document: 'swipes/{swipeId}', region: REGION },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
 
-    const { from, to, direction } = snap.data() as {
+    const { from, to, direction, note } = snap.data() as {
       from: string;
       to: string;
       direction: string;
+      note?: string;
     };
     if (direction !== 'superlike') return;
 
@@ -133,12 +143,16 @@ export const onSuperLikeReceived = onDocumentCreated(
     const token = await getPushToken(to);
     if (!token) return;
 
+    const hasNote = !!note;
+
     await sendExpoNotifications([
       {
         to: token,
         sound: 'default',
-        title: '⭐ Alguém te deu um Super Like!',
-        body: 'Abra o app para descobrir quem foi 👀',
+        title: hasNote ? '⭐ Super Like com bilhete!' : '⭐ Alguém te deu um Super Like!',
+        body: hasNote
+          ? 'Abra o app para ler o bilhete e descobrir quem foi 👀'
+          : 'Abra o app para descobrir quem foi 👀',
         data: { type: 'superlike' },
       },
     ]);

@@ -1,4 +1,4 @@
-// rules-stamp: S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
+// rules-stamp: S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -86,6 +86,50 @@ service cloud.firestore {
                                         && list[2].id != list[3].id))))))));
     }
 
+    // S68 — item de places[]/events[]: string de 1..maxLength chars, sem ser
+    // só espaço. Mesmo padrão de validação de item de isValidPromptItem
+    // acima, só que sem `id` (places/events são texto livre, sem catálogo).
+    function isValidTag(value, maxLength) {
+      return value is string && value.size() >= 1 && value.size() <= maxLength
+        && value.matches('.*\\S.*');
+    }
+
+    // S68 — endurecimento: antes desta sprint, isValidProfile só checava
+    // `data.places is list && data.places.size() <= 5` — tipo e teto da
+    // LISTA, sem validar o conteúdo de cada string (um client malicioso
+    // podia gravar item vazio, só espaço, ou maior que o limite que o
+    // próprio app já impõe visualmente). Mesmo padrão de isValidPrompts
+    // (valida list[0], list[1], ... individualmente, com curto-circuito no
+    // size() — só entra no índice N se list.size() > N), sem checagem de
+    // duplicata (não faz sentido pra texto livre). 40 = MAX_PLACE_LENGTH em
+    // src/screens/ProfileScreen.tsx — sincronia manual, mesmo padrão dos
+    // demais valores espelhados do client nestas rules.
+    function isValidPlaces(list) {
+      return list is list && list.size() <= 5
+        && (list.size() == 0
+            || (isValidTag(list[0], 40)
+                && (list.size() == 1
+                    || (isValidTag(list[1], 40)
+                        && (list.size() == 2
+                            || (isValidTag(list[2], 40)
+                                && (list.size() == 3
+                                    || (isValidTag(list[3], 40)
+                                        && (list.size() == 4
+                                            || isValidTag(list[4], 40))))))))));
+    }
+
+    // S68 — idem isValidPlaces acima, aplicado a events[] (teto de 3 itens).
+    // 60 = MAX_EVENT_LENGTH em src/screens/ProfileScreen.tsx.
+    function isValidEvents(list) {
+      return list is list && list.size() <= 3
+        && (list.size() == 0
+            || (isValidTag(list[0], 60)
+                && (list.size() == 1
+                    || (isValidTag(list[1], 60)
+                        && (list.size() == 2
+                            || isValidTag(list[2], 60))))));
+    }
+
     // S59 — Prompt da semana ganhou campo próprio (weeklyPromptAnswer),
     // FORA de prompts[]/isValidPrompts acima (que fica intocada: continua
     // size() <= 4, só prompts normais do catálogo p01-p10). Slot único (não é
@@ -119,12 +163,12 @@ service cloud.firestore {
         && (!('prompts' in data) || isValidPrompts(data.prompts))
         // S59 — slot único do prompt da semana, separado de prompts[] acima.
         && (!('weeklyPromptAnswer' in data) || isValidWeeklyPromptAnswer(data.weeklyPromptAnswer))
-        // S48 — "Meus lugares"/"No meu radar": texto livre, opcionais, sem
-        // catálogo. Mesmo precedente de rigor de `interests` (data.interests
-        // is list && size cap, sem validar cada elemento) — só tipo da lista
-        // e teto de tamanho; conteúdo de cada string é validado no client.
-        && (!('places' in data) || (data.places is list && data.places.size() <= 5))
-        && (!('events' in data) || (data.events is list && data.events.size() <= 3));
+        // S48/S68 — "Meus lugares"/"No meu radar": texto livre, opcionais,
+        // sem catálogo. S68 endureceu a validação pra item a item (antes só
+        // tipo da lista e teto de tamanho, igual `interests` continua sendo
+        // hoje — ver achado da sprint) — ver isValidPlaces/isValidEvents.
+        && (!('places' in data) || isValidPlaces(data.places))
+        && (!('events' in data) || isValidEvents(data.events));
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -526,6 +570,13 @@ service cloud.firestore {
         && request.resource.data.reason in
              ['spam', 'offensive_content', 'fake_profile', 'inappropriate_behavior', 'other']
         && request.resource.data.details is string && request.resource.data.details.size() <= 500
+        // S68 — details é opcional pro usuário no formulário (ReportModal),
+        // mas o client sempre manda a chave como string, vazia quando
+        // deixado em branco (ver reportUser em blockService.ts: `details ??
+        // ''`) — nunca ausente, por isso não há ramo `!('details' in ...)`
+        // aqui. Vazia continua permitida; só barra string SÓ espaço.
+        && (request.resource.data.details.size() == 0
+            || request.resource.data.details.matches('.*\\S.*'))
         && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt']);

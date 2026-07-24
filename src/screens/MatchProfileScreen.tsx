@@ -366,7 +366,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                   decisão de curtir de volta. */}
               {!!note && (
                 <>
-                  <Text style={styles.sectionTitle}>Bilhete da Super Curtida</Text>
+                  <Text style={styles.sectionTitle}>Bilhete</Text>
                   <View style={styles.noteBox}>
                     <Text style={styles.noteText}>“{note}”</Text>
                   </View>
