@@ -58,6 +58,10 @@ export type RootStackParamList = {
     photoURL?: string;
     fromLikes?: boolean;
     alreadyLiked?: boolean;
+    // S67-complemento — bilhete completo da super curtida, vindo já em mãos
+    // da LikesScreen (aba "Quem curtiu você"). Nunca lido do doc de swipe
+    // aqui, só repassado por param — ver comentário em MatchProfileScreen.
+    note?: string;
   };
   MatchesGrid: undefined;
   BlockedUsers: undefined;

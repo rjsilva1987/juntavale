@@ -1,4 +1,4 @@
-// rules-stamp: S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
+// rules-stamp: S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -314,7 +314,7 @@ service cloud.firestore {
         && swipeId == request.resource.data.from + '_' + request.resource.data.to
         && request.resource.data.direction in ['like', 'nope', 'superlike']
         && request.resource.data.createdAt == request.time
-        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt', 'likedPhotoURL', 'context'])
+        && request.resource.data.keys().hasOnly(['from', 'to', 'direction', 'createdAt', 'likedPhotoURL', 'context', 'note'])
         // S35: contexto opcional ("curtiu sua foto") — só existe em
         // like/superlike (nope nunca leva contexto pro alvo); campo
         // ausente continua válido (compat com nope e clients antigos).
@@ -351,6 +351,29 @@ service cloud.firestore {
                 && request.resource.data.context.promptId.size() < 60
               )
             )
+          )
+        )
+        // S67: bilhete opcional anexado à super curtida — 1..150 chars, sem
+        // ser só espaço, só em direction=='superlike' e só quando o AUTOR do
+        // swipe (request.auth.uid, já confirmado == request.resource.data.from
+        // acima) é verificado. "Autor verificado" reutiliza EXATAMENTE o
+        // mesmo mecanismo já usado por matches/{matchId}/messages create
+        // (get(users/{uid}).data.get('verified', false) == true) — mesma
+        // leitura, não uma nova. O ramo `!('note' in ...)` vem primeiro de
+        // propósito: Rules avalia `||` em curto-circuito, então o get() de
+        // verificação (e o resto da validação) só roda quando `note`
+        // realmente está presente no payload — em todo swipe sem bilhete
+        // (a esmagadora maioria: likes, nopes, superlikes sem nota), esta
+        // leitura extra nunca é cobrada.
+        && (
+          !('note' in request.resource.data)
+          || (
+            request.resource.data.note is string
+            && request.resource.data.note.size() >= 1
+            && request.resource.data.note.size() <= 150
+            && request.resource.data.note.matches('.*\\S.*')
+            && request.resource.data.direction == 'superlike'
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
           )
         )
         // Super Like Fase 2: se o swipe é 'superlike', o contador mensal

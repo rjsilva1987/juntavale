@@ -439,8 +439,12 @@ export const recordSwipe = async (
   direction: 'like' | 'nope' | 'superlike',
   likedPhotoURL?: string,
   context?: SwipeContext,
+  // S67 — bilhete opcional anexado à super curtida (só SwipeScreen envia;
+  // MatchProfileScreen continua chamando com 5 args, sem quebrar).
+  note?: string,
 ): Promise<boolean> => {
   const swipeRef = doc(db, 'swipes', `${fromUid}_${toUid}`);
+  const trimmedNote = note?.trim();
   const swipeData = {
     from: fromUid,
     to: toUid,
@@ -452,6 +456,7 @@ export const recordSwipe = async (
     // S35-A: mesma regra de direction do likedPhotoURL acima, mas como
     // referência (photoIndex/promptId) em vez de URL — ver SwipeContext.
     ...(direction !== 'nope' && context ? { context } : {}),
+    ...(trimmedNote ? { note: trimmedNote } : {}),
   };
 
   if (direction === 'superlike') {

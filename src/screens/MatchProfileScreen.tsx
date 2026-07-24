@@ -35,7 +35,20 @@ import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
 export default function MatchProfileScreen({ route, navigation }: MatchProfileScreenProps) {
-  const { uid, matchId, name, photoURL, fromLikes, alreadyLiked: alreadyLikedParam } = route.params;
+  const {
+    uid,
+    matchId,
+    name,
+    photoURL,
+    fromLikes,
+    alreadyLiked: alreadyLikedParam,
+    // S67-complemento — bilhete completo da super curtida. Vem só da
+    // LikesScreen (aba "Quem curtiu você"), já pronto por param — nunca lido
+    // do doc de swipe aqui. Ausente em todos os outros pontos de entrada
+    // desta tela (Chat, MatchesGrid, Descobrir, deep link), que continuam
+    // funcionando exatamente como antes.
+    note,
+  } = route.params;
   const isPreview = !matchId;
   const { user, profile: myProfile } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -342,6 +355,24 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 </>
               )}
 
+              {/* S67-complemento — bilhete completo da super curtida (sem
+                  numberOfLines, ao contrário do preview truncado em 3 linhas
+                  do card na LikesScreen — aquele truncamento continua
+                  correto lá, este texto aqui é a versão completa). Só existe
+                  quando o param `note` vem presente (aba "Quem curtiu você"
+                  da LikesScreen); em todo outro ponto de entrada desta tela
+                  o bloco inteiro simplesmente não renderiza. Posicionado
+                  acima de "Perguntas" — é a informação mais relevante pra
+                  decisão de curtir de volta. */}
+              {!!note && (
+                <>
+                  <Text style={styles.sectionTitle}>Bilhete da Super Curtida</Text>
+                  <View style={styles.noteBox}>
+                    <Text style={styles.noteText}>“{note}”</Text>
+                  </View>
+                </>
+              )}
+
               {((profile?.prompts?.length ?? 0) > 0 || profile?.weeklyPromptAnswer) && (
                 <>
                   <Text style={styles.sectionTitle}>Perguntas</Text>
@@ -506,6 +537,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   bio: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 22 },
+  // S67-complemento — mesma linguagem visual de citação do LikeCard
+  // (LikesScreen: borda à esquerda em primaryLight + itálico), adaptada pro
+  // fundo claro do infoCard aqui (texto escuro em vez de branco — nunca
+  // amarelo com texto branco, regra do projeto).
+  noteBox: {
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.primaryLight,
+  },
+  noteText: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+    fontStyle: 'italic',
+    lineHeight: 22,
+  },
 
   swipeActions: {
     flexDirection: 'row',

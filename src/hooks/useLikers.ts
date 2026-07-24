@@ -10,6 +10,10 @@ export interface Liker {
   profile: UserProfile;
   isSuperLike: boolean;
   likedPhotoURL?: string;
+  // S67 — bilhete opcional anexado à super curtida. Só existe em swipes
+  // direction=='superlike' de autor verificado (ver firestore.rules); em
+  // todo o resto fica undefined, tolerado normalmente.
+  note?: string;
 }
 
 interface UseLikersReturn {
@@ -59,6 +63,9 @@ export function useLikers(): UseLikersReturn {
           isSuperLike: d.data().direction === 'superlike',
           // Legado (swipe antigo sem o campo) fica undefined — tolerado.
           likedPhotoURL: d.data().likedPhotoURL as string | undefined,
+          // S67 — idem, ausente na esmagadora maioria dos swipes (não é
+          // superlike, ou é superlike sem bilhete).
+          note: d.data().note as string | undefined,
         }))
         .filter((entry) => !swipedByMe.has(entry.uid) && !blockedByMeUids.has(entry.uid));
 
@@ -67,6 +74,7 @@ export function useLikers(): UseLikersReturn {
           profile: await getUserProfile(entry.uid),
           isSuperLike: entry.isSuperLike,
           likedPhotoURL: entry.likedPhotoURL,
+          note: entry.note,
         })),
       );
 
@@ -74,17 +82,19 @@ export function useLikers(): UseLikersReturn {
         profile: UserProfile | null;
         isSuperLike: boolean;
         likedPhotoURL?: string;
+        note?: string;
       }[] = [];
       let rejectedCount = 0;
       settled.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          const { profile, isSuperLike, likedPhotoURL } = result.value;
+          const { profile, isSuperLike, likedPhotoURL, note } = result.value;
           withProfiles.push({
             // uid do swipe é confiável mesmo quando o doc de users/{uid} é
             // legado e não tem o campo `uid` gravado.
             profile: profile ? { ...profile, uid: entries[i].uid } : null,
             isSuperLike,
             likedPhotoURL,
+            note,
           });
         } else {
           rejectedCount += 1;

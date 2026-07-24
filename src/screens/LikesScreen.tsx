@@ -28,13 +28,24 @@ interface LikeCardProps {
   profile: UserProfile;
   isSuperLike: boolean;
   likedPhotoURL?: string;
+  // S67 — bilhete da super curtida. Card é compartilhado pelas duas abas;
+  // controle de exibição é por prop — só a aba "Quem curtiu você" passa
+  // esse valor adiante (useMyLikes não expõe note, ver hook).
+  note?: string;
   onPress: () => void;
   onMenuPress: () => void;
 }
 
 // Compartilhado pelas duas abas — mesmo visual do grid original (borda
 // amarela + badge estrela pra superlike, badge coração sempre visível).
-function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress, onMenuPress }: LikeCardProps) {
+function LikeCard({
+  profile,
+  isSuperLike,
+  likedPhotoURL,
+  note,
+  onPress,
+  onMenuPress,
+}: LikeCardProps) {
   // Se a foto curtida falhar ao carregar (ex: deletada do Storage), some
   // com a faixa inteira em vez de mostrar um quadrado quebrado (S35).
   const [likedPhotoFailed, setLikedPhotoFailed] = useState(false);
@@ -81,6 +92,13 @@ function LikeCard({ profile, isSuperLike, likedPhotoURL, onPress, onMenuPress }:
             />
             <Text style={styles.likedPhotoLabel} numberOfLines={1}>
               Curtiu sua foto
+            </Text>
+          </View>
+        )}
+        {!!note && (
+          <View style={styles.noteBox}>
+            <Text style={styles.noteText} numberOfLines={3}>
+              “{note}”
             </Text>
           </View>
         )}
@@ -158,7 +176,7 @@ export default function LikesScreen() {
     }, [reloadAll]),
   );
 
-  const goToProfile = (profile: UserProfile, alreadyLiked?: boolean) => {
+  const goToProfile = (profile: UserProfile, alreadyLiked?: boolean, note?: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('MatchProfile', {
       uid: profile.uid,
@@ -166,6 +184,10 @@ export default function LikesScreen() {
       photoURL: profile.photoURL,
       fromLikes: true,
       ...(alreadyLiked ? { alreadyLiked: true } : {}),
+      // S67-complemento — só a aba "Quem curtiu você" chama goToProfile com
+      // um 3º argumento; a aba "Suas curtidas" (useMyLikes, sem note) nunca
+      // passa nada aqui, então o param simplesmente não existe pra ela.
+      ...(note ? { note } : {}),
     });
   };
 
@@ -232,7 +254,8 @@ export default function LikesScreen() {
                   profile={item.profile}
                   isSuperLike={item.isSuperLike}
                   likedPhotoURL={item.likedPhotoURL}
-                  onPress={() => goToProfile(item.profile)}
+                  note={item.note}
+                  onPress={() => goToProfile(item.profile, undefined, item.note)}
                   onMenuPress={() => openMenu(item.profile)}
                 />
               )}
@@ -424,6 +447,20 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: theme.colors.white,
     fontSize: theme.fontSize.xs,
+  },
+  // S67 — bilhete da super curtida, estilo de citação (borda à esquerda +
+  // itálico). Nunca amarelo (theme.colors.secondary) com texto branco —
+  // regra do projeto (CLAUDE.md) — por isso o acento usa primaryLight.
+  noteBox: {
+    marginTop: 6,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.primaryLight,
+  },
+  noteText: {
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xs,
+    fontStyle: 'italic',
   },
   heartBadge: {
     position: 'absolute',

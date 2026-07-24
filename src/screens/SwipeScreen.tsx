@@ -26,6 +26,7 @@ import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
 import { PromptCard } from '@/components/PromptCard';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { SuperLikeNoteModal } from '@/components/SuperLikeNoteModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
@@ -65,6 +66,10 @@ export default function SwipeScreen() {
   const [matchedProfile, setMatchedProfile] = useState<UserProfile | null>(null);
   const [lastSwipedProfile, setLastSwipedProfile] = useState<LastSwipedProfile | null>(null);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  // S67 — bilhete opcional na super curtida: só perfil verificado vê o modal
+  // (item 4.2); fechar pelo backdrop/botão de fechar cancela a super curtida
+  // inteira (nada é gravado, ver handleCancelSuperLikeNote).
+  const [superLikeNoteModalVisible, setSuperLikeNoteModalVisible] = useState(false);
 
   // Interesses do usuário logado, memoizados pra não recalcular a cada
   // render — só muda quando o profile (e portanto profile.interests) muda.
@@ -206,7 +211,7 @@ export default function SwipeScreen() {
     }, []),
   );
 
-  const completeSwipe = (dir: 'left' | 'right' | 'super') => {
+  const completeSwipe = (dir: 'left' | 'right' | 'super', note?: string) => {
     const target = profilesRef.current[currentIndexRef.current];
     const swipedIndex = currentIndexRef.current;
     const targetPhotos = target?.photos?.length
@@ -236,6 +241,7 @@ export default function SwipeScreen() {
       dir === 'right' ? 'like' : dir === 'super' ? 'superlike' : 'nope',
       likedPhotoURL,
       dir !== 'left' ? visibleContext : undefined,
+      note,
     )
       .then((isMatch) => {
         if (isMatch) {
@@ -271,11 +277,36 @@ export default function SwipeScreen() {
   };
 
   const handleSuperLikePress = () => {
+    // Quota esgotada — caminho de erro atual, sem modal (item 4.2).
     if (superLikesRemaining === 0) {
       showSuperLikeQuotaAlert();
       return;
     }
+    // Não verificado — comportamento idêntico ao de hoje, sem modal: bilhete
+    // é exclusivo de perfil verificado (desenho da sprint), mas a super
+    // curtida em si continua disponível pra todo mundo.
+    if (!profile?.verified) {
+      swipeCard('super');
+      return;
+    }
+    setSuperLikeNoteModalVisible(true);
+  };
+
+  const handleSendSuperLikeWithoutNote = () => {
+    setSuperLikeNoteModalVisible(false);
     swipeCard('super');
+  };
+
+  const handleSendSuperLikeWithNote = (note: string) => {
+    setSuperLikeNoteModalVisible(false);
+    swipeCard('super', note);
+  };
+
+  // Fechar o modal pelo backdrop ou botão de fechar cancela a super curtida
+  // inteira (item 4.4): swipeCard nunca é chamado, então nenhum swipe é
+  // gravado e nenhuma cota mensal é gasta.
+  const handleCancelSuperLikeNote = () => {
+    setSuperLikeNoteModalVisible(false);
   };
 
   const handleUndo = async () => {
@@ -290,14 +321,14 @@ export default function SwipeScreen() {
     }
   };
 
-  const swipeCard = (dir: 'left' | 'right' | 'super') => {
+  const swipeCard = (dir: 'left' | 'right' | 'super', note?: string) => {
     if (!user || currentIndex >= profiles.length) return;
     const toX = dir === 'left' ? -SCREEN_W * 1.5 : SCREEN_W * 1.5;
     const toY = dir === 'super' ? -SCREEN_H : 0;
 
     translateY.value = withTiming(toY, { duration: 300 });
     translateX.value = withTiming(toX, { duration: 300 }, (finished) => {
-      if (finished) runOnJS(completeSwipe)(dir);
+      if (finished) runOnJS(completeSwipe)(dir, note);
     });
   };
 
@@ -534,6 +565,15 @@ export default function SwipeScreen() {
           clearFilters();
         }}
         onClose={() => setFilterModalVisible(false)}
+      />
+
+      {/* Bilhete opcional da Super Curtida (S67) — só abre pra perfil
+          verificado com cota disponível, ver handleSuperLikePress. */}
+      <SuperLikeNoteModal
+        visible={superLikeNoteModalVisible}
+        onClose={handleCancelSuperLikeNote}
+        onSendWithoutNote={handleSendSuperLikeWithoutNote}
+        onSendWithNote={handleSendSuperLikeWithNote}
       />
     </View>
   );
