@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="index,follow">
+<title>Excluir sua conta — JuntaVale</title>
+<meta name="description" content="Como excluir sua conta do JuntaVale e o que acontece com os seus dados.">
+<style>
+  :root{
+    --amber:#FBBF24;
+    --amber-deep:#B45309;
+    --blue:#245AD6;
+    --blue-deep:#1E42B0;
+    --ink:#1C1917;
+    --ink-soft:#57534E;
+    --line:#E7E2DA;
+    --paper:#FBFAF7;
+    --card:#FFFFFF;
+    --danger:#B91C1C;
+    --danger-bg:#FEF2F2;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65;
+    font-size:17px;
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:0 22px;}
+
+  header{
+    padding:44px 0 28px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{
+    display:inline-flex;align-items:center;gap:9px;
+    font-weight:800;font-size:20px;letter-spacing:.3px;
+    text-decoration:none;color:var(--ink);
+  }
+  .brand .mark{
+    width:28px;height:28px;border-radius:8px;display:block;
+  }
+  h1{
+    font-size:31px;line-height:1.2;margin:26px 0 8px;
+    letter-spacing:-.4px;font-weight:800;
+  }
+  .sub{color:var(--ink-soft);font-size:16px;margin:0;}
+
+  main{padding:34px 0 10px;}
+  h2{
+    font-size:14px;text-transform:uppercase;letter-spacing:1.3px;
+    color:var(--amber-deep);font-weight:700;
+    margin:38px 0 14px;
+  }
+  p{margin:0 0 16px;}
+  a{color:var(--amber-deep);}
+
+  ol.steps{
+    list-style:none;counter-reset:s;margin:0;padding:0;
+  }
+  ol.steps li{
+    counter-increment:s;
+    position:relative;
+    padding:16px 16px 16px 60px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin-bottom:12px;
+  }
+  ol.steps li::before{
+    content:counter(s);
+    position:absolute;left:16px;top:15px;
+    width:30px;height:30px;border-radius:9px;
+    background:var(--amber);color:var(--ink);
+    font-weight:800;font-size:15px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  ol.steps strong{display:block;margin-bottom:2px;}
+  ol.steps span{color:var(--ink-soft);font-size:15.5px;}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:2px 0 6px;}
+  @media(max-width:560px){.cols{grid-template-columns:1fr;}}
+  .panel{
+    border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 6px;background:var(--card);
+  }
+  .panel.kept{border-color:#E7DEC9;background:#FEFCF6;}
+  .panel h3{
+    margin:0 0 10px;font-size:15px;font-weight:700;
+    display:flex;align-items:center;gap:7px;
+  }
+  .panel ul{margin:0 0 12px;padding-left:18px;}
+  .panel li{margin-bottom:7px;font-size:15.5px;color:var(--ink-soft);}
+  .tick{color:var(--danger);font-weight:800;}
+  .hold{color:var(--amber-deep);font-weight:800;}
+
+  .note{
+    background:var(--danger-bg);
+    border:1px solid #F4CFCF;
+    border-radius:14px;
+    padding:16px 18px;
+    margin:24px 0 8px;
+    font-size:15.5px;
+    color:#7F1D1D;
+  }
+  .note strong{color:var(--danger);}
+
+  .help{
+    margin:30px 0 0;padding:20px;
+    border:1px dashed var(--line);border-radius:14px;
+    background:var(--card);
+  }
+  .help p{margin:0;font-size:15.5px;color:var(--ink-soft);}
+
+  footer{
+    margin-top:46px;padding:26px 0 40px;
+    border-top:1px solid var(--line);
+    font-size:13.5px;color:var(--ink-soft);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  }
+  footer a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid var(--line);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <a class="brand" href="/">
+      <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="JuntaVale">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2A63E0"/>
+            <stop offset="1" stop-color="#1E42B0"/>
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" rx="24" fill="url(#bg)"/>
+        <path d="M50 78C50 78 22 61 22 41.5C22 30.7 30.3 23 39.4 23C44.6 23 49 25.6 50 30C51 25.6 55.4 23 60.6 23C69.7 23 78 30.7 78 41.5C78 61 50 78 50 78Z" fill="#FBBF24"/>
+        <path d="M50 34C48 40 45 44 45 50C45 54.4 47.2 57.5 50 60C52.8 57.5 55 54.4 55 50C55 44 52 40 50 34Z" fill="#1E42B0"/>
+      </svg>
+      JuntaVale
+    </a>
+    <h1>Excluir sua conta</h1>
+    <p class="sub">Você pode apagar sua conta do JuntaVale a qualquer momento, direto pelo aplicativo. Veja como funciona e o que acontece com seus dados.</p>
+  </header>
+
+  <main>
+
+    <h2>Como excluir</h2>
+    <ol class="steps">
+      <li>
+        <strong>Abra o app e vá até o seu perfil</strong>
+        <span>Toque no ícone de perfil na barra inferior.</span>
+      </li>
+      <li>
+        <strong>Role até o fim e toque em “Excluir conta”</strong>
+        <span>A opção fica no rodapé da tela de perfil.</span>
+      </li>
+      <li>
+        <strong>Confirme que é você</strong>
+        <span>Digite sua senha para autorizar a exclusão.</span>
+      </li>
+      <li>
+        <strong>Digite EXCLUIR para confirmar</strong>
+        <span>Esse passo evita exclusões acidentais. Ao confirmar, a remoção começa na hora.</span>
+      </li>
+    </ol>
+
+    <h2>O que acontece com seus dados</h2>
+    <div class="cols">
+      <div class="panel">
+        <h3><span class="tick">✕</span> Apagado de forma permanente</h3>
+        <ul>
+          <li>Seu perfil, fotos, bio e respostas</li>
+          <li>Sua selfie e dados de verificação</li>
+          <li>Seus matches, com as conversas e imagens trocadas</li>
+          <li>Suas curtidas e quem você bloqueou</li>
+          <li>Seus tickets de suporte</li>
+          <li>Seu login de acesso ao app</li>
+        </ul>
+      </div>
+      <div class="panel kept">
+        <h3><span class="hold">•</span> Mantido por segurança</h3>
+        <ul>
+          <li>Denúncias que você fez sobre outras pessoas permanecem, sem seus dados de perfil, para que a equipe possa proteger a comunidade e agir sobre elas.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>A exclusão é definitiva.</strong> Não há como recuperar a conta nem os dados depois de confirmar. Suas conversas também deixam de aparecer para as pessoas com quem você deu match. Se quiser voltar um dia, será preciso criar uma conta nova do zero.
+    </div>
+
+    <div class="help">
+      <p>Não consegue acessar o app para excluir sua conta? Escreva para <a href="mailto:contato.juntavale@gmail.com">contato.juntavale@gmail.com</a> pelo e-mail cadastrado na sua conta e a gente faz a exclusão para você.</p>
+    </div>
+
+  </main>
+
+  <footer>
+    <span>© JuntaVale</span>
+    <a href="/privacidade">Política de Privacidade</a>
+  </footer>
+
+</div>
+</body>
+</html>

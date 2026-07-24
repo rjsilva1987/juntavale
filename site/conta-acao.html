@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Sua conta — JuntaVale</title>
+<style>
+  :root{
+    --amber:#FBBF24;
+    --amber-deep:#B45309;
+    --blue:#245AD6;
+    --blue-deep:#1E42B0;
+    --ink:#1C1917;
+    --ink-soft:#57534E;
+    --line:#E7E2DA;
+    --paper:#FBFAF7;
+    --card:#FFFFFF;
+    --ok:#15803D;
+    --ok-bg:#F0FDF4;
+    --err:#B91C1C;
+    --err-bg:#FEF2F2;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;min-height:100vh;
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;font-size:17px;
+    display:flex;flex-direction:column;
+  }
+  .wrap{width:100%;max-width:440px;margin:0 auto;padding:0 22px;flex:1;
+    display:flex;flex-direction:column;justify-content:center;}
+
+  .brand{
+    display:inline-flex;align-items:center;gap:9px;justify-content:center;
+    font-weight:800;font-size:19px;letter-spacing:.3px;
+    text-decoration:none;color:var(--ink);margin:0 auto 26px;
+  }
+  .brand .mark{width:28px;height:28px;border-radius:8px;display:block;}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:18px;padding:28px 26px 30px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 30px rgba(0,0,0,.05);
+  }
+  h1{font-size:22px;line-height:1.25;margin:0 0 6px;letter-spacing:-.3px;font-weight:800;}
+  .muted{color:var(--ink-soft);font-size:15px;margin:0 0 20px;}
+  .email{font-weight:700;color:var(--ink);}
+
+  label{display:block;font-size:13px;font-weight:700;color:var(--amber-deep);
+    text-transform:uppercase;letter-spacing:.6px;margin:16px 0 6px;}
+  input[type=password]{
+    width:100%;border:1.5px solid var(--line);border-radius:11px;
+    padding:13px 14px;font-size:16px;color:var(--ink);background:var(--paper);
+    outline:none;transition:border-color .15s;
+  }
+  input[type=password]:focus{border-color:var(--blue);}
+
+  .hint{font-size:13px;color:var(--ink-soft);margin:7px 0 0;min-height:17px;}
+  .hint.bad{color:var(--err);}
+
+  button{
+    width:100%;margin-top:22px;border:0;cursor:pointer;
+    background:var(--amber);color:var(--ink);
+    border-radius:999px;padding:15px;font-size:16px;font-weight:800;
+    letter-spacing:.2px;transition:opacity .15s,transform .05s;
+  }
+  button:hover{opacity:.92;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.5;cursor:not-allowed;}
+
+  .state{text-align:center;}
+  .state .icon{
+    width:56px;height:56px;border-radius:50%;margin:0 auto 16px;
+    display:flex;align-items:center;justify-content:center;font-size:30px;
+  }
+  .state.ok .icon{background:var(--ok-bg);color:var(--ok);}
+  .state.err .icon{background:var(--err-bg);color:var(--err);}
+  .state.load .icon{background:#F5F3EF;color:var(--ink-soft);}
+  .state h1{margin-bottom:8px;}
+
+  .spinner{
+    width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--blue);
+    border-radius:50%;animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .backlink{display:block;text-align:center;margin-top:22px;
+    color:var(--amber-deep);font-size:15px;text-decoration:none;font-weight:600;}
+
+  footer{padding:22px;text-align:center;font-size:12.5px;color:var(--ink-soft);}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+
+  <div class="wrap">
+    <a class="brand" href="/">
+      <svg class="mark" viewBox="0 0 100 100" role="img" aria-label="JuntaVale">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2A63E0"/>
+            <stop offset="1" stop-color="#1E42B0"/>
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" rx="24" fill="url(#bg)"/>
+        <path d="M50 78C50 78 22 61 22 41.5C22 30.7 30.3 23 39.4 23C44.6 23 49 25.6 50 30C51 25.6 55.4 23 60.6 23C69.7 23 78 30.7 78 41.5C78 61 50 78 50 78Z" fill="#FBBF24"/>
+        <path d="M50 34C48 40 45 44 45 50C45 54.4 47.2 57.5 50 60C52.8 57.5 55 54.4 55 50C55 44 52 40 50 34Z" fill="#1E42B0"/>
+      </svg>
+      JuntaVale
+    </a>
+
+    <!-- Carregando -->
+    <div id="loading" class="card state load">
+      <div class="icon"><div class="spinner"></div></div>
+      <h1>Um instante…</h1>
+      <p class="muted">Estamos verificando seu link.</p>
+    </div>
+
+    <!-- Formulário de nova senha -->
+    <div id="form" class="card hidden">
+      <h1>Criar uma nova senha</h1>
+      <p class="muted">Redefinindo a senha de <span id="emailLabel" class="email"></span>.</p>
+
+      <label for="pw1">Nova senha</label>
+      <input id="pw1" type="password" autocomplete="new-password" placeholder="Pelo menos 6 caracteres">
+
+      <label for="pw2">Confirmar nova senha</label>
+      <input id="pw2" type="password" autocomplete="new-password" placeholder="Digite a senha novamente">
+      <p id="hint" class="hint"></p>
+
+      <button id="submit" disabled>Salvar nova senha</button>
+    </div>
+
+    <!-- Sucesso -->
+    <div id="success" class="card state ok hidden">
+      <div class="icon">✓</div>
+      <h1>Senha alterada</h1>
+      <p class="muted">Pronto! Abra o JuntaVale e entre com a sua nova senha.</p>
+    </div>
+
+    <!-- Erro -->
+    <div id="error" class="card state err hidden">
+      <div class="icon">!</div>
+      <h1 id="errTitle">Link inválido</h1>
+      <p id="errMsg" class="muted"></p>
+      <a class="backlink" href="/">Voltar ao início</a>
+    </div>
+  </div>
+
+  <footer>© JuntaVale</footer>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+    import {
+      getAuth,
+      verifyPasswordResetCode,
+      confirmPasswordReset,
+      applyActionCode,
+      checkActionCode,
+    } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDppWsUZxORO9Co7dP91DflBTmegyV82NY",
+      authDomain: "bbmatch-9ede5.firebaseapp.com",
+      projectId: "bbmatch-9ede5",
+      storageBucket: "bbmatch-9ede5.firebasestorage.app",
+      messagingSenderId: "127211238955",
+      appId: "1:127211238955:web:31d9ba9e4abdc52f74dc6e",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    auth.languageCode = "pt-BR";
+
+    const $ = (id) => document.getElementById(id);
+    const show = (id) => {
+      ["loading", "form", "success", "error"].forEach((s) => $(s).classList.add("hidden"));
+      $(id).classList.remove("hidden");
+    };
+    const fail = (title, msg) => {
+      $("errTitle").textContent = title;
+      $("errMsg").textContent = msg;
+      show("error");
+    };
+
+    // Lê os parâmetros que o Firebase anexa ao link do e-mail.
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get("mode");
+    const oobCode = params.get("oobCode");
+
+    if (!oobCode) {
+      fail(
+        "Link inválido",
+        "Este link não é válido. Peça um novo pelo aplicativo, na opção “Esqueci minha senha”.",
+      );
+    } else if (mode === "resetPassword") {
+      handleReset(oobCode);
+    } else if (mode === "verifyEmail") {
+      handleVerify(oobCode);
+    } else if (mode === "recoverEmail") {
+      // Recuperação de e-mail não é usada hoje pelo app, mas o handler
+      // atende todos os modos porque a URL customizada vale para todos os
+      // templates. Mensagem neutra em vez de quebrar.
+      fail(
+        "Ação não disponível",
+        "Este tipo de link ainda não é usado pelo JuntaVale. Se precisar de ajuda, fale com contato.juntavale@gmail.com.",
+      );
+    } else {
+      fail(
+        "Link inválido",
+        "Não reconhecemos este link. Peça um novo pelo aplicativo.",
+      );
+    }
+
+    // ---- Redefinição de senha ----
+    async function handleReset(code) {
+      let email;
+      try {
+        // Valida o código e descobre de qual conta é. Lança se expirado/usado.
+        email = await verifyPasswordResetCode(auth, code);
+      } catch (e) {
+        return fail("Link expirado", messageForReset(e));
+      }
+
+      $("emailLabel").textContent = email;
+      show("form");
+
+      const pw1 = $("pw1");
+      const pw2 = $("pw2");
+      const hint = $("hint");
+      const submit = $("submit");
+
+      const validate = () => {
+        const a = pw1.value;
+        const b = pw2.value;
+        if (a.length > 0 && a.length < 6) {
+          hint.textContent = "A senha precisa ter pelo menos 6 caracteres.";
+          hint.classList.add("bad");
+          submit.disabled = true;
+          return;
+        }
+        if (b.length > 0 && a !== b) {
+          hint.textContent = "As senhas não são iguais.";
+          hint.classList.add("bad");
+          submit.disabled = true;
+          return;
+        }
+        hint.textContent = "";
+        hint.classList.remove("bad");
+        submit.disabled = !(a.length >= 6 && a === b);
+      };
+
+      pw1.addEventListener("input", validate);
+      pw2.addEventListener("input", validate);
+
+      submit.addEventListener("click", async () => {
+        submit.disabled = true;
+        submit.textContent = "Salvando…";
+        try {
+          await confirmPasswordReset(auth, code, pw1.value);
+          show("success");
+        } catch (e) {
+          fail("Não foi possível redefinir", messageForReset(e));
+        }
+      });
+    }
+
+    // ---- Verificação de e-mail (reservado, ainda não usado pelo app) ----
+    async function handleVerify(code) {
+      try {
+        await checkActionCode(auth, code);
+        await applyActionCode(auth, code);
+        $("emailLabel").textContent = "";
+        $("success").querySelector("h1").textContent = "E-mail confirmado";
+        $("success").querySelector(".muted").textContent =
+          "Tudo certo! Já pode voltar ao JuntaVale.";
+        show("success");
+      } catch (e) {
+        fail("Link expirado", "Este link de confirmação não é mais válido.");
+      }
+    }
+
+    function messageForReset(e) {
+      const code = e && e.code ? e.code : "";
+      switch (code) {
+        case "auth/expired-action-code":
+          return "Este link expirou. Peça um novo pelo aplicativo, em “Esqueci minha senha”.";
+        case "auth/invalid-action-code":
+          return "Este link já foi usado ou não é válido. Peça um novo pelo aplicativo.";
+        case "auth/user-disabled":
+          return "Esta conta foi desativada. Fale com contato.juntavale@gmail.com.";
+        case "auth/user-not-found":
+          return "Não encontramos esta conta. Ela pode ter sido excluída.";
+        case "auth/weak-password":
+          return "A senha precisa ter pelo menos 6 caracteres.";
+        default:
+          return "Não foi possível concluir. Tente novamente ou peça um novo link pelo aplicativo.";
+      }
+    }
+  </script>
+</body>
+</html>
