@@ -49,3 +49,5 @@ google-services.json
 google-play-key.json
 *-key.json
 serviceAccountKey.json
+
+.firebase/
