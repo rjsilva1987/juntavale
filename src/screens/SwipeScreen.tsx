@@ -43,6 +43,7 @@ import {
   SwipeContext,
   UserProfile,
 } from '@/services/firestoreService';
+import { getVerificationStatus } from '@/services/verificationService';
 import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -137,6 +138,12 @@ export default function SwipeScreen() {
     .onEnd((e) => {
       runOnJS(handlePhotoTap)(e.x);
     });
+
+  // Guarda de reentrância pra showVerificationRequiredAlert (S70): a leitura
+  // do status é async, então toques repetidos no botão antes dela resolver
+  // não devem empilhar múltiplos Alerts. Marcado antes da leitura, desmarcado
+  // em finally pra uma falha não deixar o botão travado pra sempre.
+  const verificationAlertInFlightRef = useRef(false);
 
   const loadProfiles = useCallback(async () => {
     if (!user) return;
@@ -276,17 +283,67 @@ export default function SwipeScreen() {
     );
   };
 
-  const handleSuperLikePress = () => {
-    // Quota esgotada — caminho de erro atual, sem modal (item 4.2).
-    if (superLikesRemaining === 0) {
-      showSuperLikeQuotaAlert();
+  // S70 — super curtida passou a exigir perfil verificado (antes só o
+  // bilhete exigia). Lê o status uma única vez no toque, em vez de manter
+  // mais um listener em tempo real só pra este Alert; leitura falhou ou o
+  // doc verifications/{uid} não existe (getVerificationStatus retorna null
+  // nos dois casos) → trata como "nunca enviada", o caminho mais seguro
+  // (convida a verificar em vez de dizer "em análise" por engano).
+  const showVerificationRequiredAlert = async () => {
+    if (!user) return;
+    if (verificationAlertInFlightRef.current) return;
+    verificationAlertInFlightRef.current = true;
+    let verification: Awaited<ReturnType<typeof getVerificationStatus>> = null;
+    try {
+      verification = await getVerificationStatus(user.uid).catch(() => null);
+    } finally {
+      verificationAlertInFlightRef.current = false;
+    }
+
+    if (verification?.status === 'pending') {
+      Alert.alert(
+        'Verificação em análise ⭐',
+        'Assim que seu perfil for aprovado, seus Super Likes com bilhete são liberados.',
+        [
+          { text: 'Fechar', style: 'cancel' },
+          { text: 'Ver status', onPress: () => navigation.navigate('Verification') },
+        ],
+      );
       return;
     }
-    // Não verificado — comportamento idêntico ao de hoje, sem modal: bilhete
-    // é exclusivo de perfil verificado (desenho da sprint), mas a super
-    // curtida em si continua disponível pra todo mundo.
+
+    if (verification?.status === 'rejected') {
+      Alert.alert(
+        'Sua verificação não foi aprovada',
+        'Veja o motivo e envie uma nova selfie para liberar os Super Likes com bilhete.',
+        [
+          { text: 'Agora não', style: 'cancel' },
+          { text: 'Ver motivo', onPress: () => navigation.navigate('Verification') },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Super Like é para perfis verificados ⭐',
+      'Verifique seu perfil para enviar Super Likes com bilhete. É rápido: uma selfie e a gente confere.',
+      [
+        { text: 'Agora não', style: 'cancel' },
+        { text: 'Verificar agora', onPress: () => navigation.navigate('Verification') },
+      ],
+    );
+  };
+
+  const handleSuperLikePress = () => {
+    // S70 — verificado vem ANTES da quota: uma conta não verificada que já
+    // tinha gastado superlikes antes desta mudança (remaining pode ser 0)
+    // precisa ver o convite pra verificar, não o alerta de quota esgotada.
     if (!profile?.verified) {
-      swipeCard('super');
+      showVerificationRequiredAlert();
+      return;
+    }
+    if (superLikesRemaining === 0) {
+      showSuperLikeQuotaAlert();
       return;
     }
     setSuperLikeNoteModalVisible(true);
@@ -501,7 +558,7 @@ export default function SwipeScreen() {
             size={48}
             onPress={handleSuperLikePress}
             iconColor={theme.colors.onSecondary}
-            dimmed={superLikesRemaining === 0}
+            dimmed={superLikesRemaining === 0 || !profile?.verified}
             badge={`${superLikesRemaining}/${superLikeLimit}`}
           />
           <ActionButton

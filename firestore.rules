@@ -1,4 +1,4 @@
-// rules-stamp: S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-23
+// rules-stamp: S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-25
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -398,17 +398,16 @@ service cloud.firestore {
           )
         )
         // S67: bilhete opcional anexado à super curtida — 1..150 chars, sem
-        // ser só espaço, só em direction=='superlike' e só quando o AUTOR do
-        // swipe (request.auth.uid, já confirmado == request.resource.data.from
-        // acima) é verificado. "Autor verificado" reutiliza EXATAMENTE o
-        // mesmo mecanismo já usado por matches/{matchId}/messages create
-        // (get(users/{uid}).data.get('verified', false) == true) — mesma
-        // leitura, não uma nova. O ramo `!('note' in ...)` vem primeiro de
-        // propósito: Rules avalia `||` em curto-circuito, então o get() de
-        // verificação (e o resto da validação) só roda quando `note`
-        // realmente está presente no payload — em todo swipe sem bilhete
-        // (a esmagadora maioria: likes, nopes, superlikes sem nota), esta
-        // leitura extra nunca é cobrada.
+        // ser só espaço, só em direction=='superlike'. Até o S70 este bloco
+        // também exigia get(users/{uid}).data.get('verified', false)==true
+        // aqui, redundante com o resto da validação — S70 restringiu
+        // superlike inteiro a conta verificada (ver comentário no ramo
+        // direction=='superlike' abaixo), então checar verified de novo
+        // pro note seria repetir a mesma leitura sem motivo: quem chega a
+        // criar um swipe com direction=='superlike' já é verificado. O
+        // ramo `!('note' in ...)` continua primeiro de propósito
+        // (curto-circuito do `||`): só entra na validação de conteúdo
+        // quando `note` realmente está presente no payload.
         && (
           !('note' in request.resource.data)
           || (
@@ -417,7 +416,6 @@ service cloud.firestore {
             && request.resource.data.note.size() <= 150
             && request.resource.data.note.matches('.*\\S.*')
             && request.resource.data.direction == 'superlike'
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
           )
         )
         // Super Like Fase 2: se o swipe é 'superlike', o contador mensal
@@ -426,10 +424,17 @@ service cloud.firestore {
         // ainda não commitado) — sem isso, um client malicioso criaria o
         // swipe sem gastar cota. As próprias rules do contador acima já
         // impedem resetar/decrementar count dentro do mesmo mês.
+        //
+        // S70 — verified é a PRIMEIRA condição dentro do parêntese: Rules
+        // avalia && em curto-circuito, então um superlike de conta não
+        // verificada é negado sem sequer avaliar a quota. Mesmo mecanismo
+        // já usado por matches/{matchId}/messages create e, até este
+        // sprint, pelo bloco do note acima (ver S67 e a nota do S70 ali).
         && (
           request.resource.data.direction != 'superlike'
           || (
-            getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
             && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month()
             && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count <= 3
             && (
