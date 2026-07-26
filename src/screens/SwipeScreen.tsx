@@ -24,11 +24,9 @@ import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
-import { PromptCard } from '@/components/PromptCard';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { SuperLikeNoteModal } from '@/components/SuperLikeNoteModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
@@ -44,7 +42,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import { getVerificationStatus } from '@/services/verificationService';
-import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
+import { getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -672,18 +670,7 @@ function ProfileCard({
   // Lista de interesses é pequena — calcular o conjunto compartilhado por
   // card a cada render é mais barato que memoizar por perfil.
   const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
-  // S48 — places e events juntos, places primeiro, no máximo 3 no total (sem
-  // matching entre perfis nesta versão, por isso reaproveita InterestChips
-  // com EMPTY_INTEREST_SET em vez de sharedInterests).
-  const placesAndEvents = [...(profile.places ?? []), ...(profile.events ?? [])].slice(0, 3);
-  // S59 — só 1 prompt cabe no overlay (ver comentário abaixo sobre altura);
-  // prompt da semana tem prioridade quando existe (decisão da sprint), senão
-  // cai pro primeiro item de prompts[] (comportamento anterior ao S59).
-  const firstPrompt = profile.weeklyPromptAnswer ?? profile.prompts?.[0];
-  // Com prompt no card, o overlay (chips + pergunta/resposta) fica alto
-  // demais com os 6 chips de antes — reduz pra 4 só quando há prompt pra
-  // mostrar junto, mantendo 6 no caso comum (sem prompt).
-  const chipsMaxVisible = firstPrompt ? 4 : 6;
+  const chipsMaxVisible = 6;
 
   return (
     <View style={pcStyles.container}>
@@ -730,50 +717,18 @@ function ProfileCard({
             <Text style={pcStyles.ufText}>{profile.uf}</Text>
           </View>
         )}
-        <Text style={pcStyles.bio} numberOfLines={2}>
-          {profile.bio || 'Sem bio ainda…'}
-        </Text>
-        {profile.lookingFor && (
-          <View style={pcStyles.lookingForBadge}>
-            <Text style={pcStyles.lookingForBadgeText}>
-              {LOOKING_FOR_LABELS[profile.lookingFor]}
-            </Text>
-          </View>
-        )}
-        {(!!profile.interests?.length || firstPrompt) && (
+        {!!profile.interests?.length && (
           // pointerEvents="none" pra não interceptar as tap zones do
           // PhotoCarousel nem o gesto de swipe do card.
           <View pointerEvents="none">
-            {!!profile.interests?.length && (
-              <>
-                <View style={pcStyles.interestsLabelRow}>
-                  <Ionicons name="pricetags" size={14} color={theme.colors.white} />
-                  <Text style={pcStyles.interestsLabel}>Interesses</Text>
-                </View>
-                <InterestChips
-                  interests={profile.interests}
-                  sharedSet={sharedInterests}
-                  maxVisible={chipsMaxVisible}
-                />
-              </>
-            )}
-            {firstPrompt && (
-              <View style={pcStyles.promptWrap}>
-                <PromptCard
-                  promptId={firstPrompt.id}
-                  answer={firstPrompt.answer}
-                  variant="overlay"
-                />
-              </View>
-            )}
-          </View>
-        )}
-        {placesAndEvents.length > 0 && (
-          <View style={pcStyles.placesEventsWrap} pointerEvents="none">
+            <View style={pcStyles.interestsLabelRow}>
+              <Ionicons name="pricetags" size={14} color={theme.colors.white} />
+              <Text style={pcStyles.interestsLabel}>Interesses</Text>
+            </View>
             <InterestChips
-              interests={placesAndEvents}
-              sharedSet={EMPTY_INTEREST_SET}
-              maxVisible={3}
+              interests={profile.interests}
+              sharedSet={sharedInterests}
+              maxVisible={chipsMaxVisible}
             />
           </View>
         )}
@@ -979,22 +934,6 @@ const pcStyles = StyleSheet.create({
   },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
   ufText: { fontSize: theme.fontSize.xs, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
-  bio: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
-  lookingForBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginBottom: 10,
-  },
-  lookingForBadgeText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.white,
-    fontWeight: '700',
-  },
   interestsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
   interestsLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.white },
-  promptWrap: { marginTop: 8 },
-  placesEventsWrap: { marginTop: 8 },
 });
