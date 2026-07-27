@@ -10,6 +10,7 @@ import { Text, View, StyleSheet } from 'react-native';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { InterestChips } from '@/components/InterestChips';
 import { PromptCard } from '@/components/PromptCard';
+import { REPLY_LIMIT } from '@/constants/reply';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
 import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
@@ -32,6 +33,13 @@ interface ProfileSectionsProps {
   // ausente em MatchProfileScreen, que não passa a prop e continua sem o
   // botão.
   onReply?: (promptId: string) => void;
+  // S74-B — quanto resta da quota mensal de "Responder" (contador próprio,
+  // ver useReplyQuota). Repassado pelo ProfileSheet, junto com `onReply`;
+  // undefined em MatchProfileScreen (que não passa nenhum dos dois).
+  // remaining === 0 não esconde o botão — ele fica esmaecido mas tocável
+  // (mesmo padrão do `dimmed` do ActionButton), pra que o toque ainda
+  // dispare o Alert de quota esgotada no SwipeScreen.
+  replyQuotaRemaining?: number;
 }
 
 export function ProfileSections({
@@ -39,6 +47,7 @@ export function ProfileSections({
   myInterests = [],
   note,
   onReply,
+  replyQuotaRemaining,
 }: ProfileSectionsProps) {
   const sharedInterestSet = useMemo(
     () => getSharedInterestSet(myInterests, profile?.interests),
@@ -47,6 +56,12 @@ export function ProfileSections({
   // S73 — const local em vez de `profile?.weeklyPromptAnswer` repetido:
   // evita non-null assertion no onPress do botão "Responder" mais abaixo.
   const weeklyPromptAnswer = profile?.weeklyPromptAnswer;
+  // S74-B — mesma checagem em ambos os pontos de render do botão abaixo.
+  const replyDimmed = replyQuotaRemaining === 0;
+  const replyBtnLabel =
+    replyQuotaRemaining === undefined
+      ? 'Responder'
+      : `Responder (${replyQuotaRemaining}/${REPLY_LIMIT})`;
 
   return (
     <>
@@ -130,10 +145,10 @@ export function ProfileSections({
               />
               {!!onReply && (
                 <AnimatedPressable
-                  style={styles.replyBtn}
+                  style={[styles.replyBtn, replyDimmed && styles.replyBtnDimmed]}
                   onPress={() => onReply(weeklyPromptAnswer.id)}
                 >
-                  <Text style={styles.replyBtnText}>Responder</Text>
+                  <Text style={styles.replyBtnText}>{replyBtnLabel}</Text>
                 </AnimatedPressable>
               )}
             </View>
@@ -142,8 +157,11 @@ export function ProfileSections({
             <View key={`${item.id}-${index}`}>
               <PromptCard promptId={item.id} answer={item.answer} variant="surface" />
               {!!onReply && (
-                <AnimatedPressable style={styles.replyBtn} onPress={() => onReply(item.id)}>
-                  <Text style={styles.replyBtnText}>Responder</Text>
+                <AnimatedPressable
+                  style={[styles.replyBtn, replyDimmed && styles.replyBtnDimmed]}
+                  onPress={() => onReply(item.id)}
+                >
+                  <Text style={styles.replyBtnText}>{replyBtnLabel}</Text>
                 </AnimatedPressable>
               )}
             </View>
@@ -196,5 +214,10 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: '700',
     color: theme.colors.onPrimary,
+  },
+  // S74-B — mesma opacidade do `actionBtnDisabled` do SwipeScreen (ActionButton,
+  // padrão `dimmed` do S70): reduz opacidade sem desabilitar o toque nativo.
+  replyBtnDimmed: {
+    opacity: 0.35,
   },
 });

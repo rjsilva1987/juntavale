@@ -40,6 +40,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
+import { useReplyQuota } from '@/hooks/useReplyQuota';
 import { useSuperLikeQuota } from '@/hooks/useSuperLikeQuota';
 import { RootStackParamList } from '@/navigation';
 import {
@@ -47,6 +48,7 @@ import {
   getSessionSwipedUids,
   recordSwipe,
   undoSwipe,
+  ReplyQuotaExceededError,
   SuperLikeQuotaExceededError,
   SwipeContext,
   UserProfile,
@@ -73,6 +75,8 @@ export default function SwipeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { filters, saveFilters, clearFilters } = useFilters();
   const { remaining: superLikesRemaining, limit: superLikeLimit } = useSuperLikeQuota();
+  // S74-B — quota própria de "Responder", contador separado do super like.
+  const { remaining: replyRemaining } = useReplyQuota();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -322,6 +326,13 @@ export default function SwipeScreen() {
           setCurrentIndex(swipedIndex);
           setLastSwipedProfile(null);
           showSuperLikeQuotaAlert();
+        } else if (error instanceof ReplyQuotaExceededError) {
+          // S74-B — mesmo tratamento da corrida do superlike acima, agora
+          // pro contador de "Responder": nada foi gravado (rules rejeitaram
+          // o create do swipe), só desfaz visualmente.
+          setCurrentIndex(swipedIndex);
+          setLastSwipedProfile(null);
+          showReplyQuotaAlert();
         } else {
           // S49 — o deck não deve interromper o usuário com um Alert por um
           // swipe que falhou em background (ele já viu o card sair da tela);
@@ -336,6 +347,12 @@ export default function SwipeScreen() {
       'Super Likes esgotados ⭐',
       'Seus 3 Super Likes do mês acabaram. Eles renovam no dia 1º. Em breve você poderá conseguir Super Likes extras!',
     );
+  };
+
+  // S74-B — mesmo padrão do showSuperLikeQuotaAlert acima: Alert.alert com
+  // só título/corpo já resulta num único botão OK padrão, sem navegação.
+  const showReplyQuotaAlert = () => {
+    Alert.alert('Respostas esgotadas', 'Suas 3 respostas do mês acabaram. Elas renovam no dia 1º.');
   };
 
   // S70 — super curtida passou a exigir perfil verificado (antes só o
@@ -425,8 +442,14 @@ export default function SwipeScreen() {
   // painel do Descobrir). Mesmo gate de verificado do superlike (S70),
   // reusando o mesmo Alert — não verificado nunca chega a abrir o modal.
   const handleReplyPress = (promptId: string) => {
+    // S74-B — verificado PRIMEIRO, quota DEPOIS (mesma ordem do
+    // handleSuperLikePress/S70): com quota zerada, Alert e nenhum modal.
     if (!profile?.verified) {
       showVerificationRequiredAlert();
+      return;
+    }
+    if (replyRemaining === 0) {
+      showReplyQuotaAlert();
       return;
     }
     setReplyPromptId(promptId);
@@ -636,6 +659,7 @@ export default function SwipeScreen() {
                 cardWidth={CARD_W}
                 sheetHeight={SHEET_HEIGHT}
                 onReply={handleReplyPress}
+                replyQuotaRemaining={replyRemaining}
               />
             </View>
           </>

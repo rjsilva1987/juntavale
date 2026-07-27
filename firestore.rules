@@ -1,4 +1,4 @@
-// rules-stamp: S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
+// rules-stamp: S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -320,6 +320,39 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ───────────────────────── users/{uid}/replies/usage (S74 — quota de "Responder") ─────────────────────────
+    //
+    // Contador mensal de respostas (bilhete em curtida normal, via prompt),
+    // espelhando users/{uid}/superLikes/usage acima: mesma forma de doc
+    // (year/month/count), mesmas garantias (dono lê/escreve só o próprio,
+    // count só sobe de 1 em 1 no mesmo mês ou reseta pra 1 num mês novo).
+    // S74-A só cria e passa a gravar este contador — nada aqui ainda BLOQUEIA
+    // uma resposta por falta de quota; isso é o S74-B, no bloco do `note` em
+    // swipes/ (400-424 abaixo, intocado nesta rodada).
+    match /users/{uid}/replies/usage {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'count'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && request.resource.data.count == 1;
+      allow update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'count'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && (
+          (resource.data.year == request.time.year()
+            && resource.data.month == request.time.month()
+            && request.resource.data.count == resource.data.count + 1
+            && request.resource.data.count <= 3)
+          ||
+          ((resource.data.year != request.time.year()
+            || resource.data.month != request.time.month())
+            && request.resource.data.count == 1)
+        );
+      allow delete: if false;
+    }
+
     // ───────────────────────── swipes ─────────────────────────
     //
     // Leitura liberada para from==me OU to==me (decisão consciente: a tela
@@ -418,6 +451,28 @@ service cloud.firestore {
               || (
                 request.resource.data.direction == 'like'
                 && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                // S74-B — quota de "Responder", mesmo desenho do Super Like
+                // Fase 2 abaixo (getAfter/exists/get contra o contador
+                // escrito no MESMO batch), porém contra
+                // users/{uid}/replies/usage — contador próprio, não
+                // compartilha cota com superlike. Fica AQUI DENTRO de
+                // propósito: este ramo só é avaliado quando 'note' está
+                // presente E direction=='like' (curto-circuito dos dois
+                // `||` acima), então uma curtida comum sem bilhete nunca
+                // paga nenhuma destas leituras.
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.year == request.time.year()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.month == request.time.month()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.count <= 3 // REPLY_LIMIT (src/constants/reply.ts) — sincronize manualmente, mesmo padrão do "3" do superlike abaixo (SUPER_LIKE_LIMIT)
+                && (
+                  !exists(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage)
+                    ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.count == 1
+                    : (
+                      (get(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.year == request.time.year()
+                        && get(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.month == request.time.month())
+                        ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.count == get(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.count + 1
+                        : getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/replies/usage).data.count == 1
+                    )
+                )
               )
             )
           )

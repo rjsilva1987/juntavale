@@ -27,6 +27,7 @@ import {
 
 import { ADMIN_UID } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
+import { REPLY_LIMIT } from '@/constants/reply';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
 import { db, storage } from '@/services/firebase';
@@ -375,6 +376,15 @@ interface SuperLikeUsage {
   count: number;
 }
 
+// S74-A — contador mensal de "Responder" (bilhete em curtida normal, via
+// prompt), mesma forma do SuperLikeUsage acima, em doc separado
+// (users/{uid}/replies/usage) — quota independente da de super like.
+interface ReplyUsage {
+  year: number;
+  month: number;
+  count: number;
+}
+
 // S35-A — o que estava visível no card no momento do like/superlike, como
 // REFERÊNCIA (índice da foto ou id do prompt), nunca a URL/texto em si.
 // Coexiste com likedPhotoURL (S35, já em produção) — ver decisão registrada
@@ -391,6 +401,17 @@ export class SuperLikeQuotaExceededError extends Error {
   constructor() {
     super('Limite mensal de superlikes atingido.');
     this.name = 'SuperLikeQuotaExceededError';
+  }
+}
+
+// S74-B — mesmo padrão do SuperLikeQuotaExceededError acima, agora pro
+// contador próprio de "Responder".
+export class ReplyQuotaExceededError extends Error {
+  code = 'reply/quota-exceeded' as const;
+
+  constructor() {
+    super('Limite mensal de respostas atingido.');
+    this.name = 'ReplyQuotaExceededError';
   }
 }
 
@@ -473,6 +494,29 @@ export const recordSwipe = async (
 
     if (isSameMonth && usage.count >= SUPER_LIKE_LIMIT) {
       throw new SuperLikeQuotaExceededError();
+    }
+
+    const nextCount = isSameMonth ? usage.count + 1 : 1;
+
+    const batch = writeBatch(db);
+    batch.set(usageRef, { year, month, count: nextCount });
+    batch.set(swipeRef, swipeData);
+    await batch.commit();
+  } else if (direction === 'like' && trimmedNote) {
+    // S74-A/B — contador de "Responder", mesmo desenho do superlike acima
+    // (getDoc do usage, cálculo de mês em UTC, writeBatch juntando usage e
+    // swipe), em doc separado (não compartilha quota com superlike).
+    const usageRef = doc(db, 'users', fromUid, 'replies', 'usage');
+    const usageSnap = await getDoc(usageRef);
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth() + 1;
+
+    const usage = usageSnap.exists() ? (usageSnap.data() as ReplyUsage) : null;
+    const isSameMonth = usage != null && usage.year === year && usage.month === month;
+
+    if (isSameMonth && usage.count >= REPLY_LIMIT) {
+      throw new ReplyQuotaExceededError();
     }
 
     const nextCount = isSameMonth ? usage.count + 1 : 1;
