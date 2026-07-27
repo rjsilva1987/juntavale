@@ -29,7 +29,7 @@
 - Nunca escrever "confirmado acima"/"já reproduzido" — tudo literal.
 - Toda função/tipo/componente/constante CRIADO deve constar na lista de
   alterações.
-- Baseline de lint: 0 erros / ~29 warnings (prettier pré-existentes).
+- Baseline de lint: 0 erros / 25 warnings (prettier pré-existentes).
   Qualquer erro novo é regressão.
 
 ## Padrões estabelecidos
