@@ -1,4 +1,4 @@
-// rules-stamp: S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-25
+// rules-stamp: S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -397,17 +397,15 @@ service cloud.firestore {
             )
           )
         )
-        // S67: bilhete opcional anexado à super curtida — 1..150 chars, sem
-        // ser só espaço, só em direction=='superlike'. Até o S70 este bloco
-        // também exigia get(users/{uid}).data.get('verified', false)==true
-        // aqui, redundante com o resto da validação — S70 restringiu
-        // superlike inteiro a conta verificada (ver comentário no ramo
-        // direction=='superlike' abaixo), então checar verified de novo
-        // pro note seria repetir a mesma leitura sem motivo: quem chega a
-        // criar um swipe com direction=='superlike' já é verificado. O
-        // ramo `!('note' in ...)` continua primeiro de propósito
-        // (curto-circuito do `||`): só entra na validação de conteúdo
-        // quando `note` realmente está presente no payload.
+        // S67/S73: bilhete opcional anexado a like ou superlike — 1..150
+        // chars, sem ser só espaço. Em superlike, o gate de verificado já
+        // vem do ramo direction=='superlike' abaixo (S70) — repetir o get()
+        // aqui seria a mesma leitura de novo sem motivo. Em like, não existe
+        // outro ramo que confirme verified, então o get() entra AQUI DENTRO,
+        // só neste caminho (S73) — como o bloco todo só é avaliado quando
+        // 'note' está presente no payload (curto-circuito do `!(...) ||`
+        // logo abaixo), um like comum sem bilhete nunca paga essa leitura
+        // extra. O ramo `!('note' in ...)` continua primeiro de propósito.
         && (
           !('note' in request.resource.data)
           || (
@@ -415,7 +413,13 @@ service cloud.firestore {
             && request.resource.data.note.size() >= 1
             && request.resource.data.note.size() <= 150
             && request.resource.data.note.matches('.*\\S.*')
-            && request.resource.data.direction == 'superlike'
+            && (
+              request.resource.data.direction == 'superlike'
+              || (
+                request.resource.data.direction == 'like'
+                && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+              )
+            )
           )
         )
         // Super Like Fase 2: se o swipe é 'superlike', o contador mensal

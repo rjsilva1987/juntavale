@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { InterestChips } from '@/components/InterestChips';
 import { PromptCard } from '@/components/PromptCard';
 import { theme } from '@/constants/theme';
@@ -26,13 +27,26 @@ interface ProfileSectionsProps {
   // (Chat, MatchesGrid, Descobrir, deep link), que continuam funcionando
   // exatamente como antes.
   note?: string;
+  // S73 — botão "Responder" por item de pergunta (fixa ou da semana), só no
+  // painel do Descobrir (ProfileSheet). Mesmo padrão do `note?` acima:
+  // ausente em MatchProfileScreen, que não passa a prop e continua sem o
+  // botão.
+  onReply?: (promptId: string) => void;
 }
 
-export function ProfileSections({ profile, myInterests = [], note }: ProfileSectionsProps) {
+export function ProfileSections({
+  profile,
+  myInterests = [],
+  note,
+  onReply,
+}: ProfileSectionsProps) {
   const sharedInterestSet = useMemo(
     () => getSharedInterestSet(myInterests, profile?.interests),
     [myInterests, profile?.interests],
   );
+  // S73 — const local em vez de `profile?.weeklyPromptAnswer` repetido:
+  // evita non-null assertion no onPress do botão "Responder" mais abaixo.
+  const weeklyPromptAnswer = profile?.weeklyPromptAnswer;
 
   return (
     <>
@@ -97,7 +111,7 @@ export function ProfileSections({ profile, myInterests = [], note }: ProfileSect
         </>
       )}
 
-      {((profile?.prompts?.length ?? 0) > 0 || profile?.weeklyPromptAnswer) && (
+      {((profile?.prompts?.length ?? 0) > 0 || weeklyPromptAnswer) && (
         <>
           <Text style={styles.sectionTitle}>Perguntas</Text>
           {/* S59 — prompt da semana em destaque primeiro (mesmo
@@ -107,21 +121,32 @@ export function ProfileSections({ profile, myInterests = [], note }: ProfileSect
               — continua renderizando normalmente aqui (getPromptText
               já resolve id de WEEKLY_PROMPTS), sem tratamento
               especial nem deduplicação com weeklyPromptAnswer. */}
-          {profile?.weeklyPromptAnswer && (
-            <PromptCard
-              key={`weekly-${profile.weeklyPromptAnswer.id}`}
-              promptId={profile.weeklyPromptAnswer.id}
-              answer={profile.weeklyPromptAnswer.answer}
-              variant="surface"
-            />
+          {weeklyPromptAnswer && (
+            <View key={`weekly-${weeklyPromptAnswer.id}`}>
+              <PromptCard
+                promptId={weeklyPromptAnswer.id}
+                answer={weeklyPromptAnswer.answer}
+                variant="surface"
+              />
+              {!!onReply && (
+                <AnimatedPressable
+                  style={styles.replyBtn}
+                  onPress={() => onReply(weeklyPromptAnswer.id)}
+                >
+                  <Text style={styles.replyBtnText}>Responder</Text>
+                </AnimatedPressable>
+              )}
+            </View>
           )}
           {profile?.prompts?.map((item, index) => (
-            <PromptCard
-              key={`${item.id}-${index}`}
-              promptId={item.id}
-              answer={item.answer}
-              variant="surface"
-            />
+            <View key={`${item.id}-${index}`}>
+              <PromptCard promptId={item.id} answer={item.answer} variant="surface" />
+              {!!onReply && (
+                <AnimatedPressable style={styles.replyBtn} onPress={() => onReply(item.id)}>
+                  <Text style={styles.replyBtnText}>Responder</Text>
+                </AnimatedPressable>
+              )}
+            </View>
           ))}
         </>
       )}
@@ -154,5 +179,22 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontStyle: 'italic',
     lineHeight: 22,
+  },
+  // S73 — botão "Responder" por pergunta; mesmos tokens do botão principal
+  // do SuperLikeNoteModal (primary/onPrimary), nunca secondary (amarelo) +
+  // texto branco.
+  replyBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  replyBtnText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.onPrimary,
   },
 });

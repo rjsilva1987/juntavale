@@ -83,6 +83,10 @@ export default function SwipeScreen() {
   // (item 4.2); fechar pelo backdrop/botão de fechar cancela a super curtida
   // inteira (nada é gravado, ver handleCancelSuperLikeNote).
   const [superLikeNoteModalVisible, setSuperLikeNoteModalVisible] = useState(false);
+  // S73 — modo "Responder" reusa o mesmo SuperLikeNoteModal; não-null diz
+  // que o modal está aberto respondendo a ESTE prompt (guarda o id pra
+  // montar o context {type:'prompt', promptId} no envio).
+  const [replyPromptId, setReplyPromptId] = useState<string | null>(null);
   // S72-B1 — painel de perfil (ProfileSheet) sem arrasto: abre/fecha só por
   // toque. Fecha sozinho quando o card muda, quando a tela perde foco e no
   // botão físico de voltar do Android (efeitos mais abaixo).
@@ -261,7 +265,15 @@ export default function SwipeScreen() {
     return () => subscription.remove();
   }, [sheetOpen]);
 
-  const completeSwipe = (dir: 'left' | 'right' | 'super', note?: string) => {
+  const completeSwipe = (
+    dir: 'left' | 'right' | 'super',
+    note?: string,
+    // S73 — "Responder" grava context {type:'prompt', promptId} no lugar do
+    // visibleContextRef (foto) de sempre; todo outro caminho de swipe
+    // continua sem passar isto, então visibleContextRef.current permanece o
+    // default inalterado.
+    contextOverride?: SwipeContext,
+  ) => {
     const target = profilesRef.current[currentIndexRef.current];
     const swipedIndex = currentIndexRef.current;
     const targetPhotos = target?.photos?.length
@@ -269,7 +281,7 @@ export default function SwipeScreen() {
       : target?.photoURL
         ? [target.photoURL]
         : [];
-    const visibleContext = visibleContextRef.current;
+    const visibleContext = contextOverride ?? visibleContextRef.current;
     const photoIndex = visibleContext.type === 'photo' ? visibleContext.photoIndex : 0;
     const likedPhotoURL = targetPhotos[photoIndex] ?? target?.photoURL ?? undefined;
     translateX.value = 0;
@@ -409,6 +421,34 @@ export default function SwipeScreen() {
     setSuperLikeNoteModalVisible(false);
   };
 
+  // S73 — "Responder" (bilhete em curtida normal, a partir de um prompt do
+  // painel do Descobrir). Mesmo gate de verificado do superlike (S70),
+  // reusando o mesmo Alert — não verificado nunca chega a abrir o modal.
+  const handleReplyPress = (promptId: string) => {
+    if (!profile?.verified) {
+      showVerificationRequiredAlert();
+      return;
+    }
+    setReplyPromptId(promptId);
+  };
+
+  const handleSendReply = (note: string) => {
+    const promptId = replyPromptId;
+    setReplyPromptId(null);
+    if (!promptId) return;
+    // S73 — curtida normal (não superlike), com o context do prompt no
+    // lugar do visibleContext de foto; swipeCard('right', ...) fecha o
+    // painel sozinho (useEffect de currentIndex, S72-B1) e avança o deck
+    // como em qualquer curtida.
+    swipeCard('right', note, { type: 'prompt', promptId });
+  };
+
+  // Fechar pelo backdrop/botão de fechar cancela a resposta inteira — nenhum
+  // swipe é gravado, igual ao cancelamento da super curtida acima.
+  const handleCancelReply = () => {
+    setReplyPromptId(null);
+  };
+
   const handleUndo = async () => {
     if (!user || !lastSwipedProfile) return;
     const { profile: target, index, isMatch } = lastSwipedProfile;
@@ -421,14 +461,18 @@ export default function SwipeScreen() {
     }
   };
 
-  const swipeCard = (dir: 'left' | 'right' | 'super', note?: string) => {
+  const swipeCard = (
+    dir: 'left' | 'right' | 'super',
+    note?: string,
+    contextOverride?: SwipeContext,
+  ) => {
     if (!user || currentIndex >= profiles.length) return;
     const toX = dir === 'left' ? -SCREEN_W * 1.5 : SCREEN_W * 1.5;
     const toY = dir === 'super' ? -SCREEN_H : 0;
 
     translateY.value = withTiming(toY, { duration: 300 });
     translateX.value = withTiming(toX, { duration: 300 }, (finished) => {
-      if (finished) runOnJS(completeSwipe)(dir, note);
+      if (finished) runOnJS(completeSwipe)(dir, note, contextOverride);
     });
   };
 
@@ -591,6 +635,7 @@ export default function SwipeScreen() {
                 onClose={() => setSheetOpen(false)}
                 cardWidth={CARD_W}
                 sheetHeight={SHEET_HEIGHT}
+                onReply={handleReplyPress}
               />
             </View>
           </>
@@ -686,12 +731,18 @@ export default function SwipeScreen() {
       />
 
       {/* Bilhete opcional da Super Curtida (S67) — só abre pra perfil
-          verificado com cota disponível, ver handleSuperLikePress. */}
+          verificado com cota disponível, ver handleSuperLikePress. S73
+          reusa o mesmo modal em modo "Responder" (replyPromptId != null);
+          os dois modos nunca ficam visible ao mesmo tempo (handleReplyPress
+          e handleSuperLikePress são os únicos que abrem, cada um só liga o
+          próprio state). */}
       <SuperLikeNoteModal
-        visible={superLikeNoteModalVisible}
-        onClose={handleCancelSuperLikeNote}
+        visible={superLikeNoteModalVisible || replyPromptId !== null}
+        onClose={replyPromptId !== null ? handleCancelReply : handleCancelSuperLikeNote}
         onSendWithoutNote={handleSendSuperLikeWithoutNote}
-        onSendWithNote={handleSendSuperLikeWithNote}
+        onSendWithNote={replyPromptId !== null ? handleSendReply : handleSendSuperLikeWithNote}
+        title={replyPromptId !== null ? 'Responder' : undefined}
+        hideSendWithoutNote={replyPromptId !== null}
       />
     </View>
   );

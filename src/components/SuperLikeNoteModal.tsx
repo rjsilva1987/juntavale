@@ -24,6 +24,13 @@ interface SuperLikeNoteModalProps {
   onClose: () => void;
   onSendWithoutNote: () => void;
   onSendWithNote: (note: string) => void;
+  // S73 — modo "Responder" (bilhete em curtida normal, via prompt) reusa
+  // este modal com título diferente; default mantém o texto de sempre pra
+  // não quebrar o caminho de superlike.
+  title?: string;
+  // S73 — responder um prompt sem texto não faz sentido: some com o botão
+  // "enviar sem bilhete" quando true. Default false preserva o superlike.
+  hideSendWithoutNote?: boolean;
 }
 
 export function SuperLikeNoteModal({
@@ -31,6 +38,8 @@ export function SuperLikeNoteModal({
   onClose,
   onSendWithoutNote,
   onSendWithNote,
+  title = 'Super Curtida ⭐',
+  hideSendWithoutNote = false,
 }: SuperLikeNoteModalProps) {
   const [note, setNote] = useState('');
   const trimmed = note.trim();
@@ -74,7 +83,7 @@ export function SuperLikeNoteModal({
                 <Ionicons name="close" size={24} color={theme.colors.text} />
               </AnimatedPressable>
 
-              <Text style={styles.title}>Super Curtida ⭐</Text>
+              <Text style={styles.title}>{title}</Text>
               <Text style={styles.subtitle}>
                 Anexe um bilhete opcional pra chamar atenção (até {MAX_NOTE_LENGTH} caracteres)
               </Text>
@@ -100,9 +109,11 @@ export function SuperLikeNoteModal({
                 <Text style={styles.sendNoteBtnText}>Enviar bilhete</Text>
               </AnimatedPressable>
 
-              <AnimatedPressable style={styles.sendPlainBtn} onPress={handleSendWithoutNote}>
-                <Text style={styles.sendPlainBtnText}>Enviar sem bilhete</Text>
-              </AnimatedPressable>
+              {!hideSendWithoutNote && (
+                <AnimatedPressable style={styles.sendPlainBtn} onPress={handleSendWithoutNote}>
+                  <Text style={styles.sendPlainBtnText}>Enviar sem bilhete</Text>
+                </AnimatedPressable>
+              )}
             </ScrollView>
           </Pressable>
         </Pressable>

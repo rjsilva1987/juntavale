@@ -30,6 +30,8 @@ export interface ProfileSheetProps {
   // aqui — ver relatório da sprint pra justificativa completa.
   cardWidth: number;
   sheetHeight: number;
+  // S73 — repassado direto pro ProfileSections; ver comentário lá.
+  onReply?: (promptId: string) => void;
 }
 
 export function ProfileSheet({
@@ -39,6 +41,7 @@ export function ProfileSheet({
   onClose,
   cardWidth,
   sheetHeight,
+  onReply,
 }: ProfileSheetProps) {
   const translateY = useSharedValue(sheetHeight);
 
@@ -97,7 +100,7 @@ export function ProfileSheet({
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <ProfileSections profile={profile} myInterests={myInterests} />
+        <ProfileSections profile={profile} myInterests={myInterests} onReply={onReply} />
       </ScrollView>
     </Animated.View>
   );
