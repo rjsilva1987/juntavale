@@ -5,7 +5,16 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Alert,
+  BackHandler,
+  Pressable,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -24,6 +33,7 @@ import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
+import { ProfileSheet } from '@/components/ProfileSheet';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { SuperLikeNoteModal } from '@/components/SuperLikeNoteModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -46,6 +56,10 @@ import { getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
+const CARD_H = CARD_W * 1.35;
+// S72-B1 — painel de perfil sem arrasto: 85% da altura do card, deixando uma
+// faixa de foto exposta no topo (ver ProfileSheet e o Pressable de fechar).
+const SHEET_HEIGHT = CARD_H * 0.85;
 const SWIPE_THRESHOLD = SCREEN_W * 0.25;
 
 interface LastSwipedProfile {
@@ -69,6 +83,10 @@ export default function SwipeScreen() {
   // (item 4.2); fechar pelo backdrop/botão de fechar cancela a super curtida
   // inteira (nada é gravado, ver handleCancelSuperLikeNote).
   const [superLikeNoteModalVisible, setSuperLikeNoteModalVisible] = useState(false);
+  // S72-B1 — painel de perfil (ProfileSheet) sem arrasto: abre/fecha só por
+  // toque. Fecha sozinho quando o card muda, quando a tela perde foco e no
+  // botão físico de voltar do Android (efeitos mais abaixo).
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Interesses do usuário logado, memoizados pra não recalcular a cada
   // render — só muda quando o profile (e portanto profile.interests) muda.
@@ -106,6 +124,11 @@ export default function SwipeScreen() {
   useEffect(() => {
     visibleContextRef.current = { type: 'photo', photoIndex: 0 };
   }, [currentIndex]);
+  // S72-B1 — qualquer troca de card (like/nope/superlike/undo) fecha o
+  // painel, que só faz sentido pro card que estava no topo quando foi aberto.
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [currentIndex]);
   const handlePhotoIndexChange = (index: number) => {
     visibleContextRef.current = { type: 'photo', photoIndex: index };
   };
@@ -131,6 +154,7 @@ export default function SwipeScreen() {
     }
   };
   const tapGesture = Gesture.Tap()
+    .enabled(!sheetOpen)
     .maxDuration(250)
     .maxDistance(10)
     .onEnd((e) => {
@@ -215,6 +239,27 @@ export default function SwipeScreen() {
       setLastSwipedProfile(null);
     }, []),
   );
+
+  // S72-B1 — perder foco (troca de aba) fecha o painel; reusa o mesmo
+  // useFocusEffect já importado/usado acima, só que aqui via cleanup (disparado
+  // no blur, não no focus).
+  useFocusEffect(
+    useCallback(() => {
+      return () => setSheetOpen(false);
+    }, []),
+  );
+
+  // S72-B1 — não existia nenhum BackHandler no projeto; API atual do RN
+  // (0.81): addEventListener devolve uma subscription com .remove(), em vez
+  // do antigo BackHandler.removeEventListener.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!sheetOpen) return false;
+      setSheetOpen(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [sheetOpen]);
 
   const completeSwipe = (dir: 'left' | 'right' | 'super', note?: string) => {
     const target = profilesRef.current[currentIndexRef.current];
@@ -388,6 +433,7 @@ export default function SwipeScreen() {
   };
 
   const gesture = Gesture.Pan()
+    .enabled(!sheetOpen)
     .simultaneousWithExternalGesture(pagerNativeGesture, tapGesture)
     .onBegin(() => {
       runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
@@ -510,13 +556,7 @@ export default function SwipeScreen() {
                   tapGesture={tapGesture}
                   carouselRef={carouselRef}
                   onPhotoIndexChange={handlePhotoIndexChange}
-                  onInfoPress={() =>
-                    navigation.navigate('MatchProfile', {
-                      uid: currentProfile.uid,
-                      name: currentProfile.name,
-                      photoURL: currentProfile.photoURL,
-                    })
-                  }
+                  onExpandPress={() => setSheetOpen(true)}
                 />
 
                 {/* LIKE stamp */}
@@ -530,6 +570,29 @@ export default function SwipeScreen() {
                 </Animated.View>
               </Animated.View>
             </GestureDetector>
+
+            {/* S72-B1 — wrapper com a MESMA geometria do card (mesma
+                centralização herdada de cardArea), clipando o painel e o
+                Pressable de fechar em vez de ancorá-los direto em cardArea
+                (que é maior que o card). Sempre renderizado — quem controla
+                visibilidade é o ProfileSheet, via seu próprio pointerEvents. */}
+            <View style={styles.sheetWrapper} pointerEvents="box-none">
+              {/* Faixa de foto exposta acima do painel: tocar nela fecha, em
+                  vez de avançar a foto (tapGesture já fica .enabled(false)
+                  enquanto o painel está aberto). */}
+              {sheetOpen && (
+                <Pressable style={styles.exposedPhotoOverlay} onPress={() => setSheetOpen(false)} />
+              )}
+
+              <ProfileSheet
+                visible={sheetOpen}
+                profile={currentProfile}
+                myInterests={myInterests}
+                onClose={() => setSheetOpen(false)}
+                cardWidth={CARD_W}
+                sheetHeight={SHEET_HEIGHT}
+              />
+            </View>
           </>
         )}
       </View>
@@ -642,7 +705,7 @@ interface ProfileCardProps {
   tapGesture?: ReturnType<typeof Gesture.Tap>;
   carouselRef?: React.RefObject<PhotoCarouselHandle | null>;
   onPhotoIndexChange?: (index: number) => void;
-  onInfoPress?: () => void;
+  onExpandPress?: () => void;
 }
 
 function ProfileCard({
@@ -652,7 +715,7 @@ function ProfileCard({
   tapGesture,
   carouselRef,
   onPhotoIndexChange,
-  onInfoPress,
+  onExpandPress,
 }: ProfileCardProps) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const photos = profile.photos?.length
@@ -701,13 +764,13 @@ function ProfileCard({
               </View>
             )}
           </View>
-          {onInfoPress && (
+          {onExpandPress && (
             <TouchableOpacity
               style={pcStyles.infoBtn}
-              onPress={onInfoPress}
+              onPress={onExpandPress}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="information-circle" size={28} color={theme.colors.white} />
+              <Ionicons name="chevron-up-circle" size={28} color={theme.colors.white} />
             </TouchableOpacity>
           )}
         </View>
@@ -817,10 +880,30 @@ const styles = StyleSheet.create({
   card: {
     position: 'absolute',
     width: CARD_W,
-    height: CARD_W * 1.35,
+    height: CARD_H,
     borderRadius: theme.borderRadius.xl,
     overflow: 'hidden',
     ...theme.shadows.medium,
+  },
+  // S72-B1 — mesma geometria do `card` acima, sem shadow: clipa o painel e o
+  // Pressable de fechar (que sozinhos, ancorados direto em cardArea, ficavam
+  // maiores que o card de verdade). zIndex/elevation concentrados só aqui —
+  // removidos do ProfileSheet e do exposedPhotoOverlay, que ficariam
+  // redundantes com o wrapper já clipando e reordenando os dois.
+  sheetWrapper: {
+    position: 'absolute',
+    width: CARD_W,
+    height: CARD_H,
+    borderRadius: theme.borderRadius.xl,
+    overflow: 'hidden',
+    zIndex: 20,
+    elevation: 20,
+  },
+  exposedPhotoOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: SHEET_HEIGHT,
+    width: CARD_W,
   },
   skeletonInfo: {
     position: 'absolute',
