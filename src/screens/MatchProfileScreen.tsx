@@ -10,11 +10,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { FounderBadge } from '@/components/FounderBadge';
-import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
-import { PromptCard } from '@/components/PromptCard';
+import { ProfileSections } from '@/components/ProfileSections';
 import { ReportModal } from '@/components/ReportModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
@@ -30,7 +29,6 @@ import {
   SwipeContext,
   UserProfile,
 } from '@/services/firestoreService';
-import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
@@ -243,10 +241,6 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   const photos = profile?.photos?.length ? profile.photos : photoURL ? [photoURL] : [];
 
   const myInterests = useMemo(() => myProfile?.interests ?? [], [myProfile?.interests]);
-  const sharedInterestSet = useMemo(
-    () => getSharedInterestSet(myInterests, profile?.interests),
-    [myInterests, profile?.interests],
-  );
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
@@ -312,95 +306,11 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 </View>
               )}
 
-              {!!profile?.bio && (
-                <>
-                  <Text style={styles.sectionTitle}>Sobre</Text>
-                  <Text style={styles.bio}>{profile.bio}</Text>
-                </>
-              )}
-
-              {(profile?.interests?.length ?? 0) > 0 && (
-                <>
-                  <Text style={styles.sectionTitle}>Interesses</Text>
-                  <InterestChips
-                    interests={profile?.interests ?? []}
-                    sharedSet={sharedInterestSet}
-                    maxVisible={100}
-                    variant="surface"
-                  />
-                </>
-              )}
-
-              {(profile?.places?.length ?? 0) > 0 && (
-                <>
-                  <Text style={styles.sectionTitle}>Meus lugares</Text>
-                  <InterestChips
-                    interests={profile?.places ?? []}
-                    sharedSet={EMPTY_INTEREST_SET}
-                    maxVisible={100}
-                    variant="surface"
-                  />
-                </>
-              )}
-
-              {(profile?.events?.length ?? 0) > 0 && (
-                <>
-                  <Text style={styles.sectionTitle}>No meu radar</Text>
-                  <InterestChips
-                    interests={profile?.events ?? []}
-                    sharedSet={EMPTY_INTEREST_SET}
-                    maxVisible={100}
-                    variant="surface"
-                  />
-                </>
-              )}
-
-              {/* S67-complemento — bilhete completo da super curtida (sem
-                  numberOfLines, ao contrário do preview truncado em 3 linhas
-                  do card na LikesScreen — aquele truncamento continua
-                  correto lá, este texto aqui é a versão completa). Só existe
-                  quando o param `note` vem presente (aba "Quem curtiu você"
-                  da LikesScreen); em todo outro ponto de entrada desta tela
-                  o bloco inteiro simplesmente não renderiza. Posicionado
-                  acima de "Perguntas" — é a informação mais relevante pra
-                  decisão de curtir de volta. */}
-              {!!note && (
-                <>
-                  <Text style={styles.sectionTitle}>Bilhete</Text>
-                  <View style={styles.noteBox}>
-                    <Text style={styles.noteText}>“{note}”</Text>
-                  </View>
-                </>
-              )}
-
-              {((profile?.prompts?.length ?? 0) > 0 || profile?.weeklyPromptAnswer) && (
-                <>
-                  <Text style={styles.sectionTitle}>Perguntas</Text>
-                  {/* S59 — prompt da semana em destaque primeiro (mesmo
-                      PromptCard dos demais, sem componente novo), seguido dos
-                      itens de prompts[]. Perfis de teste anteriores ao S59
-                      podem ter um item com id wXX preso dentro de prompts[]
-                      — continua renderizando normalmente aqui (getPromptText
-                      já resolve id de WEEKLY_PROMPTS), sem tratamento
-                      especial nem deduplicação com weeklyPromptAnswer. */}
-                  {profile?.weeklyPromptAnswer && (
-                    <PromptCard
-                      key={`weekly-${profile.weeklyPromptAnswer.id}`}
-                      promptId={profile.weeklyPromptAnswer.id}
-                      answer={profile.weeklyPromptAnswer.answer}
-                      variant="surface"
-                    />
-                  )}
-                  {profile?.prompts?.map((item, index) => (
-                    <PromptCard
-                      key={`${item.id}-${index}`}
-                      promptId={item.id}
-                      answer={item.answer}
-                      variant="surface"
-                    />
-                  ))}
-                </>
-              )}
+              {/* S72-A — bio/interesses/lugares/eventos/bilhete/prompts
+                  extraídos pra ProfileSections (mesma ordem, mesmos
+                  estilos). uf/lookingFor acima continuam inline aqui —
+                  não fazem parte do que foi extraído nesta sprint. */}
+              <ProfileSections profile={profile} myInterests={myInterests} note={note} />
             </View>
 
             {isPreview && (
@@ -526,31 +436,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.primary,
     fontWeight: '700',
-  },
-  sectionTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: '700',
-    color: theme.colors.primary,
-    marginTop: 16,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  bio: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 22 },
-  // S67-complemento — mesma linguagem visual de citação do LikeCard
-  // (LikesScreen: borda à esquerda em primaryLight + itálico), adaptada pro
-  // fundo claro do infoCard aqui (texto escuro em vez de branco — nunca
-  // amarelo com texto branco, regra do projeto).
-  noteBox: {
-    paddingLeft: 10,
-    borderLeftWidth: 2,
-    borderLeftColor: theme.colors.primaryLight,
-  },
-  noteText: {
-    fontSize: theme.fontSize.md,
-    color: theme.colors.text,
-    fontStyle: 'italic',
-    lineHeight: 22,
   },
 
   swipeActions: {
