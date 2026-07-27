@@ -14,13 +14,14 @@ import { ReportModal } from '@/components/ReportModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
+import { getPromptText } from '@/constants/prompts';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLikers } from '@/hooks/useLikers';
 import { useMyLikes } from '@/hooks/useMyLikes';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
-import { UserProfile } from '@/services/firestoreService';
+import { SwipeContext, UserProfile } from '@/services/firestoreService';
 
 type Tab = 'received' | 'sent';
 
@@ -32,6 +33,10 @@ interface LikeCardProps {
   // controle de exibição é por prop — só a aba "Quem curtiu você" passa
   // esse valor adiante (useMyLikes não expõe note, ver hook).
   note?: string;
+  // S73-B — referência do que estava visível no swipe (foto ou prompt
+  // respondido). Mesmo padrão do `note?` acima: só "Quem curtiu você" passa
+  // adiante (useMyLikes não expõe, ver hook).
+  context?: SwipeContext;
   onPress: () => void;
   onMenuPress: () => void;
 }
@@ -43,13 +48,23 @@ function LikeCard({
   isSuperLike,
   likedPhotoURL,
   note,
+  context,
   onPress,
   onMenuPress,
 }: LikeCardProps) {
   // Se a foto curtida falhar ao carregar (ex: deletada do Storage), some
   // com a faixa inteira em vez de mostrar um quadrado quebrado (S35).
   const [likedPhotoFailed, setLikedPhotoFailed] = useState(false);
-  const showLikedPhotoContext = !!likedPhotoURL && !likedPhotoFailed;
+  // S73-B — bloco de prompt substitui o de foto (nunca os dois juntos),
+  // mesmo quando likedPhotoURL também está presente no doc (SwipeScreen
+  // grava os dois campos independente do context, ver S73-A). Id de prompt
+  // fora do catálogo atual (removido, versão antiga) faz getPromptText
+  // devolver '' (ver constants/prompts.ts) — nesse caso o bloco novo não
+  // renderiza (promptText vazio), e o de foto também não (contexto ainda é
+  // 'prompt'), em vez de mostrar algo quebrado ou o id cru.
+  const promptText = context?.type === 'prompt' ? getPromptText(context.promptId) : '';
+  const showRepliedPrompt = context?.type === 'prompt' && !!promptText;
+  const showLikedPhotoContext = !!likedPhotoURL && !likedPhotoFailed && context?.type !== 'prompt';
 
   return (
     <AnimatedPressable
@@ -92,6 +107,16 @@ function LikeCard({
             />
             <Text style={styles.likedPhotoLabel} numberOfLines={1}>
               Curtiu sua foto
+            </Text>
+          </View>
+        )}
+        {showRepliedPrompt && (
+          <View style={styles.repliedPromptBox}>
+            <Text style={styles.likedPhotoLabel} numberOfLines={1}>
+              Respondeu à sua pergunta
+            </Text>
+            <Text style={styles.likedPhotoLabel} numberOfLines={2}>
+              {promptText}
             </Text>
           </View>
         )}
@@ -255,6 +280,7 @@ export default function LikesScreen() {
                   isSuperLike={item.isSuperLike}
                   likedPhotoURL={item.likedPhotoURL}
                   note={item.note}
+                  context={item.context}
                   onPress={() => goToProfile(item.profile, undefined, item.note)}
                   onMenuPress={() => openMenu(item.profile)}
                 />
@@ -447,6 +473,12 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: theme.colors.white,
     fontSize: theme.fontSize.xs,
+  },
+  // S73-B — mesma hierarquia de fonte/cor do bloco de foto acima
+  // (likedPhotoLabel, reusado nas duas linhas); só a direção do container
+  // muda (coluna em vez de linha, sem thumbnail pra alinhar ao lado).
+  repliedPromptBox: {
+    marginTop: 6,
   },
   // S67 — bilhete da super curtida, estilo de citação (borda à esquerda +
   // itálico). Nunca amarelo (theme.colors.secondary) com texto branco —

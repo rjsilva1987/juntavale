@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { getUserProfile, SwipeContext, UserProfile } from '@/services/firestoreService';
 
 export interface Liker {
   profile: UserProfile;
@@ -14,6 +14,10 @@ export interface Liker {
   // direction=='superlike' de autor verificado (ver firestore.rules); em
   // todo o resto fica undefined, tolerado normalmente.
   note?: string;
+  // S73-B — referência do que estava visível no swipe (foto ou prompt
+  // respondido, ver SwipeContext). Ausente em swipes anteriores ao S45,
+  // tolerado como undefined igual aos campos acima.
+  context?: SwipeContext;
 }
 
 interface UseLikersReturn {
@@ -66,6 +70,8 @@ export function useLikers(): UseLikersReturn {
           // S67 — idem, ausente na esmagadora maioria dos swipes (não é
           // superlike, ou é superlike sem bilhete).
           note: d.data().note as string | undefined,
+          // S73-B — idem, ausente em swipes anteriores ao S45.
+          context: d.data().context as SwipeContext | undefined,
         }))
         .filter((entry) => !swipedByMe.has(entry.uid) && !blockedByMeUids.has(entry.uid));
 
@@ -75,6 +81,7 @@ export function useLikers(): UseLikersReturn {
           isSuperLike: entry.isSuperLike,
           likedPhotoURL: entry.likedPhotoURL,
           note: entry.note,
+          context: entry.context,
         })),
       );
 
@@ -83,11 +90,12 @@ export function useLikers(): UseLikersReturn {
         isSuperLike: boolean;
         likedPhotoURL?: string;
         note?: string;
+        context?: SwipeContext;
       }[] = [];
       let rejectedCount = 0;
       settled.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          const { profile, isSuperLike, likedPhotoURL, note } = result.value;
+          const { profile, isSuperLike, likedPhotoURL, note, context } = result.value;
           withProfiles.push({
             // uid do swipe é confiável mesmo quando o doc de users/{uid} é
             // legado e não tem o campo `uid` gravado.
@@ -95,6 +103,7 @@ export function useLikers(): UseLikersReturn {
             isSuperLike,
             likedPhotoURL,
             note,
+            context,
           });
         } else {
           rejectedCount += 1;
