@@ -55,6 +55,18 @@ const truncateReplyQuote = (value: string): string =>
     ? Array.from(value).slice(0, REPLY_QUOTE_LENGTH).join('')
     : value;
 
+// S79-B — mesmos rótulos fixos do preview de push (functions/src/index.ts),
+// byte a byte, pra citação de foto/localização não inventar texto novo.
+// Prioridade igual à de lá: texto > foto > localização.
+const REPLY_QUOTE_PHOTO_LABEL = '📷 Foto';
+const REPLY_QUOTE_LOCATION_LABEL = '📍 Localização';
+const buildReplyQuote = (message: Message): string => {
+  if (message.text) return truncateReplyQuote(message.text);
+  if (message.imageUrl) return REPLY_QUOTE_PHOTO_LABEL;
+  if (message.location) return REPLY_QUOTE_LOCATION_LABEL;
+  return '';
+};
+
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
@@ -150,7 +162,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     const replyTo = replyTarget
       ? {
           messageId: replyTarget.id,
-          text: truncateReplyQuote(replyTarget.text),
+          text: buildReplyQuote(replyTarget),
           senderId: replyTarget.senderId,
         }
       : undefined;
@@ -363,7 +375,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             </View>
           )}
           {imageUrl ? (
-            <Pressable onPress={() => setViewerImage(imageUrl)}>
+            <Pressable
+              onPress={() => setViewerImage(imageUrl)}
+              onLongPress={() => setReplyOptionsTarget(item)}
+            >
               <Image
                 source={{ uri: imageUrl }}
                 style={styles.bubbleImage}
@@ -373,7 +388,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               />
             </Pressable>
           ) : location ? (
-            <Pressable style={styles.locationCard} onPress={() => handleOpenLocation(location)}>
+            <Pressable
+              style={styles.locationCard}
+              onPress={() => handleOpenLocation(location)}
+              onLongPress={() => setReplyOptionsTarget(item)}
+            >
               <Ionicons
                 name="location"
                 size={20}
@@ -384,8 +403,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               </Text>
             </Pressable>
           ) : (
-            // S79 — toque longo só na bolha de TEXTO (foto/localização não
-            // ganham isso nesta sprint). Text do RN já suporta onLongPress
+            // S79-B — toque longo agora também nas bolhas de FOTO e
+            // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
+            // tinha onPress próprio). Text do RN já suporta onLongPress
             // direto, sem precisar de Pressable extra por cima.
             <Text
               style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
@@ -527,7 +547,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                       {replyTarget.senderId === user?.uid ? 'Você' : otherName}
                     </Text>
                     <Text style={styles.replyBarText} numberOfLines={1}>
-                      {replyTarget.text}
+                      {/* S79-B — não pode ler replyTarget.text direto: foto e
+                          localização não têm campo text (fica ''), então a
+                          barra abriria vazia pra elas. buildReplyQuote
+                          resolve o rótulo fixo, mesmo valor usado no envio. */}
+                      {buildReplyQuote(replyTarget)}
                     </Text>
                   </View>
                   <AnimatedPressable
