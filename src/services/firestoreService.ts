@@ -133,6 +133,16 @@ export interface Match {
   blockedBy?: string[];
 }
 
+// S79 — cópia truncada (não uma referência viva) da mensagem original: v1
+// só existe pra mensagem de TEXTO, guardada já cortada em 100 code points
+// pelo client antes de chamar sendMessage (ver ChatScreen.tsx). Tocar na
+// citação não pula pra mensagem original (decisão de produto do S79).
+export interface MessageReplyTo {
+  messageId: string;
+  text: string;
+  senderId: string;
+}
+
 export interface Message {
   id: string;
   text: string;
@@ -140,6 +150,7 @@ export interface Message {
   createdAt: Timestamp;
   imageUrl?: string;
   location?: { latitude: number; longitude: number };
+  replyTo?: MessageReplyTo;
 }
 
 // ─── User ─────────────────────────────────────────────────
@@ -595,6 +606,7 @@ export const sendMessage = async (
   text: string,
   imageUrl?: string,
   location?: { latitude: number; longitude: number },
+  replyTo?: MessageReplyTo,
 ) => {
   const msgRef = collection(db, 'matches', matchId, 'messages');
   await addDoc(msgRef, {
@@ -603,6 +615,7 @@ export const sendMessage = async (
     createdAt: serverTimestamp(),
     ...(imageUrl ? { imageUrl } : {}),
     ...(location ? { location } : {}),
+    ...(replyTo ? { replyTo } : {}),
   });
   // lastMessage do doc do match é escrito pela Cloud Function onMessageCreated
   // (Admin SDK), não aqui — ver firestore.rules e a interface LastMessage.

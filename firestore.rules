@@ -1,4 +1,4 @@
-// rules-stamp: S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
+// rules-stamp: S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -617,11 +617,24 @@ service cloud.firestore {
           && (!('location' in request.resource.data) ||
               (request.resource.data.location.latitude is number
                && request.resource.data.location.longitude is number))
+          // S79 — citação de mensagem (v1, só texto): map com messageId,
+          // senderId e uma CÓPIA truncada do texto original. 400 = 4x o
+          // limite do client (100 code points, ver ChatScreen.tsx) — mesma
+          // lógica do S77, aqui não é régua de UX, é guarda de abuso. Não é
+          // número solto — mexer nele significa mexer no client E aqui.
+          && (!('replyTo' in request.resource.data) ||
+              (request.resource.data.replyTo is map
+               && request.resource.data.replyTo.messageId is string
+               && request.resource.data.replyTo.messageId.size() > 0
+               && request.resource.data.replyTo.senderId is string
+               && request.resource.data.replyTo.text is string
+               && request.resource.data.replyTo.text.size() <= 400))
           // mensagem precisa ter algum conteúdo: texto OU foto OU localização
           && (request.resource.data.text.size() > 0
               || 'imageUrl' in request.resource.data
               || 'location' in request.resource.data)
-          && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl', 'location']);
+          && request.resource.data.keys().hasOnly(
+               ['text', 'senderId', 'createdAt', 'imageUrl', 'location', 'replyTo']);
 
         // O app não tem função de editar/apagar mensagem hoje — deny by
         // default. Se um dia existir "apagar minha mensagem", trocar por:

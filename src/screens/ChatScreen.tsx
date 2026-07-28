@@ -42,8 +42,18 @@ import {
   uploadChatImage,
   Message,
 } from '@/services/firestoreService';
+import { countCodePoints } from '@/utils/text';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
+// S79 — 100 code points na citação (client); rules aceitam até 400 (4x,
+// guarda de abuso — ver firestore.rules). Nunca slice por índice UTF-16
+// (mesmo cuidado do S77 em icebreakers.ts): usa countCodePoints pra medir
+// e Array.from().slice().join() pra cortar sem partir emoji ao meio.
+const REPLY_QUOTE_LENGTH = 100;
+const truncateReplyQuote = (value: string): string =>
+  countCodePoints(value) > REPLY_QUOTE_LENGTH
+    ? Array.from(value).slice(0, REPLY_QUOTE_LENGTH).join('')
+    : value;
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -56,6 +66,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [optionsSheetVisible, setOptionsSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
+  // S79 — replyOptionsTarget: mensagem que recebeu o toque longo (abre o
+  // sheet "Responder"/"Cancelar"). replyTarget: mensagem escolhida de fato
+  // pra responder (mostra a barra de citação acima do input). Os dois nunca
+  // persistem — sair da tela sem enviar simplesmente descarta o estado.
+  const [replyOptionsTarget, setReplyOptionsTarget] = useState<Message | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [blockedBy, setBlockedBy] = useState<string[]>([]);
@@ -128,9 +144,20 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || !user || isBlocked || isUnverified) return;
+    // S79 — cópia truncada, não referência viva: se a mensagem original for
+    // apagada um dia (não dá pra hoje, mas rules podem mudar), a citação
+    // continua mostrando o que foi escrito.
+    const replyTo = replyTarget
+      ? {
+          messageId: replyTarget.id,
+          text: truncateReplyQuote(replyTarget.text),
+          senderId: replyTarget.senderId,
+        }
+      : undefined;
     setText('');
+    setReplyTarget(null);
     try {
-      await sendMessage(matchId, user.uid, trimmed);
+      await sendMessage(matchId, user.uid, trimmed, undefined, undefined, replyTo);
     } catch (_) {}
   };
 
@@ -315,6 +342,20 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             isMe ? styles.bubbleMe : styles.bubbleOther,
           ]}
         >
+          {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
+              vocabulário visual do bilhete em LikeCard/ProfileSections:
+              borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
+              pula pra mensagem original (decisão de produto). */}
+          {item.replyTo && (
+            <View style={styles.replyQuoteBox}>
+              <Text
+                style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+                numberOfLines={2}
+              >
+                {item.replyTo.text}
+              </Text>
+            </View>
+          )}
           {imageUrl ? (
             <Pressable onPress={() => setViewerImage(imageUrl)}>
               <Image
@@ -337,7 +378,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               </Text>
             </Pressable>
           ) : (
-            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+            // S79 — toque longo só na bolha de TEXTO (foto/localização não
+            // ganham isso nesta sprint). Text do RN já suporta onLongPress
+            // direto, sem precisar de Pressable extra por cima.
+            <Text
+              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+              onLongPress={() => setReplyOptionsTarget(item)}
+            >
+              {item.text}
+            </Text>
           )}
           <Text
             style={[
@@ -460,34 +509,59 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <Text style={styles.blockedBannerText}>Verifique seu perfil para responder</Text>
             </Pressable>
           ) : (
-            <View style={styles.inputRow}>
-              <AnimatedPressable
-                style={styles.inputIcon}
-                onPress={() => setAttachSheetVisible(true)}
-              >
-                <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
-              </AnimatedPressable>
-              <TextInput
-                style={styles.input}
-                placeholder={`Mensagem para ${otherName}…`}
-                placeholderTextColor={theme.colors.textLight}
-                value={text}
-                onChangeText={handleChangeText}
-                multiline
-                maxLength={500}
-              />
-              <AnimatedPressable
-                style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-                onPress={handleSend}
-                disabled={!text.trim()}
-              >
-                <Ionicons
-                  name="send"
-                  size={18}
-                  color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+            <>
+              {/* S79 — barra de citação, irmã do inputRow (mesmo pai),
+                  logo acima dele. Cancelar (X) só limpa o estado — nada é
+                  persistido, sair da tela sem enviar descarta sozinho. */}
+              {replyTarget && (
+                <View style={styles.replyBar}>
+                  <View style={styles.replyBarAccent} />
+                  <View style={styles.replyBarTextWrap}>
+                    <Text style={styles.replyBarName}>
+                      {replyTarget.senderId === user?.uid ? 'Você' : otherName}
+                    </Text>
+                    <Text style={styles.replyBarText} numberOfLines={1}>
+                      {replyTarget.text}
+                    </Text>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => setReplyTarget(null)}
+                    hitSlop={8}
+                    accessibilityLabel="Cancelar resposta"
+                  >
+                    <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                  </AnimatedPressable>
+                </View>
+              )}
+              <View style={styles.inputRow}>
+                <AnimatedPressable
+                  style={styles.inputIcon}
+                  onPress={() => setAttachSheetVisible(true)}
+                >
+                  <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
+                </AnimatedPressable>
+                <TextInput
+                  style={styles.input}
+                  placeholder={`Mensagem para ${otherName}…`}
+                  placeholderTextColor={theme.colors.textLight}
+                  value={text}
+                  onChangeText={handleChangeText}
+                  multiline
+                  maxLength={500}
                 />
-              </AnimatedPressable>
-            </View>
+                <AnimatedPressable
+                  style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+                  onPress={handleSend}
+                  disabled={!text.trim()}
+                >
+                  <Ionicons
+                    name="send"
+                    size={18}
+                    color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+                  />
+                </AnimatedPressable>
+              </View>
+            </>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -524,6 +598,38 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             <AnimatedPressable
               style={styles.sheetCancel}
               onPress={() => setAttachSheetVisible(false)}
+            >
+              <Text style={styles.sheetCancelText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* S79 — sheet do toque longo na bolha de texto: mesmo padrão de
+          Modal transparente + backdrop do attachment sheet acima, só que
+          com uma opção só. */}
+      <Modal
+        visible={!!replyOptionsTarget}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReplyOptionsTarget(null)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setReplyOptionsTarget(null)}>
+          <View style={styles.sheet}>
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                setReplyTarget(replyOptionsTarget);
+                setReplyOptionsTarget(null);
+              }}
+            >
+              <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Responder</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetGap} />
+            <AnimatedPressable
+              style={styles.sheetCancel}
+              onPress={() => setReplyOptionsTarget(null)}
             >
               <Text style={styles.sheetCancelText}>Cancelar</Text>
             </AnimatedPressable>
@@ -660,6 +766,23 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S79 — citação dentro da bolha: mesmo vocabulário do bilhete em
+  // LikeCard/ProfileSections (borda à esquerda em primaryLight + itálico).
+  // Cor do texto segue a mesma regra condicional de bubbleText/bubbleTextMe
+  // acima, porque aqui (ao contrário do LikeCard/ProfileSections, que só
+  // aparecem num fundo fixo) a bolha pode ser clara OU escura.
+  replyQuoteBox: {
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.primaryLight,
+    marginBottom: 4,
+  },
+  replyQuoteText: {
+    fontSize: theme.fontSize.xs,
+    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
+  },
+  replyQuoteTextMe: { color: 'rgba(255,255,255,0.85)' },
   bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
   bubbleTimeImage: { position: 'absolute', bottom: 6, right: 10, color: theme.colors.white },
@@ -732,6 +855,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewerImage: { width: '100%', height: '80%' },
+
+  // S79 — barra de citação acima do input, mesmo fundo/borda do inputRow
+  // logo abaixo (branco + borda superior), pra ler como um bloco só com
+  // ele. Acento reusa o mesmo vocabulário do replyQuoteBox (borda à
+  // esquerda em primaryLight).
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  replyBarAccent: {
+    width: 2,
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: 1,
+  },
+  replyBarTextWrap: { flex: 1 },
+  replyBarName: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  replyBarText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+  },
 
   inputRow: {
     flexDirection: 'row',
