@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -21,7 +22,14 @@ import {
   Pressable,
   Linking,
 } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  FadeIn,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -67,6 +75,12 @@ const buildReplyQuote = (message: Message): string => {
   return '';
 };
 
+// S79-E2 — arrasto pra responder: gatilho aos ~48px (soltar depois disso
+// dispara a resposta), limite físico da bolha aos ~64px (resistência
+// crescente entre os dois, ver onUpdate do Gesture.Pan em MessageBubble).
+const REPLY_DRAG_TRIGGER = 48;
+const REPLY_DRAG_MAX = 64;
+
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 // S79-E1 — extraído de renderMessage (era uma função chamada dentro do
@@ -86,6 +100,7 @@ interface MessageBubbleProps {
   onViewImage: (imageUrl: string) => void;
   onOpenLocation: (location: { latitude: number; longitude: number }) => void;
   onLongPressReply: (message: Message) => void;
+  onDragReply: (message: Message) => void;
 }
 
 function MessageBubble({
@@ -96,10 +111,83 @@ function MessageBubble({
   onViewImage,
   onOpenLocation,
   onLongPressReply,
+  onDragReply,
 }: MessageBubbleProps) {
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
+
+  // S79-E2 — arrasto pra responder. translateX: posição atual da bolha (só
+  // pra direita, 0..REPLY_DRAG_MAX). hasTriggeredHaptic: shared value, não
+  // useRef — o worklet do Gesture.Pan roda na thread de UI, e um useRef
+  // comum não é seguro de mutar de lá (só JS thread garante a leitura).
+  const translateX = useSharedValue(0);
+  const hasTriggeredHaptic = useSharedValue(false);
+
+  const triggerReplyHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const dispatchDragReply = () => {
+    onDragReply(item);
+  };
+
+  // S79-E2 — os callbacks de Gesture.Pan (.onUpdate/.onEnd/.onFinalize)
+  // rodam como WORKLET na thread de UI, não na JS thread. Chamar
+  // Haptics.impactAsync ou onDragReply (que no fim chama setReplyTarget, um
+  // setState do React) direto de dentro deles não funciona — precisa
+  // embrulhar em runOnJS pra saltar de volta pra JS thread. É por isso que
+  // triggerReplyHaptic e dispatchDragReply existem como funções à parte em
+  // vez de chamadas inline.
+  const pan = Gesture.Pan()
+    .activeOffsetX(10)
+    .failOffsetY([-8, 8])
+    .onUpdate((e) => {
+      // Só pra direita: translationX negativo vira 0 (clamp). Até o
+      // gatilho o movimento é 1:1 com o dedo; depois dele, resistência
+      // crescente (assíntota em REPLY_DRAG_MAX) — quanto mais puxa, menos
+      // a bolha anda por px de dedo.
+      const raw = Math.max(0, e.translationX);
+      const next =
+        raw <= REPLY_DRAG_TRIGGER
+          ? raw
+          : REPLY_DRAG_TRIGGER +
+            (REPLY_DRAG_MAX - REPLY_DRAG_TRIGGER) *
+              (1 - Math.exp(-(raw - REPLY_DRAG_TRIGGER) / (REPLY_DRAG_MAX - REPLY_DRAG_TRIGGER)));
+      translateX.value = Math.min(next, REPLY_DRAG_MAX);
+
+      // Haptic uma vez só ao CRUZAR o gatilho (não ao soltar). O flag
+      // rearma se o dedo voltar pra baixo do limiar, pra poder disparar de
+      // novo se cruzar outra vez no mesmo gesto.
+      if (translateX.value >= REPLY_DRAG_TRIGGER && !hasTriggeredHaptic.value) {
+        hasTriggeredHaptic.value = true;
+        runOnJS(triggerReplyHaptic)();
+      } else if (translateX.value < REPLY_DRAG_TRIGGER && hasTriggeredHaptic.value) {
+        hasTriggeredHaptic.value = false;
+      }
+    })
+    .onEnd(() => {
+      if (translateX.value >= REPLY_DRAG_TRIGGER) {
+        runOnJS(dispatchDragReply)();
+      }
+    })
+    .onFinalize(() => {
+      // SEMPRE volta em mola, disparou ou não — e onFinalize (ao contrário
+      // de onEnd) roda mesmo se o gesto for cancelado (ex.: outro gesto
+      // ganha prioridade no meio do arrasto), então a bolha nunca fica
+      // presa fora do lugar.
+      translateX.value = withSpring(0);
+      hasTriggeredHaptic.value = false;
+    });
+
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const replyIconStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(translateX.value / REPLY_DRAG_TRIGGER, 1),
+  }));
+
   return (
     <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
       {!isMe && (
@@ -119,81 +207,94 @@ function MessageBubble({
           )}
         </View>
       )}
-      <View
-        style={[
-          imageUrl ? styles.bubbleImageWrap : styles.bubble,
-          isMe ? styles.bubbleMe : styles.bubbleOther,
-        ]}
-      >
-        {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
-            vocabulário visual do bilhete em LikeCard/ProfileSections:
-            borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
-            pula pra mensagem original (decisão de produto). */}
-        {item.replyTo && (
-          <View style={styles.replyQuoteBox}>
+      <View style={styles.bubbleDragWrap}>
+        {/* S79-E2 — ícone de responder, atrás da bolha, revelado conforme
+            ela desliza pra direita. Reusa theme.colors.primary (mesmo token
+            de replyBarName/replyBarAccent, vocabulário visual já
+            estabelecido pra "responder" neste arquivo). */}
+        <Animated.View style={[styles.replyDragIcon, replyIconStyle]}>
+          <Ionicons name="arrow-undo" size={20} color={theme.colors.primary} />
+        </Animated.View>
+        <GestureDetector gesture={pan}>
+          <Animated.View
+            collapsable={false}
+            style={[
+              imageUrl ? styles.bubbleImageWrap : styles.bubble,
+              isMe ? styles.bubbleMe : styles.bubbleOther,
+              dragStyle,
+            ]}
+          >
+            {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
+                vocabulário visual do bilhete em LikeCard/ProfileSections:
+                borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
+                pula pra mensagem original (decisão de produto). */}
+            {item.replyTo && (
+              <View style={styles.replyQuoteBox}>
+                <Text
+                  style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+                  numberOfLines={1}
+                >
+                  {item.replyTo.senderId === currentUid ? 'Você' : otherName}
+                </Text>
+                <Text
+                  style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+                  numberOfLines={2}
+                >
+                  {item.replyTo.text}
+                </Text>
+              </View>
+            )}
+            {imageUrl ? (
+              <Pressable
+                onPress={() => onViewImage(imageUrl)}
+                onLongPress={() => onLongPressReply(item)}
+              >
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.bubbleImage}
+                  contentFit="cover"
+                  placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                  transition={200}
+                />
+              </Pressable>
+            ) : location ? (
+              <Pressable
+                style={styles.locationCard}
+                onPress={() => onOpenLocation(location)}
+                onLongPress={() => onLongPressReply(item)}
+              >
+                <Ionicons
+                  name="location"
+                  size={20}
+                  color={isMe ? theme.colors.white : theme.colors.primary}
+                />
+                <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
+                  Localização compartilhada
+                </Text>
+              </Pressable>
+            ) : (
+              // S79-B — toque longo agora também nas bolhas de FOTO e
+              // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
+              // tinha onPress próprio). Text do RN já suporta onLongPress
+              // direto, sem precisar de Pressable extra por cima.
+              <Text
+                style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+                onLongPress={() => onLongPressReply(item)}
+              >
+                {item.text}
+              </Text>
+            )}
             <Text
-              style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
-              numberOfLines={1}
+              style={[
+                styles.bubbleTime,
+                isMe && styles.bubbleTimeMe,
+                imageUrl && styles.bubbleTimeImage,
+              ]}
             >
-              {item.replyTo.senderId === currentUid ? 'Você' : otherName}
+              {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
             </Text>
-            <Text
-              style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
-              numberOfLines={2}
-            >
-              {item.replyTo.text}
-            </Text>
-          </View>
-        )}
-        {imageUrl ? (
-          <Pressable
-            onPress={() => onViewImage(imageUrl)}
-            onLongPress={() => onLongPressReply(item)}
-          >
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.bubbleImage}
-              contentFit="cover"
-              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-              transition={200}
-            />
-          </Pressable>
-        ) : location ? (
-          <Pressable
-            style={styles.locationCard}
-            onPress={() => onOpenLocation(location)}
-            onLongPress={() => onLongPressReply(item)}
-          >
-            <Ionicons
-              name="location"
-              size={20}
-              color={isMe ? theme.colors.white : theme.colors.primary}
-            />
-            <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
-              Localização compartilhada
-            </Text>
-          </Pressable>
-        ) : (
-          // S79-B — toque longo agora também nas bolhas de FOTO e
-          // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
-          // tinha onPress próprio). Text do RN já suporta onLongPress
-          // direto, sem precisar de Pressable extra por cima.
-          <Text
-            style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-            onLongPress={() => onLongPressReply(item)}
-          >
-            {item.text}
-          </Text>
-        )}
-        <Text
-          style={[
-            styles.bubbleTime,
-            isMe && styles.bubbleTimeMe,
-            imageUrl && styles.bubbleTimeImage,
-          ]}
-        >
-          {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
-        </Text>
+          </Animated.View>
+        </GestureDetector>
       </View>
     </View>
   );
@@ -464,6 +565,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       onViewImage={setViewerImage}
       onOpenLocation={handleOpenLocation}
       onLongPressReply={setReplyOptionsTarget}
+      onDragReply={setReplyTarget}
     />
   );
 
@@ -810,6 +912,18 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: theme.colors.primaryLight,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // S79-E2 — envolve só a bolha (não a row inteira, avatar fica parado) pra
+  // dar contexto de posicionamento absoluto ao ícone de responder, revelado
+  // atrás dela conforme o arrasto avança.
+  bubbleDragWrap: { position: 'relative' },
+  replyDragIcon: {
+    position: 'absolute',
+    left: -32,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
   },
 

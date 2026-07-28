@@ -235,7 +235,21 @@ export default function Navigation() {
         ) : (
           <Stack.Group>
             <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{
+                // S79-E2 — o "voltar por arrasto" do iOS captura por padrão
+                // ~50px da borda esquerda da tela, e as bolhas RECEBIDAS
+                // (mensagens do outro lado) ficam encostadas nessa borda —
+                // sem reduzir essa distância, arrastar uma bolha recebida
+                // pra responder aciona o voltar do iOS em vez do gesto de
+                // resposta. A tela já tem botão de voltar visível no
+                // header, então reduzir a área do gesto de borda é
+                // aceitável.
+                gestureResponseDistance: { start: 20 },
+              }}
+            />
             <Stack.Screen name="MatchProfile" component={MatchProfileScreen} />
             <Stack.Screen name="MatchesGrid" component={MatchesGridScreen} />
             <Stack.Screen name="Verification" component={VerificationScreen} />
