@@ -3,7 +3,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { listenTypingStatus, setTypingStatus } from '@/services/firestoreService';
 
-const TYPING_DEBOUNCE_MS = 2000;
+// Pausa sem digitar -> marca como parado (deleteField).
+const TYPING_STOP_DEBOUNCE_MS = 2000;
+// S79-C1 — o carimbo agora expira sozinho no reader (TYPING_STALE_MS =
+// 5000ms, ver firestoreService.ts), então uma digitação contínua precisa
+// renovar o carimbo periodicamente, senão a janela do reader esgota no meio
+// de uma digitação longa. Guarda antiga (`isTypingRef.current === typing`)
+// bloqueava QUALQUER regravação enquanto typing permanecia true — virou
+// throttle: renova no máximo a cada TYPING_REFRESH_THROTTLE_MS, valor bem
+// abaixo de TYPING_STALE_MS pra sobrar margem.
+const TYPING_REFRESH_THROTTLE_MS = 2000;
 
 interface UseTypingIndicatorReturn {
   isOtherTyping: boolean;
@@ -13,22 +22,28 @@ interface UseTypingIndicatorReturn {
 export function useTypingIndicator(matchId: string, currentUid: string): UseTypingIndicatorReturn {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const isTypingRef = useRef(false);
+  const lastSentAtRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const updateTyping = useCallback(
-    (typing: boolean) => {
-      if (!currentUid || isTypingRef.current === typing) return;
-      isTypingRef.current = typing;
-      setTypingStatus(matchId, currentUid, typing).catch(() => {});
-    },
-    [matchId, currentUid],
-  );
+  const sendStop = useCallback(() => {
+    if (!currentUid || !isTypingRef.current) return;
+    isTypingRef.current = false;
+    setTypingStatus(matchId, currentUid, false).catch(() => {});
+  }, [matchId, currentUid]);
 
   const handleTyping = useCallback(() => {
-    updateTyping(true);
+    if (!currentUid) return;
+
+    const now = Date.now();
+    if (!isTypingRef.current || now - lastSentAtRef.current >= TYPING_REFRESH_THROTTLE_MS) {
+      isTypingRef.current = true;
+      lastSentAtRef.current = now;
+      setTypingStatus(matchId, currentUid, true).catch(() => {});
+    }
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => updateTyping(false), TYPING_DEBOUNCE_MS);
-  }, [updateTyping]);
+    debounceRef.current = setTimeout(sendStop, TYPING_STOP_DEBOUNCE_MS);
+  }, [matchId, currentUid, sendStop]);
 
   useEffect(() => {
     const unsub = listenTypingStatus(matchId, currentUid, setIsOtherTyping);
@@ -38,9 +53,15 @@ export function useTypingIndicator(matchId: string, currentUid: string): UseTypi
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      updateTyping(false);
+      // S79-C1 — isto agora é só cortesia. Se o app morrer antes deste
+      // cleanup rodar (crash, kill do OS), o carimbo fica sem ser limpo,
+      // mas o reader (listenTypingStatus) expira sozinho em TYPING_STALE_MS
+      // porque o carimbo para de ser renovado — esse auto-expire no lado do
+      // leitor é o que substitui a dependência antiga de um cleanup
+      // perfeito, que era o bug desta sprint.
+      sendStop();
     };
-  }, [updateTyping]);
+  }, [sendStop]);
 
   return { isOtherTyping, handleTyping };
 }
