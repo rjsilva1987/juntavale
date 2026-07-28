@@ -69,6 +69,136 @@ const buildReplyQuote = (message: Message): string => {
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
+// S79-E1 — extraído de renderMessage (era uma função chamada dentro do
+// render de ChatScreen) pra componente próprio: função-por-item dentro de
+// render não pode ter hooks por linha (useSharedValue/useAnimatedStyle do
+// reanimated quebram a ordem dos hooks conforme a lista cresce/encolhe).
+// Fica aqui em vez de em src/components/ pra reusar `styles` (StyleSheet
+// único do arquivo, com chaves de header/sheets/input que não fazem sentido
+// duplicar ou repartir) e os imports que ChatScreen.tsx já tem (Image,
+// Ionicons, dayjs, Pressable, BLURHASH_PLACEHOLDER, theme, Message) sem
+// puxar nenhum import novo.
+interface MessageBubbleProps {
+  item: Message;
+  currentUid?: string;
+  otherName: string;
+  otherPhoto?: string;
+  onViewImage: (imageUrl: string) => void;
+  onOpenLocation: (location: { latitude: number; longitude: number }) => void;
+  onLongPressReply: (message: Message) => void;
+}
+
+function MessageBubble({
+  item,
+  currentUid,
+  otherName,
+  otherPhoto,
+  onViewImage,
+  onOpenLocation,
+  onLongPressReply,
+}: MessageBubbleProps) {
+  const isMe = item.senderId === currentUid;
+  const imageUrl = item.imageUrl;
+  const location = item.location;
+  return (
+    <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+      {!isMe && (
+        <View style={styles.msgAvatar}>
+          {otherPhoto ? (
+            <Image
+              source={{ uri: otherPhoto }}
+              style={styles.msgAvatarImg}
+              contentFit="cover"
+              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+              transition={200}
+            />
+          ) : (
+            <View style={styles.msgAvatarPlaceholder}>
+              <Text>😊</Text>
+            </View>
+          )}
+        </View>
+      )}
+      <View
+        style={[
+          imageUrl ? styles.bubbleImageWrap : styles.bubble,
+          isMe ? styles.bubbleMe : styles.bubbleOther,
+        ]}
+      >
+        {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
+            vocabulário visual do bilhete em LikeCard/ProfileSections:
+            borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
+            pula pra mensagem original (decisão de produto). */}
+        {item.replyTo && (
+          <View style={styles.replyQuoteBox}>
+            <Text
+              style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+              numberOfLines={1}
+            >
+              {item.replyTo.senderId === currentUid ? 'Você' : otherName}
+            </Text>
+            <Text
+              style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+              numberOfLines={2}
+            >
+              {item.replyTo.text}
+            </Text>
+          </View>
+        )}
+        {imageUrl ? (
+          <Pressable
+            onPress={() => onViewImage(imageUrl)}
+            onLongPress={() => onLongPressReply(item)}
+          >
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.bubbleImage}
+              contentFit="cover"
+              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+              transition={200}
+            />
+          </Pressable>
+        ) : location ? (
+          <Pressable
+            style={styles.locationCard}
+            onPress={() => onOpenLocation(location)}
+            onLongPress={() => onLongPressReply(item)}
+          >
+            <Ionicons
+              name="location"
+              size={20}
+              color={isMe ? theme.colors.white : theme.colors.primary}
+            />
+            <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
+              Localização compartilhada
+            </Text>
+          </Pressable>
+        ) : (
+          // S79-B — toque longo agora também nas bolhas de FOTO e
+          // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
+          // tinha onPress próprio). Text do RN já suporta onLongPress
+          // direto, sem precisar de Pressable extra por cima.
+          <Text
+            style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+            onLongPress={() => onLongPressReply(item)}
+          >
+            {item.text}
+          </Text>
+        )}
+        <Text
+          style={[
+            styles.bubbleTime,
+            isMe && styles.bubbleTimeMe,
+            imageUrl && styles.bubbleTimeImage,
+          ]}
+        >
+          {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
@@ -325,108 +455,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     });
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.senderId === user?.uid;
-    const imageUrl = item.imageUrl;
-    const location = item.location;
-    return (
-      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        {!isMe && (
-          <View style={styles.msgAvatar}>
-            {otherPhoto ? (
-              <Image
-                source={{ uri: otherPhoto }}
-                style={styles.msgAvatarImg}
-                contentFit="cover"
-                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                transition={200}
-              />
-            ) : (
-              <View style={styles.msgAvatarPlaceholder}>
-                <Text>😊</Text>
-              </View>
-            )}
-          </View>
-        )}
-        <View
-          style={[
-            imageUrl ? styles.bubbleImageWrap : styles.bubble,
-            isMe ? styles.bubbleMe : styles.bubbleOther,
-          ]}
-        >
-          {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
-              vocabulário visual do bilhete em LikeCard/ProfileSections:
-              borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
-              pula pra mensagem original (decisão de produto). */}
-          {item.replyTo && (
-            <View style={styles.replyQuoteBox}>
-              <Text
-                style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
-                numberOfLines={1}
-              >
-                {item.replyTo.senderId === user?.uid ? 'Você' : otherName}
-              </Text>
-              <Text
-                style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
-                numberOfLines={2}
-              >
-                {item.replyTo.text}
-              </Text>
-            </View>
-          )}
-          {imageUrl ? (
-            <Pressable
-              onPress={() => setViewerImage(imageUrl)}
-              onLongPress={() => setReplyOptionsTarget(item)}
-            >
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.bubbleImage}
-                contentFit="cover"
-                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                transition={200}
-              />
-            </Pressable>
-          ) : location ? (
-            <Pressable
-              style={styles.locationCard}
-              onPress={() => handleOpenLocation(location)}
-              onLongPress={() => setReplyOptionsTarget(item)}
-            >
-              <Ionicons
-                name="location"
-                size={20}
-                color={isMe ? theme.colors.white : theme.colors.primary}
-              />
-              <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
-                Localização compartilhada
-              </Text>
-            </Pressable>
-          ) : (
-            // S79-B — toque longo agora também nas bolhas de FOTO e
-            // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
-            // tinha onPress próprio). Text do RN já suporta onLongPress
-            // direto, sem precisar de Pressable extra por cima.
-            <Text
-              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-              onLongPress={() => setReplyOptionsTarget(item)}
-            >
-              {item.text}
-            </Text>
-          )}
-          <Text
-            style={[
-              styles.bubbleTime,
-              isMe && styles.bubbleTimeMe,
-              imageUrl && styles.bubbleTimeImage,
-            ]}
-          >
-            {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
-          </Text>
-        </View>
-      </View>
-    );
-  };
+  const renderMessage = ({ item }: { item: Message }) => (
+    <MessageBubble
+      item={item}
+      currentUid={user?.uid}
+      otherName={otherName}
+      otherPhoto={otherPhoto}
+      onViewImage={setViewerImage}
+      onOpenLocation={handleOpenLocation}
+      onLongPressReply={setReplyOptionsTarget}
+    />
+  );
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
