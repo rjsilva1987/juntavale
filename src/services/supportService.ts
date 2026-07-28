@@ -16,6 +16,7 @@ import {
 
 import { SupportCategory } from '@/constants/supportCategories';
 import { db } from '@/services/firebase';
+import { countCodePoints } from '@/utils/text';
 
 export type SupportTicketStatus = 'open' | 'resolved';
 
@@ -56,7 +57,7 @@ export const submitSupportTicket = async ({
   message,
 }: SubmitSupportTicketParams): Promise<void> => {
   const trimmed = message.trim();
-  if (trimmed.length === 0 || trimmed.length > 1000) {
+  if (countCodePoints(trimmed) === 0 || countCodePoints(trimmed) > 1000) {
     throw new Error('Mensagem inválida');
   }
 
@@ -136,7 +137,7 @@ export const sendSupportMessage = async (
   text: string,
 ): Promise<void> => {
   const trimmed = text.trim();
-  if (trimmed.length === 0 || trimmed.length > 1000) {
+  if (countCodePoints(trimmed) === 0 || countCodePoints(trimmed) > 1000) {
     throw new Error('Mensagem inválida');
   }
 

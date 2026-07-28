@@ -2,6 +2,7 @@
 import { LookingFor } from '@/constants/lookingFor';
 import { PROMPTS_CATALOG } from '@/constants/prompts';
 import { getSharedInterestSet, normalizeInterest } from '@/utils/interests';
+import { countCodePoints } from '@/utils/text';
 
 export interface IcebreakerProfile {
   interests?: string[] | null;
@@ -18,9 +19,12 @@ export interface IcebreakerProfile {
 const PROMPT_ANSWER_QUOTE_LIMIT = 60;
 const PROMPT_ANSWER_TRUNCATED_LENGTH = 57;
 
+// S77 — slice por code point (Array.from), não por índice UTF-16: um emoji
+// fora do BMP ocupa 2 code units, e o slice antigo (answer.slice(0, N))
+// podia cair bem no meio do par substituto, quebrando o emoji na citação.
 const truncatePromptAnswer = (answer: string): string =>
-  answer.length > PROMPT_ANSWER_QUOTE_LIMIT
-    ? `${answer.slice(0, PROMPT_ANSWER_TRUNCATED_LENGTH)}...`
+  countCodePoints(answer) > PROMPT_ANSWER_QUOTE_LIMIT
+    ? `${Array.from(answer).slice(0, PROMPT_ANSWER_TRUNCATED_LENGTH).join('')}...`
     : answer;
 
 // 2 variações, escolhidas de forma determinística pelo índice do promptId no

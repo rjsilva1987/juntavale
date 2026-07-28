@@ -42,6 +42,7 @@ import {
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
 import { useLikers } from '@/hooks/useLikers';
 import { RootStackParamList } from '@/navigation';
@@ -55,6 +56,7 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
+import { countCodePoints } from '@/utils/text';
 
 // Ambas contam o mesmo array de matches visíveis hoje (todo match é uma
 // conversa no modelo atual), mas ficam como funções separadas de propósito:
@@ -94,9 +96,19 @@ const MAX_PLACE_LENGTH = 40;
 const MAX_EVENT_LENGTH = 60;
 const MIN_TAG_LENGTH = 2;
 
+// S77 — nome/bio nunca tiveram teto no client (só nas rules, isValidProfile:
+// name<=60, bio<=500) — bug separado achado na recon, corrigido aqui. Os
+// números batem com o que as rules JÁ exigiam antes desta sprint (agora
+// viram só o "guarda de abuso" 4x maior — ver firestore.rules).
+const MAX_NAME_LENGTH = 60;
+const MAX_BIO_LENGTH = 500;
+
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
+  // S78 — mesmo hook do badge da tab bar (navigation/index.tsx); aqui vira
+  // o pontinho na linha de verificação, não o badge da aba.
+  const { showAlert: showVerificationAlert } = useVerificationAlert();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.name ?? '');
   const [age, setAge] = useState(String(profile?.age ?? ''));
@@ -181,6 +193,17 @@ export default function ProfileScreen() {
     if (!user) return;
     if (!gender) {
       Alert.alert('Gênero obrigatório', 'Selecione uma opção de gênero antes de salvar.');
+      return;
+    }
+    // S77 — nome/bio nunca tiveram teto no client (bug separado, ver
+    // recon); sem isso, um texto que passasse do teto das rules só falhava
+    // no save com erro genérico, sem dizer o motivo.
+    if (countCodePoints(name) > MAX_NAME_LENGTH) {
+      Alert.alert('Nome muito longo', `O nome pode ter no máximo ${MAX_NAME_LENGTH} caracteres.`);
+      return;
+    }
+    if (countCodePoints(bio) > MAX_BIO_LENGTH) {
+      Alert.alert('Bio muito longa', `A bio pode ter no máximo ${MAX_BIO_LENGTH} caracteres.`);
       return;
     }
     setSaving(true);
@@ -337,7 +360,8 @@ export default function ProfileScreen() {
   const handleSavePromptAnswer = async () => {
     if (!user || !editingPromptId) return;
     const trimmed = answerDraft.trim();
-    if (trimmed.length < 1 || trimmed.length > MAX_ANSWER_LENGTH) return;
+    const trimmedLength = countCodePoints(trimmed);
+    if (trimmedLength < 1 || trimmedLength > MAX_ANSWER_LENGTH) return;
     setPromptSaving(true);
     try {
       if (editingWeeklySlot) {
@@ -609,9 +633,9 @@ export default function ProfileScreen() {
         {/* Edit form */}
         {editing ? (
           <View style={styles.card}>
-            <Field label="Nome" value={name} onChange={setName} />
+            <Field label="Nome" value={name} onChange={setName} maxLength={MAX_NAME_LENGTH} />
             <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
-            <Field label="Bio" value={bio} onChange={setBio} multiline />
+            <Field label="Bio" value={bio} onChange={setBio} multiline maxLength={MAX_BIO_LENGTH} />
 
             <Text style={styles.fieldLabel}>Gênero</Text>
             <View style={styles.genderRow}>
@@ -845,6 +869,7 @@ export default function ProfileScreen() {
           <Text style={styles.blockedUsersText}>
             {profile?.verified ? 'Perfil verificado' : 'Verificar perfil'}
           </Text>
+          {showVerificationAlert && <View style={styles.verificationAlertDot} />}
         </AnimatedPressable>
 
         {/* Usuários bloqueados */}
@@ -1009,19 +1034,20 @@ export default function ProfileScreen() {
                 <Text
                   style={[
                     styles.promptCounter,
-                    answerDraft.trim().length === 0 && styles.promptCounterError,
+                    countCodePoints(answerDraft.trim()) === 0 && styles.promptCounterError,
                   ]}
                 >
-                  {answerDraft.length}/{MAX_ANSWER_LENGTH}
+                  {countCodePoints(answerDraft)}/{MAX_ANSWER_LENGTH}
                 </Text>
 
                 <AnimatedPressable
                   style={[
                     styles.saveBtn,
-                    (promptSaving || answerDraft.trim().length === 0) && styles.saveBtnDisabled,
+                    (promptSaving || countCodePoints(answerDraft.trim()) === 0) &&
+                      styles.saveBtnDisabled,
                   ]}
                   onPress={handleSavePromptAnswer}
-                  disabled={promptSaving || answerDraft.trim().length === 0}
+                  disabled={promptSaving || countCodePoints(answerDraft.trim()) === 0}
                 >
                   {promptSaving ? (
                     <ActivityIndicator color={theme.colors.onSecondary} />
@@ -1065,9 +1091,14 @@ interface FieldProps {
   onChange: (text: string) => void;
   multiline?: boolean;
   keyboardType?: TextInputProps['keyboardType'];
+  // S77 — opcional: só Nome/Bio passam isso hoje. Quando presente, mostra o
+  // contador por code point abaixo do input (mesmo padrão de TagEditor e do
+  // modal de resposta de prompt) — Idade não passa, então continua sem
+  // contador, igual antes.
+  maxLength?: number;
 }
 
-function Field({ label, value, onChange, multiline, keyboardType }: FieldProps) {
+function Field({ label, value, onChange, multiline, keyboardType, maxLength }: FieldProps) {
   return (
     <>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -1077,8 +1108,14 @@ function Field({ label, value, onChange, multiline, keyboardType }: FieldProps) 
         onChangeText={onChange}
         multiline={multiline}
         keyboardType={keyboardType}
+        maxLength={maxLength}
         placeholderTextColor={theme.colors.textLight}
       />
+      {maxLength !== undefined && (
+        <Text style={styles.promptCounter}>
+          {countCodePoints(value)}/{maxLength}
+        </Text>
+      )}
     </>
   );
 }
@@ -1109,8 +1146,9 @@ function TagEditor({
 }: TagEditorProps) {
   const [draft, setDraft] = useState('');
   const trimmed = draft.trim();
+  const trimmedLength = countCodePoints(trimmed);
   const canAdd =
-    values.length < maxItems && trimmed.length >= MIN_TAG_LENGTH && trimmed.length <= maxLength;
+    values.length < maxItems && trimmedLength >= MIN_TAG_LENGTH && trimmedLength <= maxLength;
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -1155,10 +1193,10 @@ function TagEditor({
           <Text
             style={[
               styles.promptCounter,
-              trimmed.length > 0 && trimmed.length < MIN_TAG_LENGTH && styles.promptCounterError,
+              trimmedLength > 0 && trimmedLength < MIN_TAG_LENGTH && styles.promptCounterError,
             ]}
           >
-            {draft.length}/{maxLength}
+            {countCodePoints(draft)}/{maxLength}
           </Text>
         </>
       )}
@@ -1469,6 +1507,14 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontSize: theme.fontSize.md,
     fontWeight: '600',
+  },
+  // S78 — mesma forma do unreadDot em MatchesScreen.tsx (10x10,
+  // borderRadius 5), cor theme.colors.error em vez de primary.
+  verificationAlertDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.error,
   },
 
   reengagementCard: {

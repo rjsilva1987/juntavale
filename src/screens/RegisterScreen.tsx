@@ -22,6 +22,12 @@ import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import { countCodePoints } from '@/utils/text';
+
+// S77 — alinhado com MAX_BIO_LENGTH do ProfileScreen (mesma edição de bio,
+// mesmo teto dos dois lados — bug separado achado na recon, o cadastro
+// tinha 160 e a edição de perfil não tinha nenhum).
+const MAX_BIO_LENGTH = 500;
 
 const INTERESTS = [
   'Investimentos',
@@ -216,9 +222,11 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 value={bio}
                 onChangeText={setBio}
                 multiline
-                maxLength={160}
+                maxLength={MAX_BIO_LENGTH}
               />
-              <Text style={styles.charCount}>{bio.length}/160</Text>
+              <Text style={styles.charCount}>
+                {countCodePoints(bio)}/{MAX_BIO_LENGTH}
+              </Text>
 
               <Text style={styles.label}>Estado onde você mora</Text>
               <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />

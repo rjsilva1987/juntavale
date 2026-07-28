@@ -23,6 +23,7 @@ import { CHAVEF_REGEX } from '@/constants/chaveF';
 import { REJECTION_REASON_LABELS } from '@/constants/rejectionReasons';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { RootStackParamList } from '@/navigation';
 import {
   getRegistrationPrivate,
@@ -51,6 +52,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
   const [chaveF, setChaveF] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const { markSeen } = useVerificationAlert();
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -73,6 +75,23 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
   useEffect(() => {
     load();
   }, [load]);
+
+  // S78 — some o selo assim que a tela abre, não quando o Perfil abre. Sem
+  // padrão de foco (useFocusEffect) nesta tela hoje — mount simples basta.
+  //
+  // S78-correção — a dependência [markSeen] é PROPOSITAL e load-bearing, não
+  // sobra de exhaustive-deps: no mount, o onSnapshot de verifications/{uid}
+  // (no VerificationAlertProvider) ainda não respondeu, então reviewedAt
+  // ainda é null e este primeiro markSeen() vira no-op (guard interno do
+  // provider). markSeen só é uma função nova (useCallback com
+  // reviewedAtMillis no dep array) quando o snapshot chega com o valor real
+  // — é essa TROCA DE IDENTIDADE de markSeen que dispara o efeito de novo e
+  // marca de verdade. Com `[]` no lugar de `[markSeen]`, o efeito rodaria
+  // uma vez só, com a closure antiga (reviewedAt ainda null), e nunca
+  // marcaria nada como visto.
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
 
   // Aprovação vem de profile.verified (realtime, via onSnapshot no useAuth)
   // em vez de verification.status — este último é buscado uma única vez em

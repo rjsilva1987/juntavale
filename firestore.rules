@@ -1,4 +1,4 @@
-// rules-stamp: S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
+// rules-stamp: S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -50,13 +50,16 @@ service cloud.firestore {
       return uid in m.users && m.get('blockedBy', []).size() == 0;
     }
 
-    // Um item de users/{uid}.prompts[] — { id: string, answer: string },
-    // resposta de 1 a 150 chars. Ver src/constants/prompts.ts (catálogo) e
-    // MAX_ANSWER_LENGTH no app.
+    // Um item de users/{uid}.prompts[] — { id: string, answer: string }.
+    // Ver src/constants/prompts.ts (catálogo) e MAX_ANSWER_LENGTH no app
+    // (150). S77 — 600 = 4x MAX_ANSWER_LENGTH: client conta por code point
+    // e já barra em 150; este teto aqui não é mais régua de UX, é só guarda
+    // de abuso (client malicioso direto contra a API). NÃO é número solto —
+    // mexer nele significa mexer em MAX_ANSWER_LENGTH E aqui.
     function isValidPromptItem(item) {
       return item is map && item.keys().hasOnly(['id', 'answer'])
         && item.id is string
-        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 150
+        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 600
         && item.answer.matches('.*\\S.*');
     }
 
@@ -101,33 +104,35 @@ service cloud.firestore {
     // próprio app já impõe visualmente). Mesmo padrão de isValidPrompts
     // (valida list[0], list[1], ... individualmente, com curto-circuito no
     // size() — só entra no índice N se list.size() > N), sem checagem de
-    // duplicata (não faz sentido pra texto livre). 40 = MAX_PLACE_LENGTH em
-    // src/screens/ProfileScreen.tsx — sincronia manual, mesmo padrão dos
-    // demais valores espelhados do client nestas rules.
+    // duplicata (não faz sentido pra texto livre). S77 — 160 = 4x
+    // MAX_PLACE_LENGTH (40) em src/screens/ProfileScreen.tsx: client conta
+    // por code point e barra em 40; aqui é só guarda de abuso, não é número
+    // solto — mexer nele significa mexer em MAX_PLACE_LENGTH E aqui.
     function isValidPlaces(list) {
       return list is list && list.size() <= 5
         && (list.size() == 0
-            || (isValidTag(list[0], 40)
+            || (isValidTag(list[0], 160)
                 && (list.size() == 1
-                    || (isValidTag(list[1], 40)
+                    || (isValidTag(list[1], 160)
                         && (list.size() == 2
-                            || (isValidTag(list[2], 40)
+                            || (isValidTag(list[2], 160)
                                 && (list.size() == 3
-                                    || (isValidTag(list[3], 40)
+                                    || (isValidTag(list[3], 160)
                                         && (list.size() == 4
-                                            || isValidTag(list[4], 40))))))))));
+                                            || isValidTag(list[4], 160))))))))));
     }
 
     // S68 — idem isValidPlaces acima, aplicado a events[] (teto de 3 itens).
-    // 60 = MAX_EVENT_LENGTH em src/screens/ProfileScreen.tsx.
+    // S77 — 240 = 4x MAX_EVENT_LENGTH (60) em src/screens/ProfileScreen.tsx,
+    // mesmo raciocínio de guarda de abuso do isValidPlaces acima.
     function isValidEvents(list) {
       return list is list && list.size() <= 3
         && (list.size() == 0
-            || (isValidTag(list[0], 60)
+            || (isValidTag(list[0], 240)
                 && (list.size() == 1
-                    || (isValidTag(list[1], 60)
+                    || (isValidTag(list[1], 240)
                         && (list.size() == 2
-                            || isValidTag(list[2], 60))))));
+                            || isValidTag(list[2], 240))))));
     }
 
     // S59 — Prompt da semana ganhou campo próprio (weeklyPromptAnswer),
@@ -137,12 +142,13 @@ service cloud.firestore {
     // contrário de isValidPromptItem, que aceita qualquer string em item.id,
     // porque prompts[] também tolera ids de catálogo futuro; aqui o pool é
     // fechado, então validamos contra a lista). Mesmo limite de tamanho de
-    // resposta de isValidPromptItem (MAX_ANSWER_LENGTH = 150 no app).
+    // resposta de isValidPromptItem — S77: 600 = 4x MAX_ANSWER_LENGTH (150),
+    // mesmo raciocínio de guarda de abuso do comentário de isValidPromptItem.
     function isValidWeeklyPromptAnswer(item) {
       return item is map && item.keys().hasOnly(['id', 'answer'])
         && item.id in ['w01', 'w02', 'w03', 'w04', 'w05', 'w06',
                         'w07', 'w08', 'w09', 'w10', 'w11', 'w12']
-        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 150
+        && item.answer is string && item.answer.size() >= 1 && item.answer.size() <= 600
         && item.answer.matches('.*\\S.*');
     }
 
@@ -150,10 +156,17 @@ service cloud.firestore {
     // lista (ex: um futuro "isAdmin" ou "verified") NUNCA pode ser escrito pelo
     // client, mesmo que alguém adicione o campo no app no futuro e esqueça de
     // atualizar as regras — hasOnly() bloqueia por padrão.
+    // S77 — 240 = 4x MAX_NAME_LENGTH (60) e 2000 = 4x MAX_BIO_LENGTH (500),
+    // ambos em src/screens/ProfileScreen.tsx: até esta sprint nome/bio não
+    // tinham teto nenhum no client (bug separado, ver recon) — 60/500 eram
+    // só o que as rules já exigiam. Client agora conta por code point e
+    // barra em 60/500; aqui virou guarda de abuso, 4x maior. Não são
+    // números soltos — mexer neles significa mexer nas constantes do app
+    // E aqui.
     function isValidProfile(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 60
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 240
         && data.age is number && data.age >= 18 && data.age <= 100
-        && data.bio is string && data.bio.size() <= 500
+        && data.bio is string && data.bio.size() <= 2000
         && data.photoURL is string
         && data.photos is list && data.photos.size() <= 6
         && data.interests is list && data.interests.size() <= 15
@@ -448,21 +461,25 @@ service cloud.firestore {
             )
           )
         )
-        // S67/S73: bilhete opcional anexado a like ou superlike — 1..150
-        // chars, sem ser só espaço. Em superlike, o gate de verificado já
-        // vem do ramo direction=='superlike' abaixo (S70) — repetir o get()
-        // aqui seria a mesma leitura de novo sem motivo. Em like, não existe
-        // outro ramo que confirme verified, então o get() entra AQUI DENTRO,
-        // só neste caminho (S73) — como o bloco todo só é avaliado quando
-        // 'note' está presente no payload (curto-circuito do `!(...) ||`
-        // logo abaixo), um like comum sem bilhete nunca paga essa leitura
-        // extra. O ramo `!('note' in ...)` continua primeiro de propósito.
+        // S67/S73: bilhete opcional anexado a like ou superlike — sem ser só
+        // espaço. Em superlike, o gate de verificado já vem do ramo
+        // direction=='superlike' abaixo (S70) — repetir o get() aqui seria a
+        // mesma leitura de novo sem motivo. Em like, não existe outro ramo
+        // que confirme verified, então o get() entra AQUI DENTRO, só neste
+        // caminho (S73) — como o bloco todo só é avaliado quando 'note' está
+        // presente no payload (curto-circuito do `!(...) ||` logo abaixo),
+        // um like comum sem bilhete nunca paga essa leitura extra. O ramo
+        // `!('note' in ...)` continua primeiro de propósito.
+        // S77 — 600 = 4x MAX_NOTE_LENGTH (150, SuperLikeNoteModal.tsx):
+        // client conta por code point e barra em 150; aqui é só guarda de
+        // abuso. Não é número solto — mexer nele significa mexer em
+        // MAX_NOTE_LENGTH E aqui.
         && (
           !('note' in request.resource.data)
           || (
             request.resource.data.note is string
             && request.resource.data.note.size() >= 1
-            && request.resource.data.note.size() <= 150
+            && request.resource.data.note.size() <= 600
             && request.resource.data.note.matches('.*\\S.*')
             && (
               request.resource.data.direction == 'superlike'
@@ -651,7 +668,10 @@ service cloud.firestore {
         && request.resource.data.reportedId != request.auth.uid
         && request.resource.data.reason in
              ['spam', 'offensive_content', 'fake_profile', 'inappropriate_behavior', 'other']
-        && request.resource.data.details is string && request.resource.data.details.size() <= 500
+        // S77 — 2000 = 4x o maxLength do ReportModal.tsx (500): client conta
+        // por code point; aqui virou guarda de abuso, não é número solto —
+        // mexer nele significa mexer no maxLength do ReportModal E aqui.
+        && request.resource.data.details is string && request.resource.data.details.size() <= 2000
         // S68 — details é opcional pro usuário no formulário (ReportModal),
         // mas o client sempre manda a chave como string, vazia quando
         // deixado em branco (ver reportUser em blockService.ts: `details ??
@@ -735,9 +755,13 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.category in
              ['duvida', 'problema_tecnico', 'denuncia', 'sugestao', 'conta']
+        // S77 — 4000 = 4x MAX_MESSAGE_LENGTH (1000, SupportScreen.tsx):
+        // client conta por code point; aqui virou guarda de abuso, não é
+        // número solto — mexer nele significa mexer em MAX_MESSAGE_LENGTH
+        // E aqui.
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 1
-        && request.resource.data.message.size() <= 1000
+        && request.resource.data.message.size() <= 4000
         && request.resource.data.message.matches('.*\\S.*')
         && request.resource.data.status == 'open'
         && request.resource.data.createdAt == request.time
@@ -788,9 +812,11 @@ service cloud.firestore {
           && (isAdmin()
               || getAfter(/databases/$(database)/documents/support/$(ticketId)).data.uid
                    == request.auth.uid)
+          // S77 — 4000 = 4x o maxLength do SupportThreadScreen.tsx (1000),
+          // mesmo raciocínio de guarda de abuso do create do ticket acima.
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
-          && request.resource.data.text.size() <= 1000
+          && request.resource.data.text.size() <= 4000
           && request.resource.data.text.matches('.*\\S.*')
           && request.resource.data.createdAt == request.time
           && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);

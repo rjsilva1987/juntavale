@@ -14,6 +14,7 @@ import {
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
+import { countCodePoints } from '@/utils/text';
 
 const MAX_NOTE_LENGTH = 150;
 
@@ -43,7 +44,7 @@ export function SuperLikeNoteModal({
 }: SuperLikeNoteModalProps) {
   const [note, setNote] = useState('');
   const trimmed = note.trim();
-  const canSendWithNote = trimmed.length > 0;
+  const canSendWithNote = countCodePoints(trimmed) > 0;
 
   const handleClose = () => {
     setNote('');
@@ -97,8 +98,8 @@ export function SuperLikeNoteModal({
                 multiline
                 maxLength={MAX_NOTE_LENGTH}
               />
-              <Text style={[styles.counter, note.length === 0 && styles.counterMuted]}>
-                {note.length}/{MAX_NOTE_LENGTH}
+              <Text style={[styles.counter, countCodePoints(note) === 0 && styles.counterMuted]}>
+                {countCodePoints(note)}/{MAX_NOTE_LENGTH}
               </Text>
 
               <AnimatedPressable

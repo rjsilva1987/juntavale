@@ -22,6 +22,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { submitSupportTicket } from '@/services/supportService';
+import { countCodePoints } from '@/utils/text';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -34,10 +35,10 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const trimmedMessage = message.trim();
-  const canSubmit = category !== null && trimmedMessage.length > 0 && !submitting;
+  const canSubmit = category !== null && countCodePoints(trimmedMessage) > 0 && !submitting;
 
   const handleSubmit = async () => {
-    if (!user || !category || trimmedMessage.length === 0) return;
+    if (!user || !category || countCodePoints(trimmedMessage) === 0) return;
     setSubmitting(true);
     try {
       await submitSupportTicket({ uid: user.uid, category, message });
@@ -121,7 +122,7 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
               editable={!submitting}
             />
             <Text style={styles.charCount}>
-              {message.length}/{MAX_MESSAGE_LENGTH}
+              {countCodePoints(message)}/{MAX_MESSAGE_LENGTH}
             </Text>
 
             <AnimatedPressable

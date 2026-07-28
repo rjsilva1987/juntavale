@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { VerificationAlertProvider } from './src/contexts/VerificationAlertContext';
 import Navigation from './src/navigation';
 
 export default function App() {
@@ -11,8 +12,13 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="light" />
-          <Navigation />
+          {/* S78-correção — depende de useAuth (uid do usuário logado pro
+              onSnapshot de verifications/{uid}), então fica DENTRO do
+              AuthProvider, nunca antes dele. */}
+          <VerificationAlertProvider>
+            <StatusBar style="light" />
+            <Navigation />
+          </VerificationAlertProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

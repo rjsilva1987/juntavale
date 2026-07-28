@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
@@ -95,6 +96,12 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const unreadCount = useUnreadCount();
+  // S78 — sem contagem (não é "quantas revisões", é "tem uma nova pra ver"),
+  // então o badge não usa número: um espaço só deixa a bolinha visível, sem
+  // texto dentro dela. Some quando showAlert vira false (markSeen na
+  // VerificationScreen), mesmo padrão de "some ao abrir" do badge de
+  // Conversas (que some ao ler as mensagens).
+  const { showAlert: showVerificationAlert } = useVerificationAlert();
 
   return (
     <Tab.Navigator
@@ -148,7 +155,15 @@ function MainTabs() {
           </ErrorBoundary>
         )}
       </Tab.Screen>
-      <Tab.Screen name="Perfil">
+      <Tab.Screen
+        name="Perfil"
+        options={{
+          tabBarBadge: showVerificationAlert ? ' ' : undefined,
+          // theme.colors.error (#E5484D) — nunca usado antes; não é o
+          // vermelho padrão do React Navigation, é o nosso token.
+          tabBarBadgeStyle: { backgroundColor: theme.colors.error },
+        }}
+      >
         {() => (
           <ErrorBoundary>
             <ProfileScreen />
