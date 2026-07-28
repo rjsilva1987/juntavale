@@ -349,6 +349,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           {item.replyTo && (
             <View style={styles.replyQuoteBox}>
               <Text
+                style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+                numberOfLines={1}
+              >
+                {item.replyTo.senderId === user?.uid ? 'Você' : otherName}
+              </Text>
+              <Text
                 style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
                 numberOfLines={2}
               >
@@ -776,6 +782,11 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: theme.colors.primaryLight,
     marginBottom: 4,
+  },
+  replyQuoteName: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
   },
   replyQuoteText: {
     fontSize: theme.fontSize.xs,
