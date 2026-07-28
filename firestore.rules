@@ -1,4 +1,4 @@
-// rules-stamp: S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
+// rules-stamp: S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-27
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -262,8 +262,9 @@ service cloud.firestore {
 
       // ─────────────── users/{userId}/private ───────────────
       // Dois documentos com regras próprias (não um wildcard único), porque
-      // têm mutabilidade diferente: o push token é regravado a cada refresh,
-      // o ChaveF do cadastro (S-ChaveF) é criado uma vez e nunca muda.
+      // têm mutabilidade diferente: o push token é regravado a cada refresh;
+      // o ChaveF (S-ChaveF) é criado uma vez e só volta a ser gravável numa
+      // janela específica (S75 — ver comentário do próprio doc abaixo).
 
       // users/{userId}/private/push — token do Expo push, só o dono lê/escreve.
       match /private/push {
@@ -273,8 +274,17 @@ service cloud.firestore {
       // users/{userId}/private/registration — ChaveF capturado no cadastro.
       // Nunca exposto no doc público users/{userId} (que tem read amplo pra
       // qualquer autenticado, por causa do Swipe/Discover) — só o dono e o
-      // admin enxergam. Imutável: uma vez criado, nem o dono pode alterar
-      // (allow update, delete: if false, explícito, não só ausência de regra).
+      // admin enxergam.
+      //
+      // S75 — deixou de ser imutável: o dono pode CORRIGIR o chaveF, mas só
+      // enquanto verifications/{uid}.status == 'rejected' (get() cruzado
+      // abaixo — decisão de produto: correção liberada independente do
+      // motivo da recusa, não só chave_f_invalida). Fora dessa janela (sem
+      // verification, pending, ou approved), o update continua negado, na
+      // prática tão imutável quanto antes. `createdAt` é preservado
+      // (request.resource.data.createdAt == resource.data.createdAt) — a
+      // correção não é um novo cadastro, é o mesmo registro com o campo
+      // certo. `chaveF` continua validado pelo mesmo formato do create.
       match /private/registration {
         allow read: if isOwner(userId) || isAdmin();
 
@@ -284,7 +294,15 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.keys().hasOnly(['chaveF', 'createdAt']);
 
-        allow update, delete: if false;
+        allow update: if isOwner(userId)
+          && exists(/databases/$(database)/documents/verifications/$(userId))
+          && get(/databases/$(database)/documents/verifications/$(userId)).data.status == 'rejected'
+          && request.resource.data.chaveF is string
+          && request.resource.data.chaveF.matches('^F\\d{7}$')
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.keys().hasOnly(['chaveF', 'createdAt']);
+
+        allow delete: if false;
       }
     }
 

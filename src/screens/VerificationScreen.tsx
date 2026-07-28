@@ -23,7 +23,12 @@ import { REJECTION_REASON_LABELS } from '@/constants/rejectionReasons';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { getRegistrationPrivate, submitRegistrationPrivate } from '@/services/firestoreService';
+import {
+  getRegistrationPrivate,
+  RegistrationPrivate,
+  submitRegistrationPrivate,
+  updateChaveF,
+} from '@/services/firestoreService';
 import {
   getVerificationStatus,
   submitVerification,
@@ -35,11 +40,13 @@ type VerificationScreenProps = NativeStackScreenProps<RootStackParamList, 'Verif
 export default function VerificationScreen({ navigation }: VerificationScreenProps) {
   const { user, profile, refreshProfile } = useAuth();
   const [verification, setVerification] = useState<Verification | null>(null);
-  // null enquanto ainda não sabemos (mesma janela de `loading` abaixo) — true
-  // pra contas antigas que já tinham ChaveF gravado no cadastro, false pra
-  // quem nunca gravou (cadastro atual não pede mais ChaveF), caso em que o
-  // campo abaixo aparece e passa a ser exigido aqui, na hora de verificar.
-  const [registrationExists, setRegistrationExists] = useState<boolean | null>(null);
+  // null enquanto ainda não sabemos (mesma janela de `loading` abaixo).
+  // S75 — guarda o doc inteiro (não só um booleano de existência): o valor
+  // gravado é usado pra pré-preencher o campo quando a tela reabre pra
+  // CORRIGIR o ChaveF (status 'rejected'), e null vs not-null continua
+  // distinguindo "nunca gravou" (cadastro atual não pede mais ChaveF) de
+  // "já gravou, agora é correção" no handler abaixo.
+  const [registration, setRegistration] = useState<RegistrationPrivate | null>(null);
   const [chaveF, setChaveF] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -52,7 +59,13 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       getRegistrationPrivate(user.uid),
     ]);
     setVerification(v);
-    setRegistrationExists(reg != null);
+    setRegistration(reg);
+    // S75 — pré-preenche com o valor já gravado (o dono pode ler o próprio
+    // doc): sem isso, quem for corrigir um dígito errado veria um campo
+    // vazio em vez do que digitou da primeira vez.
+    if (reg?.chaveF) {
+      setChaveF(reg.chaveF);
+    }
     setLoading(false);
   }, [user]);
 
@@ -65,11 +78,14 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
   // load() e ficaria "Em análise" preso até reabrir a tela após o admin
   // aprovar.
   const isApproved = profile?.verified === true;
-  const needsChaveF = registrationExists === false;
+  // S75 — mostra o campo tanto pra quem nunca gravou (registration null)
+  // quanto pra quem foi recusado (pode corrigir, decisão de produto: vale
+  // pra qualquer motivo de recusa, não só chave_f_invalida — ver rules).
+  const showChaveFField = registration === null || verification?.status === 'rejected';
 
   const handleTakeSelfie = async () => {
     if (!user) return;
-    if (needsChaveF && !CHAVEF_REGEX.test(chaveF)) {
+    if (showChaveFField && !CHAVEF_REGEX.test(chaveF)) {
       Alert.alert(
         'Chave F inválida',
         'A Chave F deve ter o formato F seguido de 7 dígitos (ex: F1234567).',
@@ -91,14 +107,18 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
 
     setSubmitting(true);
     try {
-      // Grava o ChaveF ANTES da selfie: users/{uid}/private/registration é
-      // create-only nas rules, então isso precisa acontecer só uma vez, e
-      // antes é mais seguro que depois — se a selfie falhar, o usuário só
-      // tenta reenviar (branch 'rejected'/sem pedido), sem precisar
-      // redigitar o ChaveF, já que na próxima carga `registrationExists`
-      // já estará true.
-      if (needsChaveF) {
-        await submitRegistrationPrivate(user.uid, chaveF);
+      // Grava/corrige o ChaveF ANTES da selfie: submitVerification põe o
+      // status em 'pending', e a partir daí a rule de private/registration
+      // nega o update de novo (S75 — só permite enquanto status ==
+      // 'rejected'). Se este await falhar, o catch abaixo interrompe a
+      // cadeia aqui mesmo — submitVerification nunca chega a rodar, então
+      // nenhuma selfie é enviada com a Chave F antiga.
+      if (showChaveFField) {
+        if (registration) {
+          await updateChaveF(user.uid, chaveF);
+        } else {
+          await submitRegistrationPrivate(user.uid, chaveF);
+        }
       }
       await submitVerification(user.uid, result.assets[0].uri);
       await Promise.all([load(), refreshProfile()]);
@@ -190,7 +210,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                       ? 'Tire uma selfie simples, sem gestos ou filtros, com boa iluminação e o rosto visível. Nossa equipe compara com suas fotos de perfil e aprova manualmente — isso costuma levar até 48h. A selfie nunca fica pública.'
                       : 'No JuntaVale, só perfis verificados podem conversar. Cada selfie é revisada individualmente pela nossa equipe — nada de robô aprovando fake. A sua verificação protege você e todo mundo que cruzar seu caminho.'}
                   </Text>
-                  {needsChaveF && (
+                  {showChaveFField && (
                     <View style={styles.chaveFWrap}>
                       <Text style={styles.chaveFLabel}>Chave F</Text>
                       <TextInput
@@ -217,7 +237,9 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                       <ActivityIndicator color={theme.colors.onSecondary} />
                     ) : (
                       <Text style={styles.actionBtnText}>
-                        {verification?.status === 'rejected' ? 'Reenviar selfie' : 'Tirar selfie'}
+                        {verification?.status === 'rejected'
+                          ? 'Reenviar selfie e Chave F'
+                          : 'Enviar selfie e Chave F'}
                       </Text>
                     )}
                   </AnimatedPressable>

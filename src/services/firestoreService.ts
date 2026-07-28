@@ -174,6 +174,14 @@ export const submitRegistrationPrivate = async (uid: string, chaveF: string): Pr
   });
 };
 
+// S75 — corrige o chaveF depois de uma recusa (verifications/{uid}.status
+// == 'rejected'); a janela e o formato são validados nas rules, não aqui.
+// updateDoc, não setDoc: setDoc sem merge apagaria createdAt, e a rule (que
+// exige createdAt inalterado nesta operação) rejeitaria o write.
+export const updateChaveF = async (uid: string, chaveF: string): Promise<void> => {
+  await updateDoc(doc(db, 'users', uid, 'private', 'registration'), { chaveF });
+};
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? (snap.data() as UserProfile) : null;
