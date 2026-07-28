@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePresenceHeartbeat } from '@/hooks/usePresenceHeartbeat';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
@@ -178,6 +179,7 @@ export default function Navigation() {
   const { user, loading } = useAuth();
   useNotifications();
   useActivityTracker();
+  usePresenceHeartbeat();
   const { onNavigationReady } = useChatDeepLink(user?.uid);
 
   // Resolvido em paralelo com o Auth (AsyncStorage não depende do Firebase) —
