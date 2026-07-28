@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -159,7 +160,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
               <ActivityIndicator color={theme.colors.primary} />
             </View>
           ) : (
-            <View style={styles.content}>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
               {isApproved ? (
                 <>
                   <View style={styles.iconWrap}>
@@ -258,7 +259,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                   </Text>
                 </>
               )}
-            </View>
+            </ScrollView>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -283,8 +284,12 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, width: 34 },
   headerTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text },
 
+  // S75-B — contentContainerStyle de um ScrollView agora (era um View
+  // fixo): flexGrow no lugar de flex, mesmo padrão do RegisterScreen (S64).
+  // Sem justifyContent 'center' — foi exatamente isso que cortava o topo
+  // no LoginScreen.
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     padding: theme.spacing.lg,
     paddingTop: theme.spacing.xl,
