@@ -742,6 +742,25 @@ export const listenTypingStatus = (
   };
 };
 
+// ─── Presence (S79-C2-B) ────────────────────────────────────
+
+export const listenPresence = (userId: string, callback: (lastSeenAt: Date | null) => void) => {
+  return onSnapshot(
+    doc(db, 'presence', userId),
+    (snap) => {
+      const data = snap.data() as { lastSeenAt?: Timestamp } | undefined;
+      callback(data?.lastSeenAt ? data.lastSeenAt.toDate() : null);
+    },
+    () => {
+      // Se o match for desfeito com o chat aberto, a regra de leitura de
+      // presence passa a negar (deixa de existir match entre os dois uids)
+      // e este onSnapshot estouraria sem este callback de erro. Reporta
+      // ausência de presença em vez de propagar o erro pro chamador.
+      callback(null);
+    },
+  );
+};
+
 // ─── Block status (S19) ─────────────────────────────────────
 
 export const listenMatchBlockStatus = (

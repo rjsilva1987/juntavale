@@ -39,6 +39,7 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOtherPresence } from '@/hooks/useOtherPresence';
 import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
@@ -328,6 +329,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const isUnverified = !profile?.verified;
   const flatListRef = React.useRef<FlatList>(null);
   const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
+  const { presenceLabel } = useOtherPresence(otherUid);
 
   // Fundação do badge de não lidas (S27, ver useUnreadCount): marca
   // lastReadAt.{meuUid} ao focar a tela e de novo sempre que uma mensagem
@@ -602,9 +604,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             )}
             <View>
               <Text style={styles.headerName}>{otherName}</Text>
-              <Text style={styles.headerStatus}>
-                {isOtherTyping ? 'digitando...' : 'Online agora'}
-              </Text>
+              {(isOtherTyping || presenceLabel) && (
+                <Text style={styles.headerStatus}>
+                  {isOtherTyping ? 'digitando...' : presenceLabel}
+                </Text>
+              )}
             </View>
           </AnimatedPressable>
           <AnimatedPressable onPress={() => setOptionsSheetVisible(true)}>
