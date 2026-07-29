@@ -22,12 +22,19 @@ import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import { Gender } from '@/services/firestoreService';
 import { countCodePoints } from '@/utils/text';
 
 // S77 — alinhado com MAX_BIO_LENGTH do ProfileScreen (mesma edição de bio,
 // mesmo teto dos dois lados — bug separado achado na recon, o cadastro
 // tinha 160 e a edição de perfil não tinha nenhum).
 const MAX_BIO_LENGTH = 500;
+
+const GENDER_OPTIONS: { label: string; value: Gender }[] = [
+  { label: 'Masculino', value: 'masculino' },
+  { label: 'Feminino', value: 'feminino' },
+  { label: 'Outro', value: 'outro' },
+];
 
 const INTERESTS = [
   'Investimentos',
@@ -55,6 +62,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [age, setAge] = useState('');
   const [bio, setBio] = useState('');
+  const [gender, setGender] = useState<Gender | null>(null);
   const [uf, setUf] = useState<UF | undefined>(undefined);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(undefined);
@@ -79,6 +87,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       Alert.alert('Estado obrigatório', 'Selecione o estado onde você mora.');
       return;
     }
+    if (!gender) {
+      Alert.alert('Gênero obrigatório', 'Selecione seu gênero.');
+      return;
+    }
     const ageNum = Number(age);
     if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
       Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
@@ -95,6 +107,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         selectedInterests,
         lookingFor,
         uf,
+        gender,
       );
     } catch (e) {
       // S62 — mensagem em português via catálogo (nunca e.message cru).
@@ -214,6 +227,24 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 maxLength={2}
               />
 
+              <Text style={styles.label}>Gênero</Text>
+              <View style={styles.genderRow}>
+                {GENDER_OPTIONS.map((option) => {
+                  const active = gender === option.value;
+                  return (
+                    <AnimatedPressable
+                      key={option.value}
+                      style={[styles.genderOption, active && styles.genderOptionActive]}
+                      onPress={() => setGender(option.value)}
+                    >
+                      <Text style={[styles.genderText, active && styles.genderTextActive]}>
+                        {option.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
               <Text style={styles.label}>Bio</Text>
               <TextInput
                 style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
@@ -232,12 +263,15 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
 
               <AnimatedPressable
-                style={[styles.btnPrimary, !uf && { opacity: 0.7 }]}
-                disabled={!uf}
+                style={[styles.btnPrimary, !(uf && gender) && { opacity: 0.7 }]}
+                disabled={!uf || !gender}
                 onPress={() => {
                   const ageNum = Number(age);
                   if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
                     return Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
+                  }
+                  if (!gender) {
+                    return Alert.alert('Gênero obrigatório', 'Selecione seu gênero.');
                   }
                   setStep(3);
                 }}
@@ -367,6 +401,26 @@ const styles = StyleSheet.create({
     color: theme.colors.textLight,
     marginTop: 4,
   },
+
+  genderRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: 8,
+  },
+  genderOption: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  genderOptionActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  genderText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
+  genderTextActive: { color: theme.colors.onPrimary },
 
   btnPrimary: {
     backgroundColor: theme.colors.secondary,

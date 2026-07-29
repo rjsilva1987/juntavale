@@ -13,7 +13,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { LookingFor } from '@/constants/lookingFor';
 import { UF } from '@/constants/ufs';
 import { auth, db } from '@/services/firebase';
-import { clearSessionSwipes, getUserProfile, UserProfile } from '@/services/firestoreService';
+import {
+  clearSessionSwipes,
+  getUserProfile,
+  Gender,
+  UserProfile,
+} from '@/services/firestoreService';
 import { removePushToken } from '@/services/notifications';
 
 interface AuthContextType {
@@ -29,6 +34,7 @@ interface AuthContextType {
     interests: string[],
     lookingFor: LookingFor,
     uf: UF,
+    gender: Gender,
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -91,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     interests: string[],
     lookingFor: LookingFor,
     uf: UF,
+    gender: Gender,
   ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
@@ -103,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       interests,
       lookingFor,
       uf,
+      gender,
     };
     // createUserWithEmailAndPassword acima fica fora deste setDoc de
     // propósito — Auth não é Firestore, as duas operações não podem ser
