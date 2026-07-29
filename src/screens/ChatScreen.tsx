@@ -46,12 +46,14 @@ import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import {
   listenMessages,
   listenMatchBlockStatus,
+  listenReactions,
   markMatchRead,
   sendMessage,
   setMessageReaction,
   uploadChatImage,
   Message,
   REACTION_EMOJIS,
+  ReactionEmoji,
 } from '@/services/firestoreService';
 import { countCodePoints } from '@/utils/text';
 
@@ -100,6 +102,11 @@ interface MessageBubbleProps {
   currentUid?: string;
   otherName: string;
   otherPhoto?: string;
+  // S80-B — uid -> emoji pra ESTA mensagem. Passado direto do objeto do
+  // estado (reactions[item.id]) pelo chamador, sem `?? {}` no ponto de
+  // passagem (mudaria de identidade a cada render) — o fallback é tratado
+  // aqui dentro.
+  reactions?: Record<string, ReactionEmoji>;
   onViewImage: (imageUrl: string) => void;
   onOpenLocation: (location: { latitude: number; longitude: number }) => void;
   onLongPressReply: (message: Message) => void;
@@ -111,6 +118,7 @@ function MessageBubble({
   currentUid,
   otherName,
   otherPhoto,
+  reactions,
   onViewImage,
   onOpenLocation,
   onLongPressReply,
@@ -119,6 +127,13 @@ function MessageBubble({
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
+  // S80-B — no máximo 2 participantes, logo no máximo 2 entradas. Ordenado
+  // por uid: a ordem de chaves do objeto vem do snapshot do Firestore e não
+  // é garantida entre re-renders, então sem isso os emoji trocariam de
+  // lugar sozinhos.
+  const reactionEntries = reactions
+    ? Object.entries(reactions).sort(([a], [b]) => a.localeCompare(b))
+    : [];
 
   // S79-E2 — arrasto pra responder. translateX: posição atual da bolha (só
   // pra direita, 0..REPLY_DRAG_MAX). hasTriggeredHaptic: shared value, não
@@ -296,6 +311,15 @@ function MessageBubble({
             >
               {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
             </Text>
+            {reactionEntries.length > 0 && (
+              <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
+                {reactionEntries.map(([uid, emoji]) => (
+                  <Text key={uid} style={styles.reactionBadge}>
+                    {emoji}
+                  </Text>
+                ))}
+              </View>
+            )}
           </Animated.View>
         </GestureDetector>
       </View>
@@ -307,6 +331,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  // S80-B — messageId -> (uid -> emoji), espelho do doc mais recente de
+  // matches/{matchId}/reactions/{messageId} (ver listenReactions).
+  const [reactions, setReactions] = useState<Record<string, Record<string, ReactionEmoji>>>({});
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
@@ -382,6 +409,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     });
     return unsub;
   }, [matchId, uid]);
+
+  useEffect(() => {
+    const unsub = listenReactions(matchId, setReactions);
+    return unsub;
+  }, [matchId]);
 
   useEffect(() => {
     const unsub = listenMatchBlockStatus(matchId, setBlockedBy);
@@ -566,6 +598,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       currentUid={user?.uid}
       otherName={otherName}
       otherPhoto={otherPhoto}
+      reactions={reactions[item.id]}
       onViewImage={setViewerImage}
       onOpenLocation={handleOpenLocation}
       onLongPressReply={setReplyOptionsTarget}
@@ -793,9 +826,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setReplyOptionsTarget(null)}>
           <View style={styles.sheet}>
-            {/* S80-A — fileira de reação, só grava (ver setMessageReaction em
-                firestoreService.ts). Tocar num emoji ainda não alterna nem
-                mostra a reação na bolha — isso é o S80-B. */}
+            {/* S80-A escreve, S80-B alterna: tocar de novo no MESMO emoji que
+                o próprio usuário já reagiu remove a reação (deleteField). */}
             <View style={styles.reactionRow}>
               {REACTION_EMOJIS.map((emoji) => (
                 <AnimatedPressable
@@ -803,10 +835,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   style={styles.reactionButton}
                   onPress={() => {
                     if (replyOptionsTarget && user?.uid) {
+                      const current = reactions[replyOptionsTarget.id]?.[user.uid];
+                      const next = current === emoji ? null : emoji;
                       // Fire-and-forget, mas não em silêncio (mesmo padrão de
                       // usePresenceHeartbeat.ts): sem isso o erro desaparece
                       // sem deixar rastro, já que não há await aqui.
-                      setMessageReaction(matchId, replyOptionsTarget.id, user.uid, emoji).catch(
+                      setMessageReaction(matchId, replyOptionsTarget.id, user.uid, next).catch(
                         (err) => console.warn('[ChatScreen] falha ao gravar reação', err),
                       );
                     }
@@ -1005,6 +1039,12 @@ const styles = StyleSheet.create({
   bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
   bubbleTimeImage: { position: 'absolute', bottom: 6, right: 10, color: theme.colors.white },
+
+  // S80-B — mesmo lado da bolha: flex-start (recebida) por padrão, flex-end
+  // (própria) sobrepõe, mesma convenção de msgRowMe/msgRowOther acima.
+  reactionBadgeRow: { flexDirection: 'row', gap: 2, alignSelf: 'flex-start' },
+  reactionBadgeRowMe: { alignSelf: 'flex-end' },
+  reactionBadge: { fontSize: theme.fontSize.sm },
 
   bubbleImageWrap: {
     maxWidth: '75%',

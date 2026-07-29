@@ -660,19 +660,45 @@ export const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
 
 // merge:true (não updateDoc) porque o doc matches/{matchId}/reactions/{messageId}
-// pode não existir ainda — mesmo motivo do presence/{userId} (S79-C2-A). Aceita
-// deleteField() como emoji pra já cobrir a remoção de reação (S80-B usa o
-// mesmo caminho de código, não haverá dois jeitos divergentes de escrever).
+// pode não existir ainda — mesmo motivo do presence/{userId} (S79-C2-A).
+// emoji null = remover a reação (traduzido pra deleteField() aqui dentro,
+// o chamador não precisa importar nada de 'firebase/firestore').
 export const setMessageReaction = async (
   matchId: string,
   messageId: string,
   uid: string,
-  emoji: ReactionEmoji | ReturnType<typeof deleteField>,
+  emoji: ReactionEmoji | null,
 ) => {
   await setDoc(
     doc(db, 'matches', matchId, 'reactions', messageId),
-    { [uid]: emoji },
+    { [uid]: emoji === null ? deleteField() : emoji },
     { merge: true },
+  );
+};
+
+// S80-B — assina a COLEÇÃO inteira (um doc por mensagem), não um doc único
+// como listenPresence/listenTypingStatus. callback recebe messageId -> (uid
+// -> emoji), montado a partir de snap.docs (id do doc = messageId).
+export const listenReactions = (
+  matchId: string,
+  callback: (reactions: Record<string, Record<string, ReactionEmoji>>) => void,
+) => {
+  return onSnapshot(
+    collection(db, 'matches', matchId, 'reactions'),
+    (snap) => {
+      const reactions: Record<string, Record<string, ReactionEmoji>> = {};
+      snap.docs.forEach((d) => {
+        reactions[d.id] = d.data() as Record<string, ReactionEmoji>;
+      });
+      callback(reactions);
+    },
+    () => {
+      // Mesmo motivo do listenPresence (S79-C2-B): se o match for desfeito
+      // com o chat aberto, a regra de leitura de reactions passa a negar e
+      // este onSnapshot estouraria sem este callback de erro. Reporta
+      // ausência de reações em vez de propagar o erro pro chamador.
+      callback({});
+    },
   );
 };
 
