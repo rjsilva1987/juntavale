@@ -30,7 +30,7 @@ import { LookingFor } from '@/constants/lookingFor';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
-import { Vale } from '@/constants/vale';
+import { VALES, Vale } from '@/constants/vale';
 import { db, storage } from '@/services/firebase';
 
 // ─── Types ───────────────────────────────────────────────
@@ -43,6 +43,11 @@ export interface DiscoverFilters {
   uf: UF | 'all';
   gender: Gender | 'all';
   lookingFor: LookingFor | 'all';
+  // S83-B — primeiro filtro de múltipla escolha do app: os outros campos
+  // usam sentinela 'all' (um valor só, "sem restrição"); vale é uma lista de
+  // valores marcados. Ver getDiscoverProfiles pra como isso é interpretado
+  // (seleção total/vazia = inerte, parcial = filtra).
+  vale: Vale[];
   verifiedOnly: boolean;
 }
 
@@ -376,6 +381,17 @@ export const getDiscoverProfiles = async (
       // Perfil SEM uf é excluído quando um estado específico está filtrado —
       // comportamento intencional (S44).
       if (filters.uf !== 'all' && candidate.uf !== filters.uf) return;
+      // S83-B — vale só filtra quando a seleção é PARCIAL (>0 e <VALES.length).
+      // Com os três marcados (padrão) ou nenhum marcado, o filtro fica
+      // INERTE e não exclui ninguém: contas existentes ainda não têm vale, e
+      // uma condição ingênua (`filters.vale.includes(candidate.vale)` sem
+      // essa guarda) esvaziaria o Descobrir inteiro com o filtro no padrão
+      // (perfil sem vale nunca bateria contra nenhuma seleção), parecendo
+      // bug de query em vez de filtro funcionando. Quando a seleção É
+      // parcial, perfil SEM vale não aparece — comportamento pedido.
+      if (filters.vale.length > 0 && filters.vale.length < VALES.length) {
+        if (!candidate.vale || !filters.vale.includes(candidate.vale)) return;
+      }
     }
 
     profiles.push(candidate);

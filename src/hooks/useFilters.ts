@@ -1,6 +1,7 @@
 // src/hooks/useFilters.ts
 import { useCallback, useEffect, useState } from 'react';
 
+import { VALES } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { DiscoverFilters, updateUserProfile } from '@/services/firestoreService';
 
@@ -10,6 +11,10 @@ export const DEFAULT_FILTERS: DiscoverFilters = {
   uf: 'all',
   gender: 'all',
   lookingFor: 'all',
+  // S83-B — começa com os três marcados: seleção total = filtro inerte (ver
+  // getDiscoverProfiles), mesmo comportamento de "sem restrição" que os
+  // outros campos expressam com 'all'.
+  vale: [...VALES],
   verifiedOnly: false,
 };
 

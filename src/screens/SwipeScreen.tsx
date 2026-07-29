@@ -38,6 +38,7 @@ import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { SuperLikeNoteModal } from '@/components/SuperLikeNoteModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { theme } from '@/constants/theme';
+import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_FILTERS, useFilters } from '@/hooks/useFilters';
 import { useReplyQuota } from '@/hooks/useReplyQuota';
@@ -849,6 +850,13 @@ function ProfileCard({
             </TouchableOpacity>
           )}
         </View>
+        {/* S83-B — abaixo do nome, acima da UF. Perfil SEM vale não
+            renderiza nada aqui (nem rótulo vazio, nem "não informado", nem
+            espaço reservado) — durante a migração manual, vários perfis vão
+            estar sem o campo, e um placeholder chamaria atenção pro que
+            falta em vez de simplesmente não aparecer. Rótulo de
+            VALE_LABELS, nunca o value cru. */}
+        {profile.vale && <Text style={pcStyles.valeText}>{VALE_LABELS[profile.vale]}</Text>}
         {profile.uf && (
           <View style={pcStyles.ufRow} pointerEvents="none">
             <Ionicons name="location-outline" size={14} color={theme.colors.white} />
@@ -1089,6 +1097,12 @@ const pcStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: theme.colors.white,
+  },
+  valeText: {
+    fontSize: theme.fontSize.xs,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
   ufText: { fontSize: theme.fontSize.xs, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },

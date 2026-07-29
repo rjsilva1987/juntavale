@@ -8,6 +8,7 @@ import { UfPicker } from '@/components/UfPicker';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
+import { VALE_OPTIONS } from '@/constants/vale';
 import { DiscoverFilters, Gender } from '@/services/firestoreService';
 
 interface FilterModalProps {
@@ -130,6 +131,36 @@ export function FilterModal({
                   <Text
                     style={[styles.lookingForText, active && styles.lookingForTextActive]}
                   >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* S83-B — vale, múltipla escolha (diferente de Busca acima, que é
+              seleção única): reusa o mesmo componente visual de opções
+              curtas (lookingForRow/lookingForOption/lookingForText), só que
+              o onPress alterna a presença no array em vez de substituir um
+              valor único. */}
+          <Text style={styles.label}>Vale</Text>
+          <View style={styles.lookingForRow}>
+            {VALE_OPTIONS.map((option) => {
+              const active = draft.vale.includes(option.value);
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                  onPress={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      vale: active
+                        ? prev.vale.filter((v) => v !== option.value)
+                        : [...prev.vale, option.value],
+                    }))
+                  }
+                >
+                  <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
