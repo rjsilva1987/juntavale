@@ -20,6 +20,7 @@ import { getAuthErrorMessage } from '@/constants/authErrors';
 import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
+import { Vale, VALE_OPTIONS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { Gender } from '@/services/firestoreService';
@@ -94,6 +95,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [uf, setUf] = useState<UF | undefined>(undefined);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(undefined);
+  const [vale, setVale] = useState<Vale | undefined>(undefined);
   const [loading, setLoading] = useState(false);
 
   const toggleInterest = (item: string) => {
@@ -109,6 +111,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
     }
     if (!lookingFor) {
       Alert.alert('Busca obrigatória', 'Selecione o que você está buscando no app.');
+      return;
+    }
+    if (!vale) {
+      Alert.alert('Vale obrigatório', 'Selecione qual é o seu vale.');
       return;
     }
     if (!uf) {
@@ -135,6 +141,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         selectedInterests,
         lookingFor,
         uf,
+        vale,
         gender,
       );
     } catch (e) {
@@ -335,6 +342,31 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 })}
               </View>
 
+              {/* S83-A — mesmo componente visual do "O que você busca?"
+                  acima: reusa lookingForGrid/lookingForOption/lookingForText
+                  (grade curta de opções fixas), sem duplicar estilo — Vale
+                  tem o mesmo formato de escolha que lookingFor, diferente de
+                  UF (27 opções, precisa de busca, por isso UfPicker). */}
+              <Text style={[styles.title, { marginTop: theme.spacing.lg }]}>Qual seu vale?</Text>
+              <Text style={styles.subtitle}>Obrigatório — escolha uma opção</Text>
+
+              <View style={styles.lookingForGrid}>
+                {VALE_OPTIONS.map((option) => {
+                  const active = vale === option.value;
+                  return (
+                    <AnimatedPressable
+                      key={option.value}
+                      style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                      onPress={() => setVale(option.value)}
+                    >
+                      <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
+                        {option.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
               <Text style={[styles.title, { marginTop: theme.spacing.lg }]}>Seus interesses</Text>
               <Text style={styles.subtitle}>Escolha até 5 que te representam</Text>
 
@@ -357,9 +389,9 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </View>
 
               <AnimatedPressable
-                style={[styles.btnPrimary, (loading || !lookingFor) && { opacity: 0.7 }]}
+                style={[styles.btnPrimary, (loading || !lookingFor || !vale) && { opacity: 0.7 }]}
                 onPress={handleRegister}
-                disabled={loading || !lookingFor}
+                disabled={loading || !lookingFor || !vale}
               >
                 {loading ? (
                   <ActivityIndicator color={theme.colors.onSecondary} />

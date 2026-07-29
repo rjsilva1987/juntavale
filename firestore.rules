@@ -1,4 +1,8 @@
-// rules-stamp: S76-A (birthDate opcional em users/{userId}: entra no hasOnly
+// rules-stamp: S83-A (users/{userId} ganha campo vale, enum ['BB', 'CAIXA',
+// 'BRB']: obrigatório no create, dentro do enum; no update, gravável UMA VEZ
+// só — campo ausente nos dois é ok, campo já existente não pode mudar de
+// valor, campo ausente antes e presente agora precisa estar no enum; entra
+// no hasOnly de create e update) + S76-A (birthDate opcional em users/{userId}: entra no hasOnly
 // de create e update; isValidProfile valida SÓ quando presente — is
 // timestamp e idade aproximada entre 18 e 101 anos via duration.value(),
 // checagem exata mora no client; age continua obrigatório e sem trava,
@@ -246,9 +250,12 @@ service cloud.firestore {
              ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG',
               'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
               'RS', 'SC', 'SE', 'SP', 'TO']
+        // S83-A — mesmo padrão de lookingFor/uf acima: obrigatório no
+        // cadastro, sem o campo (ou fora do enum) o create inteiro é negado.
+        && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']
         && request.resource.data.keys().hasOnly(
              ['uid', 'name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts',
+              'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'createdAt', 'prompts',
               'places', 'events', 'weeklyPromptAnswer'])
         && isValidProfile(request.resource.data);
 
@@ -280,9 +287,24 @@ service cloud.firestore {
                   ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG',
                    'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
                    'RS', 'SC', 'SE', 'SP', 'TO']))
+        // S83-A — vale é GRAVÁVEL UMA VEZ, diferente do padrão "troca livre
+        // entre as opções" de lookingFor/uf acima: contas que já existem não
+        // têm o campo, e travar como imutável de cara as deixaria presas sem
+        // poder nunca definir o primeiro valor — por isso o 1º set continua
+        // liberado. Mas depois de definido, não muda mais. Três ramos: (a)
+        // ausente nos dois — conta sem o campo segue editando o resto sem
+        // travar; (b) já existia E continua no resultado E É O MESMO valor —
+        // qualquer tentativa de trocar (ou remover, que cai fora dos 3 ramos)
+        // é negada; (c) não existia antes e aparece agora — aí, e só aí,
+        // precisa estar dentro do enum (1ª definição, fora do cadastro).
+        && ((!('vale' in resource.data) && !('vale' in request.resource.data))
+            || ('vale' in resource.data && 'vale' in request.resource.data
+                  && request.resource.data.vale == resource.data.vale)
+            || (!('vale' in resource.data) && 'vale' in request.resource.data
+                  && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
-              'gender', 'lookingFor', 'uf', 'location', 'filters', 'prompts', 'lastActiveAt',
+              'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'places', 'events', 'weeklyPromptAnswer'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio

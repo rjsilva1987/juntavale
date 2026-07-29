@@ -12,6 +12,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import { LookingFor } from '@/constants/lookingFor';
 import { UF } from '@/constants/ufs';
+import { Vale } from '@/constants/vale';
 import { auth, db } from '@/services/firebase';
 import {
   clearSessionSwipes,
@@ -35,6 +36,7 @@ interface AuthContextType {
     interests: string[],
     lookingFor: LookingFor,
     uf: UF,
+    vale: Vale,
     gender: Gender,
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -98,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     interests: string[],
     lookingFor: LookingFor,
     uf: UF,
+    vale: Vale,
     gender: Gender,
   ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -113,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       interests,
       lookingFor,
       uf,
+      vale,
       gender,
     };
     // createUserWithEmailAndPassword acima fica fora deste setDoc de

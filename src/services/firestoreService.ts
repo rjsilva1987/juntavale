@@ -30,6 +30,7 @@ import { LookingFor } from '@/constants/lookingFor';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
+import { Vale } from '@/constants/vale';
 import { db, storage } from '@/services/firebase';
 
 // ─── Types ───────────────────────────────────────────────
@@ -67,6 +68,12 @@ export interface UserProfile {
   // (RegisterScreen + firestore.rules) pra toda conta nova, nunca fica vazio
   // depois de setado uma vez (ver rules de update).
   uf?: UF;
+  // S83-A — mesmo padrão de lookingFor/uf acima: OPCIONAL no tipo de
+  // propósito, mesmo sendo obrigatório no cadastro. Contas que já existem
+  // (criadas antes deste campo existir) não têm vale na base — marcar como
+  // obrigatório aqui faria o TypeScript mentir sobre o formato real dos
+  // docs antigos. Gravável uma vez só depois de setado (ver firestore.rules).
+  vale?: Vale;
   // S44 removeu o uso de location no Descobrir (geo trocado por UF) — campo
   // mantido no schema/rules por não ter sido pedida a remoção nesta sprint;
   // não confundir com Message.location (compartilhamento de localização no
