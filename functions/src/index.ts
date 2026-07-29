@@ -977,6 +977,23 @@ export const deleteAccount = onCall(
       console.error('[deleteAccount] falha ao apagar verification:', uid, error);
     }
 
+    // presence/{uid} (S82) — coleção RAIZ, fora de users/ e de matches/,
+    // então nenhum recursiveDelete das etapas acima alcança este doc:
+    // precisa de etapa própria. Mesmo padrão de verifications/{uid} logo
+    // acima — db.doc(...).delete() dentro de try/catch-e-loga, sem
+    // propagar erro pro client.
+    //
+    // Reações (matches/{matchId}/reactions/{messageId}) NÃO precisam de
+    // etapa própria aqui: moram DENTRO do doc do match (subcoleção), e o
+    // recursiveDelete(matchDoc.ref) da etapa a) de matches, acima, já leva
+    // todos os descendentes junto. Não "conserte" isso de novo depois.
+    try {
+      await db.doc(`presence/${uid}`).delete();
+      console.log('[deleteAccount] presence apagada');
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar presence:', uid, error);
+    }
+
     // f) Storage do perfil — avatares.
     try {
       await bucket.deleteFiles({ prefix: `avatars/${uid}/` });
