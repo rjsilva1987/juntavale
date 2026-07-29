@@ -49,6 +49,10 @@ export interface UserProfile {
   uid: string;
   name: string;
   age: number;
+  // S76-A — `age` segue no schema, escrito no cadastro (derivado, ver
+  // AuthContext.register/calculateAge), mas a FONTE DA VERDADE passa a ser
+  // birthDate. Opcional: perfis antigos não têm o campo.
+  birthDate?: Timestamp;
   bio: string;
   photoURL: string;
   photos: string[];

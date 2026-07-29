@@ -20,6 +20,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import { removePushToken } from '@/services/notifications';
+import { calculateAge } from '@/utils/birthDate';
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +30,7 @@ interface AuthContextType {
     email: string,
     password: string,
     name: string,
-    age: number,
+    birthDate: Date,
     bio: string,
     interests: string[],
     lookingFor: LookingFor,
@@ -92,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     name: string,
-    age: number,
+    birthDate: Date,
     bio: string,
     interests: string[],
     lookingFor: LookingFor,
@@ -101,6 +102,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
+    // S76-A — age é derivado de birthDate, calculado uma vez aqui no cadastro.
+    const age = calculateAge(birthDate, new Date());
     const newProfile: Omit<UserProfile, 'uid'> = {
       name,
       age,
@@ -121,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await setDoc(doc(db, 'users', cred.user.uid), {
       ...newProfile,
       uid: cred.user.uid,
+      birthDate,
       createdAt: serverTimestamp(),
     });
 

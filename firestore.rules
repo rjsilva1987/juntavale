@@ -1,4 +1,9 @@
-// rules-stamp: S80-A (matches/{matchId}/reactions/{messageId} nova: reação de
+// rules-stamp: S76-A (birthDate opcional em users/{userId}: entra no hasOnly
+// de create e update; isValidProfile valida SÓ quando presente — is
+// timestamp e idade aproximada entre 18 e 101 anos via duration.value(),
+// checagem exata mora no client; age continua obrigatório e sem trava,
+// segue derivado de birthDate no cadastro; nenhum campo removido) + S80-A
+// (matches/{matchId}/reactions/{messageId} nova: reação de
 // emoji por mensagem, chave = uid de quem reagiu, valor = emoji — mesmo
 // padrão de guarda por diff de 3 ramos do typing (S79-C1): chave do próprio
 // uid inalterada, ausente no resultado (remoção via deleteField, usada pelo
@@ -173,6 +178,16 @@ service cloud.firestore {
     function isValidProfile(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 240
         && data.age is number && data.age >= 18 && data.age <= 100
+        // S76-A — SÓ quando presente: perfis antigos não têm birthDate, e
+        // esta função roda no update também — exigir sempre travaria toda
+        // conta legada ao editar bio/foto/etc. 6570d ~ 18 anos e 36890d ~
+        // 101 anos, aproximação deliberada (meses/anos bissextos não
+        // entram na conta) — a checagem exata mora no client
+        // (parseBirthInput, src/utils/birthDate.ts).
+        && (!('birthDate' in data) ||
+            (data.birthDate is timestamp
+             && request.time - data.birthDate > duration.value(6570, 'd')
+             && request.time - data.birthDate < duration.value(36890, 'd')))
         && data.bio is string && data.bio.size() <= 2000
         && data.photoURL is string
         && data.photos is list && data.photos.size() <= 6
@@ -232,7 +247,7 @@ service cloud.firestore {
               'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
               'RS', 'SC', 'SE', 'SP', 'TO']
         && request.resource.data.keys().hasOnly(
-             ['uid', 'name', 'age', 'bio', 'photoURL', 'photos', 'interests',
+             ['uid', 'name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'location', 'filters', 'createdAt', 'prompts',
               'places', 'events', 'weeklyPromptAnswer'])
         && isValidProfile(request.resource.data);
@@ -266,7 +281,7 @@ service cloud.firestore {
                    'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR',
                    'RS', 'SC', 'SE', 'SP', 'TO']))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-             ['name', 'age', 'bio', 'photoURL', 'photos', 'interests',
+             ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'places', 'events', 'weeklyPromptAnswer'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave

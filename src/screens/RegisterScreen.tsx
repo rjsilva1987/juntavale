@@ -23,6 +23,7 @@ import { UF } from '@/constants/ufs';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { Gender } from '@/services/firestoreService';
+import { BirthParseReason, parseBirthInput } from '@/utils/birthDate';
 import { countCodePoints } from '@/utils/text';
 
 // S77 — alinhado com MAX_BIO_LENGTH do ProfileScreen (mesma edição de bio,
@@ -35,6 +36,33 @@ const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Feminino', value: 'feminino' },
   { label: 'Outro', value: 'outro' },
 ];
+
+// Máscara incremental DD/MM/AAAA: mantém só dígitos e reconstrói as barras a
+// partir da posição, então funciona tanto digitando pra frente quanto
+// apagando (backspace) sem deixar barra solta. Sem regex de propósito — a
+// tela não faz nenhuma checagem sobre a data em si, só formata o texto (a
+// decisão de validade é toda de parseBirthInput, em birthDate.ts).
+function formatBirthDateInput(text: string): string {
+  let digits = '';
+  for (const char of text) {
+    if (char >= '0' && char <= '9') digits += char;
+    if (digits.length === 8) break;
+  }
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  return [day, month, year].filter(Boolean).join('/');
+}
+
+// Mapa único reason -> mensagem, usado nos dois pontos onde a data é
+// validada (botão Continuar do Step 2 e handleRegister) — nenhum dos dois
+// reimplementa a checagem, só traduzem o `reason` que parseBirthInput já deu.
+const BIRTH_ERROR_MESSAGES: Record<BirthParseReason, string> = {
+  incomplete: 'Data incompleta. Use o formato DD/MM/AAAA.',
+  invalid: 'Data inválida. Confira o dia e o mês.',
+  underage: 'É preciso ter pelo menos 18 anos.',
+  overage: 'Confira o ano de nascimento.',
+};
 
 const INTERESTS = [
   'Investimentos',
@@ -60,7 +88,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [age, setAge] = useState('');
+  const [birthDateText, setBirthDateText] = useState('');
   const [bio, setBio] = useState('');
   const [gender, setGender] = useState<Gender | null>(null);
   const [uf, setUf] = useState<UF | undefined>(undefined);
@@ -91,9 +119,9 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       Alert.alert('Gênero obrigatório', 'Selecione seu gênero.');
       return;
     }
-    const ageNum = Number(age);
-    if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
-      Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
+    const birthResult = parseBirthInput(birthDateText);
+    if (birthResult.ok === false) {
+      Alert.alert('Data de nascimento', BIRTH_ERROR_MESSAGES[birthResult.reason]);
       return;
     }
     setLoading(true);
@@ -102,7 +130,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         email.trim(),
         password,
         name.trim(),
-        ageNum,
+        birthResult.date,
         bio.trim(),
         selectedInterests,
         lookingFor,
@@ -216,15 +244,15 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <Text style={styles.title}>Seu perfil</Text>
               <Text style={styles.subtitle}>Conte um pouco sobre você</Text>
 
-              <Text style={styles.label}>Idade</Text>
+              <Text style={styles.label}>Data de nascimento</Text>
               <TextInput
                 style={styles.input}
-                placeholder="25"
+                placeholder="DD/MM/AAAA"
                 placeholderTextColor={theme.colors.textLight}
-                value={age}
-                onChangeText={setAge}
+                value={birthDateText}
+                onChangeText={(text) => setBirthDateText(formatBirthDateInput(text))}
                 keyboardType="number-pad"
-                maxLength={2}
+                maxLength={10}
               />
 
               <Text style={styles.label}>Gênero</Text>
@@ -266,9 +294,12 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 style={[styles.btnPrimary, !(uf && gender) && { opacity: 0.7 }]}
                 disabled={!uf || !gender}
                 onPress={() => {
-                  const ageNum = Number(age);
-                  if (!age.trim() || !Number.isFinite(ageNum) || ageNum < 18 || ageNum > 100) {
-                    return Alert.alert('Idade inválida', 'Informe uma idade entre 18 e 100 anos.');
+                  const birthResult = parseBirthInput(birthDateText);
+                  if (birthResult.ok === false) {
+                    return Alert.alert(
+                      'Data de nascimento',
+                      BIRTH_ERROR_MESSAGES[birthResult.reason],
+                    );
                   }
                   if (!gender) {
                     return Alert.alert('Gênero obrigatório', 'Selecione seu gênero.');
