@@ -651,6 +651,31 @@ export const listenMessages = (matchId: string, callback: (messages: Message[]) 
   });
 };
 
+// ─── Reações (S80-A) ────────────────────────────────────────
+
+// Precisa ficar em sincronia manual com a lista literal de firestore.rules
+// (match /reactions/{messageId}, comentário "S80-A") — rules não importa
+// nada do client, os dois lados são mantidos à mão.
+export const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
+
+// merge:true (não updateDoc) porque o doc matches/{matchId}/reactions/{messageId}
+// pode não existir ainda — mesmo motivo do presence/{userId} (S79-C2-A). Aceita
+// deleteField() como emoji pra já cobrir a remoção de reação (S80-B usa o
+// mesmo caminho de código, não haverá dois jeitos divergentes de escrever).
+export const setMessageReaction = async (
+  matchId: string,
+  messageId: string,
+  uid: string,
+  emoji: ReactionEmoji | ReturnType<typeof deleteField>,
+) => {
+  await setDoc(
+    doc(db, 'matches', matchId, 'reactions', messageId),
+    { [uid]: emoji },
+    { merge: true },
+  );
+};
+
 // ─── Leitura (badge de não lidas, S27) ──────────────────────
 
 // Grava lastReadAt.{uid} no doc do match — cada participante só consegue

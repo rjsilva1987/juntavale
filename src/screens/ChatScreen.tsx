@@ -48,8 +48,10 @@ import {
   listenMatchBlockStatus,
   markMatchRead,
   sendMessage,
+  setMessageReaction,
   uploadChatImage,
   Message,
+  REACTION_EMOJIS,
 } from '@/services/firestoreService';
 import { countCodePoints } from '@/utils/text';
 
@@ -791,6 +793,31 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setReplyOptionsTarget(null)}>
           <View style={styles.sheet}>
+            {/* S80-A — fileira de reação, só grava (ver setMessageReaction em
+                firestoreService.ts). Tocar num emoji ainda não alterna nem
+                mostra a reação na bolha — isso é o S80-B. */}
+            <View style={styles.reactionRow}>
+              {REACTION_EMOJIS.map((emoji) => (
+                <AnimatedPressable
+                  key={emoji}
+                  style={styles.reactionButton}
+                  onPress={() => {
+                    if (replyOptionsTarget && user?.uid) {
+                      // Fire-and-forget, mas não em silêncio (mesmo padrão de
+                      // usePresenceHeartbeat.ts): sem isso o erro desaparece
+                      // sem deixar rastro, já que não há await aqui.
+                      setMessageReaction(matchId, replyOptionsTarget.id, user.uid, emoji).catch(
+                        (err) => console.warn('[ChatScreen] falha ao gravar reação', err),
+                      );
+                    }
+                    setReplyOptionsTarget(null);
+                  }}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                </AnimatedPressable>
+              ))}
+            </View>
+            <View style={styles.sheetDivider} />
             <AnimatedPressable
               style={styles.sheetOption}
               onPress={() => {
@@ -1023,6 +1050,17 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     paddingBottom: 32,
   },
+  reactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.sm,
+  },
+  reactionButton: {
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+  },
+  reactionEmoji: { fontSize: theme.fontSize.xl },
   sheetOption: {
     flexDirection: 'row',
     alignItems: 'center',
