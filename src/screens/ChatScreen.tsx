@@ -50,6 +50,7 @@ import {
   listenReactions,
   listenHiddenMessages,
   hideMessage,
+  deleteMessageForEveryone,
   markMatchRead,
   sendMessage,
   setMessageReaction,
@@ -88,6 +89,13 @@ const buildReplyQuote = (message: Message): string => {
 // crescente entre os dois, ver onUpdate do Gesture.Pan em MessageBubble).
 const REPLY_DRAG_TRIGGER = 48;
 const REPLY_DRAG_MAX = 64;
+
+// S85-B — janela de "apagar pros dois", em ms. Precisa ficar em sincronia
+// manual com duration.value(1, 'h') em firestore.rules (match /messages/
+// {messageId}, allow update) — mesmo padrão de sincronia manual de
+// REACTION_EMOJIS. É só a guarda de UX (esconder a opção fora do prazo);
+// quem decide de verdade é a rule.
+const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000;
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -175,6 +183,7 @@ function MessageBubble({
   // triggerReplyHaptic e dispatchDragReply existem como funções à parte em
   // vez de chamadas inline.
   const pan = Gesture.Pan()
+    .enabled(!item.deletedAt)
     .activeOffsetX(10)
     .failOffsetY([-8, 8])
     .onUpdate((e) => {
@@ -279,46 +288,65 @@ function MessageBubble({
                 </Text>
               </View>
             )}
-            {imageUrl ? (
-              <Pressable
-                onPress={() => onViewImage(imageUrl)}
-                onLongPress={() => onLongPressReply(item)}
-              >
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={styles.bubbleImage}
-                  contentFit="cover"
-                  placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                  transition={200}
-                />
-              </Pressable>
-            ) : location ? (
-              <Pressable
-                style={styles.locationCard}
-                onPress={() => onOpenLocation(location)}
-                onLongPress={() => onLongPressReply(item)}
-              >
-                <Ionicons
-                  name="location"
-                  size={20}
-                  color={isMe ? theme.colors.white : theme.colors.primary}
-                />
-                <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
-                  Localização compartilhada
-                </Text>
-              </Pressable>
-            ) : (
-              // S79-B — toque longo agora também nas bolhas de FOTO e
-              // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
-              // tinha onPress próprio). Text do RN já suporta onLongPress
-              // direto, sem precisar de Pressable extra por cima.
-              <Text
-                style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-                onLongPress={() => onLongPressReply(item)}
-              >
-                {item.text}
+            {/* S85-B — lápide: mensagem apagada pros dois. Guarda antes do
+                ternário de imagem/localização/texto — uma mensagem apagada
+                não tem reação nem toque longo (o Text da lápide não recebe
+                onLongPress de propósito); hora continua aparecendo (ver
+                bubbleTimeRow fora deste ternário), só o tique de leitura
+                some (condicionado a !item.deletedAt logo abaixo). */}
+            {item.deletedAt ? (
+              <Text style={[styles.bubbleTextDeleted, isMe && styles.bubbleTextDeletedMe]}>
+                Esta mensagem foi apagada
               </Text>
+            ) : (
+              <>
+                {imageUrl ? (
+                  <Pressable
+                    onPress={() => onViewImage(imageUrl)}
+                    onLongPress={() => onLongPressReply(item)}
+                  >
+                    <Image
+                      source={{ uri: imageUrl }}
+                      style={styles.bubbleImage}
+                      contentFit="cover"
+                      placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                      transition={200}
+                    />
+                  </Pressable>
+                ) : location ? (
+                  <Pressable
+                    style={styles.locationCard}
+                    onPress={() => onOpenLocation(location)}
+                    onLongPress={() => onLongPressReply(item)}
+                  >
+                    <Ionicons
+                      name="location"
+                      size={20}
+                      color={isMe ? theme.colors.white : theme.colors.primary}
+                    />
+                    <Text style={[styles.locationText, isMe && styles.bubbleTextMe]}>
+                      Localização compartilhada
+                    </Text>
+                  </Pressable>
+                ) : (
+                  // S79-B — toque longo agora também nas bolhas de FOTO e
+                  // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
+                  // tinha onPress próprio). Text do RN já suporta onLongPress
+                  // direto, sem precisar de Pressable extra por cima.
+                  <Text
+                    style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+                    onLongPress={() => onLongPressReply(item)}
+                  >
+                    {item.text}
+                  </Text>
+                )}
+              </>
             )}
+            {/* S85-B — fora do ternário de propósito: a hora aparece nos
+                dois casos (apagada ou não), só o tique de leitura some na
+                lápide (isMe && !item.deletedAt). imageUrl é sempre
+                undefined numa mensagem apagada, então bubbleTimeRowImage
+                nunca pega a lápide. */}
             <View style={[styles.bubbleTimeRow, imageUrl && styles.bubbleTimeRowImage]}>
               <Text
                 style={[
@@ -329,7 +357,7 @@ function MessageBubble({
               >
                 {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
               </Text>
-              {isMe && (
+              {isMe && !item.deletedAt && (
                 <Ionicons
                   name={isRead ? 'checkmark-done' : 'checkmark'}
                   size={14}
@@ -343,7 +371,10 @@ function MessageBubble({
                 />
               )}
             </View>
-            {reactionEntries.length > 0 && (
+            {/* S85-B — !item.deletedAt obrigatório: o doc de reações de uma
+                mensagem apagada fica órfão no Firestore, sem essa guarda
+                uma reação antiga voltaria a aparecer sobre a lápide. */}
+            {!item.deletedAt && reactionEntries.length > 0 && (
               <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
                 {reactionEntries.map(([uid, emoji]) => (
                   <Text key={uid} style={styles.reactionBadge}>
@@ -663,6 +694,19 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     />
   );
 
+  // S85-B — guarda de UX obrigatória junto da rule (mesmo bug do S49: sem
+  // ela a pessoa toca e leva um permission-denied engolido). Só a própria
+  // mensagem, ainda não apagada, dentro da janela — createdAt nulo
+  // (mensagem recém-enviada, servidor ainda não confirmou) conta como
+  // dentro da janela, mesmo critério "nunca lida" do S86 pro tique.
+  const canDeleteForEveryone =
+    !!replyOptionsTarget &&
+    !!uid &&
+    replyOptionsTarget.senderId === uid &&
+    !replyOptionsTarget.deletedAt &&
+    (!replyOptionsTarget.createdAt ||
+      Date.now() - replyOptionsTarget.createdAt.toMillis() < DELETE_FOR_EVERYONE_WINDOW_MS);
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container}>
@@ -951,6 +995,42 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 Apagar pra mim
               </Text>
             </AnimatedPressable>
+            {/* S85-B — "apagar pros dois": vira lápide pra ambos. Só
+                aparece dentro da janela de 1h e pra mensagem própria ainda
+                não apagada — mesma guarda que a rule exige, client-side
+                primeiro pra não deixar a pessoa levar permission-denied
+                engolido (bug do S49). */}
+            {canDeleteForEveryone && (
+              <AnimatedPressable
+                style={styles.sheetOption}
+                onPress={() => {
+                  const target = replyOptionsTarget;
+                  setReplyOptionsTarget(null);
+                  if (!target) return;
+                  Alert.alert(
+                    'Apagar pros dois',
+                    'Essa mensagem vira "apagada" pros dois lados e não pode ser desfeito. Continuar?',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Apagar',
+                        style: 'destructive',
+                        onPress: () => {
+                          deleteMessageForEveryone(matchId, target.id).catch((err) =>
+                            console.warn('[ChatScreen] falha ao apagar mensagem', err),
+                          );
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Ionicons name="trash-bin-outline" size={22} color={theme.colors.nope} />
+                <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>
+                  Apagar pros dois
+                </Text>
+              </AnimatedPressable>
+            )}
             <View style={styles.sheetGap} />
             <AnimatedPressable
               style={styles.sheetCancel}
@@ -1102,6 +1182,15 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S85-B — lápide de mensagem apagada "pros dois": mesmo vocabulário
+  // itálico + cor apagada do replyQuoteText/replyQuoteTextMe acima.
+  bubbleTextDeleted: {
+    fontSize: theme.fontSize.md,
+    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  bubbleTextDeletedMe: { color: 'rgba(255,255,255,0.85)' },
   // S79 — citação dentro da bolha: mesmo vocabulário do bilhete em
   // LikeCard/ProfileSections (borda à esquerda em primaryLight + itálico).
   // Cor do texto segue a mesma regra condicional de bubbleText/bubbleTextMe

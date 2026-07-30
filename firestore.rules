@@ -1,4 +1,10 @@
-// rules-stamp: S85-A (matches/{matchId}/hidden/{uid} nova: "apagar pra mim",
+// rules-stamp: S85-B (matches/{matchId}/messages/{messageId} ganha update:
+// "apagar pros dois" vira lápide, nunca deleta o doc — só o próprio
+// senderId, só dentro de 1h de createdAt (duration.value), só uma vez
+// (!('deletedAt' in resource.data)), hasOnly(['senderId','createdAt',
+// 'deletedAt']) derruba text/imageUrl/location/replyTo por construção,
+// senderId e createdAt preservados, deletedAt == request.time; allow delete
+// continua false, separado) + S85-A (matches/{matchId}/hidden/{uid} nova: "apagar pra mim",
 // doc por usuário com messageIds (list) das mensagens escondidas na própria
 // tela — client-side only, não afeta o doc da mensagem nem o outro
 // participante; create/update restrito ao dono, hasOnly(['messageIds']);
@@ -697,10 +703,29 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
                ['text', 'senderId', 'createdAt', 'imageUrl', 'location', 'replyTo']);
 
-        // O app não tem função de editar/apagar mensagem hoje — deny by
-        // default. Se um dia existir "apagar minha mensagem", trocar por:
-        // allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
-        allow update, delete: if false;
+        // S85-B — "apagar pros dois": vira lápide, nunca deleta o doc (por
+        // isso allow delete continua false, separado). Update só transforma
+        // texto/foto/localização/citação em nada, nas condições abaixo; não
+        // existe edição de conteúdo, só esse único caminho de apagar.
+        allow update: if isSignedIn()
+          && resource.data.senderId == request.auth.uid
+          // prazo: 1h a partir do createdAt original, mesma unidade
+          // duration.value() já usada em isValidProfile pro cap de idade.
+          && request.time < resource.data.createdAt + duration.value(1, 'h')
+          // via única: lápide não se reescreve — sem isso um doc já apagado
+          // aceitaria update de novo e resetaria deletedAt.
+          && !('deletedAt' in resource.data)
+          // conteúdo removido de verdade: text/imageUrl/location/replyTo têm
+          // que estar AUSENTES no resultado — hasOnly derruba os quatro por
+          // construção, não precisa checar campo a campo.
+          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'deletedAt'])
+          // imutáveis preservados — senderId e createdAt não podem mudar de
+          // valor no update, só o shape do doc muda.
+          && request.resource.data.senderId == resource.data.senderId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.deletedAt == request.time;
+
+        allow delete: if false;
       }
 
       // ─────────────── matches/{matchId}/hidden (S85-A) ───────────────

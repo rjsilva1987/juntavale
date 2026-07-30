@@ -168,6 +168,10 @@ export interface Message {
   imageUrl?: string;
   location?: { latitude: number; longitude: number };
   replyTo?: MessageReplyTo;
+  // S85-B — presente só em mensagem apagada "pros dois" (lápide). Nesse
+  // caso text/imageUrl/location/replyTo ficam ausentes por construção (ver
+  // firestore.rules e deleteMessageForEveryone abaixo).
+  deletedAt?: Timestamp;
 }
 
 // ─── User ─────────────────────────────────────────────────
@@ -647,6 +651,23 @@ export const sendMessage = async (
   });
   // lastMessage do doc do match é escrito pela Cloud Function onMessageCreated
   // (Admin SDK), não aqui — ver firestore.rules e a interface LastMessage.
+};
+
+// S85-B — "apagar pros dois": vira lápide, nunca deleta o doc (a rule nega
+// delete). deleteField() nos quatro campos de conteúdo faz o resultado bater
+// com o hasOnly(['senderId','createdAt','deletedAt']) da rule; serverTimestamp()
+// resolve pro request.time que a rule compara em deletedAt — mesmo padrão do
+// lastSeenAt em usePresenceHeartbeat.ts. Guarda de autor/prazo/via-única mora
+// só na rule; a tela já filtra antes de oferecer a opção (ver S85-B no
+// ChatScreen.tsx), mas quem decide de verdade é o server.
+export const deleteMessageForEveryone = async (matchId: string, messageId: string) => {
+  await updateDoc(doc(db, 'matches', matchId, 'messages', messageId), {
+    text: deleteField(),
+    imageUrl: deleteField(),
+    location: deleteField(),
+    replyTo: deleteField(),
+    deletedAt: serverTimestamp(),
+  });
 };
 
 export const uploadChatImage = async (
