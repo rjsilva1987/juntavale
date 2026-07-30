@@ -1,4 +1,9 @@
-// rules-stamp: S83-A (users/{userId} ganha campo vale, enum ['BB', 'CAIXA',
+// rules-stamp: S85-A (matches/{matchId}/hidden/{uid} nova: "apagar pra mim",
+// doc por usuário com messageIds (list) das mensagens escondidas na própria
+// tela — client-side only, não afeta o doc da mensagem nem o outro
+// participante; create/update restrito ao dono, hasOnly(['messageIds']);
+// delete negado por quebrar hasOnly sobre request.resource nulo; messages/
+// {messageId} intocado, allow update, delete: if false segue igual) + S83-A (users/{userId} ganha campo vale, enum ['BB', 'CAIXA',
 // 'BRB']: obrigatório no create, dentro do enum; no update, gravável UMA VEZ
 // só — campo ausente nos dois é ok, campo já existente não pode mudar de
 // valor, campo ausente antes e presente agora precisa estar no enum; entra
@@ -696,6 +701,31 @@ service cloud.firestore {
         // default. Se um dia existir "apagar minha mensagem", trocar por:
         // allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
         allow update, delete: if false;
+      }
+
+      // ─────────────── matches/{matchId}/hidden (S85-A) ───────────────
+      //
+      // "Apagar pra mim": doc por USUÁRIO (id = uid), array de messageId que
+      // o dono escondeu na própria tela — client-side only, a mensagem em si
+      // (matches/{matchId}/messages/{messageId}) continua intacta e o outro
+      // participante não é afetado. Sem lápide, sem apagar pros dois (S85-B,
+      // fora desta rodada).
+      //
+      // delete separado e negado: hasOnly() sobre request.resource quebraria
+      // em delete (request.resource é null), mesmo motivo do split
+      // create/update vs delete em avatars/{uid} no storage.rules.
+      match /hidden/{uid} {
+        allow read: if isSignedIn()
+          && request.auth.uid == uid
+          && request.auth.uid in getMatch(matchId).users;
+
+        allow create, update: if isSignedIn()
+          && request.auth.uid == uid
+          && request.auth.uid in getMatch(matchId).users
+          && request.resource.data.keys().hasOnly(['messageIds'])
+          && request.resource.data.messageIds is list;
+
+        allow delete: if false;
       }
 
       // ─────────────── matches/{matchId}/reactions (S80-A) ───────────────

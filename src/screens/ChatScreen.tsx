@@ -8,7 +8,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Timestamp } from 'firebase/firestore';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,8 @@ import {
   listenMessages,
   listenMatchBlockStatus,
   listenReactions,
+  listenHiddenMessages,
+  hideMessage,
   markMatchRead,
   sendMessage,
   setMessageReaction,
@@ -383,6 +385,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // onSnapshot de listenMatchBlockStatus (ver comentário na função). Só o
   // valor do OUTRO uid é repassado pro MessageBubble.
   const [otherLastReadAt, setOtherLastReadAt] = useState<Record<string, Timestamp>>({});
+  // S85-A — "apagar pra mim": ids escondidos SÓ pro uid do dono da tela,
+  // espelho do doc matches/{matchId}/hidden/{meuUid} (ver listenHiddenMessages).
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   // Defesa em profundidade: MatchesScreen já barra a navegação pra cá se
   // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
   // (deep link, MatchProfile, etc.) — a garantia real continua sendo a rule
@@ -448,6 +453,20 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     const unsub = listenReactions(matchId, setReactions);
     return unsub;
   }, [matchId]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = listenHiddenMessages(matchId, uid, setHiddenIds);
+    return unsub;
+  }, [matchId, uid]);
+
+  // S85-A — ponto único do filtro: a FlatList consome visibleMessages, não
+  // messages direto (ver data={visibleMessages} abaixo). hiddenIds é só do
+  // dono da tela, então isso nunca afeta o que o outro participante vê.
+  const visibleMessages = useMemo(
+    () => (hiddenIds.length === 0 ? messages : messages.filter((m) => !hiddenIds.includes(m.id))),
+    [messages, hiddenIds],
+  );
 
   useEffect(() => {
     const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt) => {
@@ -711,7 +730,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           ) : (
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={visibleMessages}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messagesList}
               renderItem={renderMessage}
@@ -899,6 +918,38 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             >
               <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Responder</Text>
+            </AnimatedPressable>
+            {/* S85-A — "apagar pra mim": só esconde na própria tela, o doc da
+                mensagem continua intacto e o outro lado não é afetado. Sem
+                desfazer, por isso o Alert de confirmação antes de agir. */}
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                const target = replyOptionsTarget;
+                setReplyOptionsTarget(null);
+                if (!target || !uid) return;
+                Alert.alert(
+                  'Apagar pra mim',
+                  'Essa mensagem some só da sua tela e não pode ser desfeito. Continuar?',
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    {
+                      text: 'Apagar',
+                      style: 'destructive',
+                      onPress: () => {
+                        hideMessage(matchId, uid, target.id).catch((err) =>
+                          console.warn('[ChatScreen] falha ao esconder mensagem', err),
+                        );
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Ionicons name="trash-outline" size={22} color={theme.colors.nope} />
+              <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>
+                Apagar pra mim
+              </Text>
             </AnimatedPressable>
             <View style={styles.sheetGap} />
             <AnimatedPressable

@@ -16,6 +16,7 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
+  arrayUnion,
 } from 'firebase/firestore';
 import {
   ref,
@@ -726,6 +727,42 @@ export const listenReactions = (
       // ausência de reações em vez de propagar o erro pro chamador.
       callback({});
     },
+  );
+};
+
+// ─── Apagar pra mim (S85-A) ──────────────────────────────────
+
+// "Apagar pra mim": doc por usuário em matches/{matchId}/hidden/{uid}, campo
+// messageIds (array) das mensagens que o dono escondeu na própria tela —
+// client-side only, não apaga nem sinaliza a mensagem em si (ver
+// firestore.rules) e não afeta o que o outro participante vê. Sem prazo, vale
+// pra qualquer mensagem, inclusive recebidas; sem desfazer.
+export const listenHiddenMessages = (
+  matchId: string,
+  uid: string,
+  callback: (hiddenIds: string[]) => void,
+) => {
+  return onSnapshot(
+    doc(db, 'matches', matchId, 'hidden', uid),
+    (snap) => {
+      const data = snap.data();
+      callback(Array.isArray(data?.messageIds) ? (data.messageIds as string[]) : []);
+    },
+    () => {
+      // Mesmo motivo do listenReactions/listenPresence: se o match for
+      // desfeito com o chat aberto, a rule de leitura passa a negar e este
+      // onSnapshot estouraria sem este callback. Reporta "nada escondido" em
+      // vez de propagar o erro pro chamador.
+      callback([]);
+    },
+  );
+};
+
+export const hideMessage = async (matchId: string, uid: string, messageId: string) => {
+  await setDoc(
+    doc(db, 'matches', matchId, 'hidden', uid),
+    { messageIds: arrayUnion(messageId) },
+    { merge: true },
   );
 };
 
