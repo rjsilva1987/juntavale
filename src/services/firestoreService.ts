@@ -841,12 +841,15 @@ export const listenPresence = (userId: string, callback: (lastSeenAt: Date | nul
 
 // ─── Block status (S19) ─────────────────────────────────────
 
+// S86 — reaproveita este onSnapshot em matches/{matchId} (já existente pro
+// blockedBy) pra também entregar lastReadAt: doc já está sendo lido aqui,
+// não há motivo pra um segundo listener só pra outro campo do mesmo doc.
 export const listenMatchBlockStatus = (
   matchId: string,
-  callback: (blockedBy: string[]) => void,
+  callback: (blockedBy: string[], lastReadAt: Record<string, Timestamp>) => void,
 ) => {
   return onSnapshot(doc(db, 'matches', matchId), (snap) => {
     const data = snap.data() as Match | undefined;
-    callback(data?.blockedBy ?? []);
+    callback(data?.blockedBy ?? [], data?.lastReadAt ?? {});
   });
 };

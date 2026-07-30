@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { Timestamp } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -107,6 +108,11 @@ interface MessageBubbleProps {
   // passagem (mudaria de identidade a cada render) — o fallback é tratado
   // aqui dentro.
   reactions?: Record<string, ReactionEmoji>;
+  // S86 — lastReadAt do OUTRO participante (só o valor dele, não o map
+  // inteiro), pra decidir o tique de leitura da mensagem PRÓPRIA. Mesmo
+  // padrão de `reactions` acima: passado direto pelo chamador, sem `?? {}`
+  // no ponto de passagem.
+  otherReadAt?: Timestamp;
   onViewImage: (imageUrl: string) => void;
   onOpenLocation: (location: { latitude: number; longitude: number }) => void;
   onLongPressReply: (message: Message) => void;
@@ -119,6 +125,7 @@ function MessageBubble({
   otherName,
   otherPhoto,
   reactions,
+  otherReadAt,
   onViewImage,
   onOpenLocation,
   onLongPressReply,
@@ -127,6 +134,14 @@ function MessageBubble({
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
+  // S86 — só a mensagem PRÓPRIA mostra tique; createdAt nulo (mensagem
+  // recém-enviada, servidor ainda não confirmou) NUNCA conta como lida —
+  // fica no tique de enviado até o próprio createdAt resolver.
+  const isRead =
+    isMe &&
+    !!otherReadAt &&
+    !!item.createdAt &&
+    otherReadAt.toMillis() >= item.createdAt.toMillis();
   // S80-B — no máximo 2 participantes, logo no máximo 2 entradas. Ordenado
   // por uid: a ordem de chaves do objeto vem do snapshot do Firestore e não
   // é garantida entre re-renders, então sem isso os emoji trocariam de
@@ -302,15 +317,30 @@ function MessageBubble({
                 {item.text}
               </Text>
             )}
-            <Text
-              style={[
-                styles.bubbleTime,
-                isMe && styles.bubbleTimeMe,
-                imageUrl && styles.bubbleTimeImage,
-              ]}
-            >
-              {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
-            </Text>
+            <View style={[styles.bubbleTimeRow, imageUrl && styles.bubbleTimeRowImage]}>
+              <Text
+                style={[
+                  styles.bubbleTime,
+                  isMe && styles.bubbleTimeMe,
+                  imageUrl && styles.bubbleTimeImage,
+                ]}
+              >
+                {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
+              </Text>
+              {isMe && (
+                <Ionicons
+                  name={isRead ? 'checkmark-done' : 'checkmark'}
+                  size={14}
+                  color={
+                    isRead
+                      ? theme.colors.success
+                      : imageUrl
+                        ? theme.colors.white
+                        : 'rgba(255,255,255,0.6)'
+                  }
+                />
+              )}
+            </View>
             {reactionEntries.length > 0 && (
               <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
                 {reactionEntries.map(([uid, emoji]) => (
@@ -349,6 +379,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [blockedBy, setBlockedBy] = useState<string[]>([]);
   const isBlocked = blockedBy.length > 0;
+  // S86 — espelho do lastReadAt do doc matches/{matchId}, vindo do mesmo
+  // onSnapshot de listenMatchBlockStatus (ver comentário na função). Só o
+  // valor do OUTRO uid é repassado pro MessageBubble.
+  const [otherLastReadAt, setOtherLastReadAt] = useState<Record<string, Timestamp>>({});
   // Defesa em profundidade: MatchesScreen já barra a navegação pra cá se
   // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
   // (deep link, MatchProfile, etc.) — a garantia real continua sendo a rule
@@ -416,7 +450,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   }, [matchId]);
 
   useEffect(() => {
-    const unsub = listenMatchBlockStatus(matchId, setBlockedBy);
+    const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt) => {
+      setBlockedBy(blocked);
+      setOtherLastReadAt(lastReadAt);
+    });
     return unsub;
   }, [matchId]);
 
@@ -599,6 +636,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       otherName={otherName}
       otherPhoto={otherPhoto}
       reactions={reactions[item.id]}
+      otherReadAt={otherLastReadAt[otherUid]}
       onViewImage={setViewerImage}
       onOpenLocation={handleOpenLocation}
       onLongPressReply={setReplyOptionsTarget}
@@ -1035,9 +1073,14 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   replyQuoteTextMe: { color: 'rgba(255,255,255,0.85)' },
-  bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
+  bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
-  bubbleTimeImage: { position: 'absolute', bottom: 6, right: 10, color: theme.colors.white },
+  bubbleTimeImage: { color: theme.colors.white },
+  // S86 — hora + tique de leitura lado a lado. alignSelf (que antes vivia em
+  // bubbleTime) muda pra cá: agora é a ROW que se alinha à direita da
+  // bolha, não mais o Text sozinho.
+  bubbleTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-end' },
+  bubbleTimeRowImage: { position: 'absolute', bottom: 6, right: 10 },
 
   // S80-B — mesmo lado da bolha: flex-start (recebida) por padrão, flex-end
   // (própria) sobrepõe, mesma convenção de msgRowMe/msgRowOther acima.
