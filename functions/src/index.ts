@@ -229,6 +229,50 @@ export const onMessageCreated = onDocumentCreated(
   },
 );
 
+// S85-C2 — quando a ÚLTIMA mensagem da conversa vira lápide ("apagar pros
+// dois", S85-B), o preview em Conversas (MatchesScreen.tsx, campo
+// lastMessage do doc do match) precisa acompanhar — senão continua exibindo
+// o texto/foto/localização que a mensagem já não tem mais.
+export const onMessageDeletedForEveryone = onDocumentUpdated(
+  { document: 'matches/{matchId}/messages/{messageId}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+    // Só a transição ausente -> presente é a lápide. Qualquer outro update
+    // (não existe hoje, mas por garantia) sai sem fazer nada.
+    if (before.deletedAt || !after.deletedAt) return;
+
+    const { matchId, messageId } = event.params;
+
+    // Precisa ser a ÚLTIMA mensagem da conversa pra mexer no preview —
+    // apagar uma mensagem do meio não pode reordenar nem sobrescrever o que
+    // já está lá. Comparação por ID, NUNCA por createdAt: lastMessage.createdAt
+    // é o serverTimestamp de quando onMessageCreated rodou (linha ~199
+    // acima), não o createdAt da própria mensagem — os dois nunca coincidem.
+    // A lápide continua na subcoleção, então ela mesma volta nesta consulta
+    // quando for de fato a última: esperado, não é bug.
+    const lastSnap = await db
+      .collection(`matches/${matchId}/messages`)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+    if (lastSnap.empty || lastSnap.docs[0].id !== messageId) return;
+
+    // Notação de ponto: só o texto muda. senderId e createdAt do lastMessage
+    // ficam como estavam — sobrescrever createdAt reordenaria a lista de
+    // Conversas, que ordena por ele (MatchesScreen.tsx). Sem push: apagar
+    // não é evento que avisa ninguém.
+    try {
+      await db.doc(`matches/${matchId}`).update({
+        'lastMessage.text': 'Esta mensagem foi apagada',
+      });
+    } catch (error) {
+      console.error('[onMessageDeletedForEveryone] falha ao atualizar lastMessage:', error);
+    }
+  },
+);
+
 export const onBlockCreated = onDocumentCreated(
   { document: 'blocks/{blockId}', region: REGION },
   async (event) => {
