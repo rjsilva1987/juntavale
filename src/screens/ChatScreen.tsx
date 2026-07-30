@@ -983,7 +983,7 @@ const styles = StyleSheet.create({
   // S79-E2 — envolve só a bolha (não a row inteira, avatar fica parado) pra
   // dar contexto de posicionamento absoluto ao ícone de responder, revelado
   // atrás dela conforme o arrasto avança.
-  bubbleDragWrap: { position: 'relative' },
+  bubbleDragWrap: { position: 'relative', maxWidth: '75%' },
   replyDragIcon: {
     position: 'absolute',
     left: -32,
@@ -993,7 +993,6 @@ const styles = StyleSheet.create({
   },
 
   bubble: {
-    maxWidth: '75%',
     borderRadius: theme.borderRadius.lg,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1047,7 +1046,6 @@ const styles = StyleSheet.create({
   reactionBadge: { fontSize: theme.fontSize.sm },
 
   bubbleImageWrap: {
-    maxWidth: '75%',
     borderRadius: theme.borderRadius.lg,
     overflow: 'hidden',
   },
