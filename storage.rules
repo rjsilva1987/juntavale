@@ -71,7 +71,12 @@ service firebase.storage {
       }
 
       allow read: if isParticipant();
-      allow write: if isParticipant() && isValidImage();
+      // S85-C1 — delete separado, sem isValidImage(): mesmo bug/mesma
+      // correção do split em avatars/{uid} acima (request.resource é null
+      // em delete, e isValidImage() lê request.resource.size — sem o split,
+      // apagar a foto do chat, junto do "apagar pros dois", sempre negaria).
+      allow create, update: if isParticipant() && isValidImage();
+      allow delete: if isParticipant();
     }
 
     // ───────────────────────── verifications (S20) ─────────────────────────

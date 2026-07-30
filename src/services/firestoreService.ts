@@ -660,7 +660,23 @@ export const sendMessage = async (
 // lastSeenAt em usePresenceHeartbeat.ts. Guarda de autor/prazo/via-única mora
 // só na rule; a tela já filtra antes de oferecer a opção (ver S85-B no
 // ChatScreen.tsx), mas quem decide de verdade é o server.
-export const deleteMessageForEveryone = async (matchId: string, messageId: string) => {
+//
+// S85-C1 — imageUrl opcional: quando a mensagem apagada é foto, apaga o
+// arquivo no Storage DEPOIS do updateDoc, nunca antes. updateDoc primeiro:
+// se a rule negar o update (fora do prazo, não é o autor, já apagada), o
+// arquivo tem que continuar existindo — a mensagem sobrevive intacta e não
+// pode passar a apontar pra um arquivo inexistente (imagem quebrada nos
+// dois aparelhos). imageUrl aqui é só o PARÂMETRO em memória, não o campo do
+// doc: o deleteField() no updateDoc não afeta essa variável local, não há
+// referência que se perca por rodar depois. Pior caso com a ordem
+// atual: updateDoc funciona e o deleteObject falha — arquivo órfão no
+// Storage, mesmo custo (só armazenamento) que o comentário do removePhoto
+// já registra, nunca um doc apontando pro nada.
+export const deleteMessageForEveryone = async (
+  matchId: string,
+  messageId: string,
+  imageUrl?: string,
+) => {
   await updateDoc(doc(db, 'matches', matchId, 'messages', messageId), {
     text: deleteField(),
     imageUrl: deleteField(),
@@ -668,6 +684,9 @@ export const deleteMessageForEveryone = async (matchId: string, messageId: strin
     replyTo: deleteField(),
     deletedAt: serverTimestamp(),
   });
+  if (imageUrl) {
+    await deleteObject(ref(storage, imageUrl)).catch(() => {});
+  }
 };
 
 export const uploadChatImage = async (

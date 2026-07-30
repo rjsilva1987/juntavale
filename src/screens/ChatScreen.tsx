@@ -1016,8 +1016,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                         text: 'Apagar',
                         style: 'destructive',
                         onPress: () => {
-                          deleteMessageForEveryone(matchId, target.id).catch((err) =>
-                            console.warn('[ChatScreen] falha ao apagar mensagem', err),
+                          deleteMessageForEveryone(matchId, target.id, target.imageUrl).catch(
+                            (err) => console.warn('[ChatScreen] falha ao apagar mensagem', err),
                           );
                         },
                       },
