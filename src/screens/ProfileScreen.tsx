@@ -41,6 +41,7 @@ import {
 } from '@/constants/prompts';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
+import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
@@ -633,7 +634,18 @@ export default function ProfileScreen() {
         {/* Edit form */}
         {editing ? (
           <View style={styles.card}>
-            <Field label="Nome" value={name} onChange={setName} maxLength={MAX_NAME_LENGTH} />
+            <Field
+              label="Nome"
+              value={name}
+              onChange={setName}
+              maxLength={MAX_NAME_LENGTH}
+              locked={!!profile?.verified}
+              lockedHint={
+                profile?.verified
+                  ? 'Não é possível alterar o nome depois que o perfil é verificado. Precisa corrigir? Fale com o suporte.'
+                  : undefined
+              }
+            />
             <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
             <Field label="Bio" value={bio} onChange={setBio} multiline maxLength={MAX_BIO_LENGTH} />
 
@@ -654,6 +666,15 @@ export default function ProfileScreen() {
                 );
               })}
             </View>
+
+            {!!profile?.vale && (
+              <Field
+                label="Vale"
+                value={VALE_LABELS[profile.vale]}
+                locked
+                lockedHint="O vale é definido no cadastro e não pode ser alterado."
+              />
+            )}
 
             <Text style={styles.fieldLabel}>Estado onde você mora</Text>
             <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
@@ -1088,7 +1109,9 @@ export default function ProfileScreen() {
 interface FieldProps {
   label: string;
   value: string;
-  onChange: (text: string) => void;
+  // Opcional: um campo `locked` não tem estado pra atualizar, então a
+  // omissão só é válida junto de `locked`.
+  onChange?: (text: string) => void;
   multiline?: boolean;
   keyboardType?: TextInputProps['keyboardType'];
   // S77 — opcional: só Nome/Bio passam isso hoje. Quando presente, mostra o
@@ -1096,26 +1119,48 @@ interface FieldProps {
   // modal de resposta de prompt) — Idade não passa, então continua sem
   // contador, igual antes.
   maxLength?: number;
+  // S76-B1 — primeiro campo permanentemente travado por regra de negócio do
+  // projeto (todo `editable=` anterior é transitório, tipo !submitting). O
+  // padrão visual que nasce aqui vai ser reusado pela idade no S76-B2:
+  // fundo esmaecido, texto secundário, contador suprimido e a explicação
+  // logo abaixo — travar sem dizer por quê vira "o app está com bug".
+  locked?: boolean;
+  lockedHint?: string;
 }
 
-function Field({ label, value, onChange, multiline, keyboardType, maxLength }: FieldProps) {
+function Field({
+  label,
+  value,
+  onChange,
+  multiline,
+  keyboardType,
+  maxLength,
+  locked,
+  lockedHint,
+}: FieldProps) {
   return (
     <>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.input, multiline && { height: 80, textAlignVertical: 'top' }]}
+        style={[
+          styles.input,
+          multiline && { height: 80, textAlignVertical: 'top' },
+          locked && styles.inputLocked,
+        ]}
         value={value}
         onChangeText={onChange}
         multiline={multiline}
         keyboardType={keyboardType}
         maxLength={maxLength}
+        editable={!locked}
         placeholderTextColor={theme.colors.textLight}
       />
-      {maxLength !== undefined && (
+      {!locked && maxLength !== undefined && (
         <Text style={styles.promptCounter}>
           {countCodePoints(value)}/{maxLength}
         </Text>
       )}
+      {!!lockedHint && <Text style={styles.fieldHint}>{lockedHint}</Text>}
     </>
   );
 }
@@ -1407,6 +1452,15 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     color: theme.colors.text,
     backgroundColor: theme.colors.surface,
+  },
+  inputLocked: {
+    backgroundColor: theme.colors.background,
+    color: theme.colors.textSecondary,
+  },
+  fieldHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
   },
 
   genderRow: {

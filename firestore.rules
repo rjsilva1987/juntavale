@@ -1,4 +1,7 @@
-// rules-stamp: S85-B (matches/{matchId}/messages/{messageId} ganha update:
+// rules-stamp: S76-B1 (users/{userId} update: nome vira IMUTÁVEL a partir da
+// aprovação da verificação — resource.data.get('verified', false) != true ||
+// request.resource.data.name == resource.data.name, inserido logo após a
+// guarda write-once do vale) + S85-B (matches/{matchId}/messages/{messageId} ganha update:
 // "apagar pros dois" vira lápide, nunca deleta o doc — só o próprio
 // senderId, só dentro de 1h de createdAt (duration.value), só uma vez
 // (!('deletedAt' in resource.data)), hasOnly(['senderId','createdAt',
@@ -25,7 +28,7 @@
 // S80-B) ou presente com valor na lista fixa de 6 emoji; create+update
 // juntos pois o doc pode não existir na 1ª reação, mesmo padrão do presence
 // (S79-C2-A); delete negado; lista de emoji precisa ficar em sincronia com
-// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-28
+// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) — 2026-07-30
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -313,6 +316,22 @@ service cloud.firestore {
                   && request.resource.data.vale == resource.data.vale)
             || (!('vale' in resource.data) && 'vale' in request.resource.data
                   && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']))
+        // S76-B1 — nome IMUTÁVEL a partir da aprovação da verificação. A
+        // verificação aqui é HUMANA (revisor confere selfie contra a Chave
+        // F): se o nome seguisse editável depois da aprovação, o selo
+        // passaria a afirmar algo que ninguém conferiu — a pessoa se
+        // verifica como si mesma e depois renomeia. Antes da aprovação a
+        // edição segue livre, pra que erro de digitação se conserte sozinho
+        // na janela pré-verificação. Duas partes só (não três como o vale):
+        // `name` é sempre obrigatório, garantido por isValidProfile no
+        // create E no update, então nunca existe o caso "ausente". Usa
+        // get('verified', false) porque conta que nunca enviou verificação
+        // não tem a chave — o default false deixa ela editar normalmente, e
+        // o curto-circuito do || evita dereferenciar name nesse caminho.
+        // `verified` NÃO precisa de get() cruzado como nas linhas 543/585/678:
+        // aqui o documento avaliado É o do próprio usuário.
+        && (resource.data.get('verified', false) != true
+            || request.resource.data.name == resource.data.name)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',

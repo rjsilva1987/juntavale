@@ -19,6 +19,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UF_NAMES } from '@/constants/ufs';
+import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
@@ -291,6 +292,15 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                 {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
 
+              {/* S88 — mesma ordem do card do Descobrir (SwipeScreen.tsx:859):
+                  vale acima da UF. Espelha styles.ufText com margem própria
+                  (mesmo token de tipografia já usado nesta região pra
+                  meta-info de identidade — textSecondary/sm/600), sem cor
+                  nova; não reaproveita valeText do SwipeScreen porque
+                  aquele depende de contexto de card sobre foto (fundo
+                  escuro), e aqui o fundo é o infoCard normal da tela. */}
+              {!!profile?.vale && <Text style={styles.valeText}>{VALE_LABELS[profile.vale]}</Text>}
+
               {profile?.uf && (
                 <View style={styles.ufRow}>
                   <Ionicons name="location-outline" size={16} color={theme.colors.textSecondary} />
@@ -424,6 +434,16 @@ const styles = StyleSheet.create({
   },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   ufText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
+  // S88 — espelha ufText, mas com margem própria: o respiro de 4px da UF
+  // mora no wrapper `ufRow`, e o vale é <Text> solto, sem wrapper — sem
+  // isto ele encosta no nome enquanto a UF respira. Mesmo papel do
+  // marginBottom do valeText no card do Descobrir.
+  valeText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
   lookingForBadge: {
     alignSelf: 'flex-start',
     backgroundColor: theme.colors.primaryLight,
