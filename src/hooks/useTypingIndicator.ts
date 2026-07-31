@@ -3,8 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { listenTypingStatus, setTypingStatus } from '@/services/firestoreService';
 
-// Pausa sem digitar -> marca como parado (deleteField).
-const TYPING_STOP_DEBOUNCE_MS = 2000;
+// S89 — este debounce é QUEM de fato faz o "digitando..." sumir no caminho
+// normal: ele grava isTyping:false 1200ms depois da última tecla. O
+// TYPING_STALE_MS de 5s (firestoreService.ts) é só a rede de segurança pra
+// client que morreu sem limpar (crash/kill do OS) — não é ele que governa o
+// tempo percebido. Se alguém quiser acelerar mais, mexa AQUI, não lá:
+// derrubar o STALE pra perto do THROTTLE abaixo faz o rótulo piscar durante
+// digitação longa, porque o carimbo renovado chega depois do timer expirar.
+const TYPING_STOP_DEBOUNCE_MS = 1200;
 // S79-C1 — o carimbo agora expira sozinho no reader (TYPING_STALE_MS =
 // 5000ms, ver firestoreService.ts), então uma digitação contínua precisa
 // renovar o carimbo periodicamente, senão a janela do reader esgota no meio

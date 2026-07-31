@@ -6,12 +6,18 @@ import { AppState, AppStateStatus } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 
-// Intervalo da batida em primeiro plano.
-export const PRESENCE_HEARTBEAT_MS = 2 * 60 * 1000;
+// S89 — a batida e a janela de "Online" são um PAR e não podem ser mexidas
+// separadamente: o carimbo precisa ser renovado várias vezes dentro da
+// janela, senão quem está com o app aberto pisca pra fora do "Online" bem na
+// hora da batida seguinte. Margem atual: 45s de batida contra 120s de janela
+// (~2,7x). Se a janela encurtar de novo, a batida tem que cair junto — e o
+// custo sobe: cada usuário em primeiro plano faz ~80 escritas/hora em
+// presence/{uid} com estes valores.
+export const PRESENCE_HEARTBEAT_MS = 45 * 1000;
 // S79-C2-B consome isto pra decidir "online agora" (carimbo com menos que
 // isso de idade) — mora aqui, junto de quem escreve o carimbo, pra escrita
 // e leitura nunca divergirem sobre o que "recente" quer dizer.
-export const PRESENCE_ONLINE_MS = 5 * 60 * 1000;
+export const PRESENCE_ONLINE_MS = 2 * 60 * 1000;
 
 // S79-C2-A — heartbeat de presença (presence/{uid}.lastSeenAt), diferente
 // de useActivityTracker (users/{uid}.lastActiveAt, throttle de 1h): aquele

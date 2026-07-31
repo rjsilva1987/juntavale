@@ -8,8 +8,12 @@ import { listenPresence } from '@/services/firestoreService';
 // Intervalo do ticker que recalcula o rótulo sem depender de um novo
 // snapshot — a escada muda com o tempo (ex.: "Online" -> "visto há pouco")
 // mesmo que o carimbo em si não mude.
-const PRESENCE_LABEL_TICK_MS = 30 * 1000;
-const PRESENCE_RECENT_MS = 60 * 60 * 1000;
+// S89 — este tick tem que ser uma fração pequena de PRESENCE_ONLINE_MS,
+// senão a queda de "Online" pra "visto há pouco" atrasa até um tick inteiro.
+// Hoje: 15s de tick contra 120s de janela. Custo é só CPU local, nenhuma
+// escrita, e applyLabel já barra re-render quando a string não muda.
+const PRESENCE_LABEL_TICK_MS = 15 * 1000;
+const PRESENCE_RECENT_MS = 30 * 60 * 1000;
 
 interface UseOtherPresenceReturn {
   presenceLabel: string | null;
