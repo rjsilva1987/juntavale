@@ -13,6 +13,7 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
+import { getDisplayAge } from '@/utils/birthDate';
 
 type MatchesGridScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchesGrid'>;
 
@@ -60,6 +61,8 @@ export default function MatchesGridScreen({ navigation }: MatchesGridScreenProps
           columnWrapperStyle={{ gap: 12 }}
           renderItem={({ item }) => {
             const other = item.otherProfile;
+            // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+            const displayAge = getDisplayAge(other);
             return (
               <AnimatedPressable
                 style={styles.matchCard}
@@ -90,7 +93,7 @@ export default function MatchesGridScreen({ navigation }: MatchesGridScreenProps
                   <View style={styles.matchInfo}>
                     <Text style={styles.matchName}>
                       {other?.name ?? 'Usuário'}
-                      {other?.age ? `, ${other.age}` : ''}
+                      {displayAge != null ? `, ${displayAge}` : ''}
                     </Text>
                   </View>
                   <View style={styles.matchBadge}>

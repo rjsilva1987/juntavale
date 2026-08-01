@@ -1,4 +1,9 @@
 // src/utils/birthDate.ts
+// Import type-only e direto do SDK, não via firestoreService: o
+// firestoreService importa getDisplayAge daqui, então puxar o tipo de lá
+// fecharia uma dependência circular.
+import type { Timestamp } from 'firebase/firestore';
+
 export const MIN_AGE = 18;
 export const MAX_AGE = 100;
 
@@ -56,4 +61,26 @@ export function parseBirthInput(text: string, now: Date = new Date()): BirthPars
   if (age > MAX_AGE) return { ok: false, reason: 'overage' };
 
   return { ok: true, date: birth };
+}
+
+// S76-B2 — ponto ÚNICO de onde sai a idade exibida no app. Antes disto, os 8
+// pontos de exibição liam o campo `age` gravado, que só era calculado uma vez
+// no cadastro (AuthContext.register) e portanto CONGELAVA: a pessoa fazia
+// aniversário e continuava aparecendo com a idade antiga até editar o perfil.
+//
+// Constraint genérica em vez de `profile: UserProfile` porque nenhum helper
+// deste projeto recebe o perfil inteiro — ver hasValidLastMessage em
+// utils/matches.ts, que é o precedente.
+//
+// FALLBACK para o `age` gravado quando não há birthDate: é o que permite
+// subir este código ANTES da migração das contas antigas sem quebrar nada.
+// Não remova o fallback achando que virou código morto — ele também cobre
+// documento em estado inesperado, onde o certo é mostrar algo em vez de nada.
+export function getDisplayAge<T extends { age: number; birthDate?: Timestamp }>(
+  profile: T | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  if (!profile) return null;
+  if (profile.birthDate) return calculateAge(profile.birthDate.toDate(), now);
+  return typeof profile.age === 'number' ? profile.age : null;
 }

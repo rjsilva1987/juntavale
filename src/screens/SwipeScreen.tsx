@@ -55,6 +55,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import { getVerificationStatus } from '@/services/verificationService';
+import { getDisplayAge } from '@/utils/birthDate';
 import { getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -810,6 +811,8 @@ function ProfileCard({
   // card a cada render é mais barato que memoizar por perfil.
   const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
   const chipsMaxVisible = 6;
+  // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+  const displayAge = getDisplayAge(profile);
 
   return (
     <View style={pcStyles.container}>
@@ -827,7 +830,7 @@ function ProfileCard({
         <View style={pcStyles.nameRow}>
           <View style={pcStyles.nameTextGroup}>
             <Text style={pcStyles.name} numberOfLines={1}>
-              {profile.name}, {profile.age}
+              {profile.name}, {displayAge}
             </Text>
             {profile.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
             {profile.founderNumber != null && <FounderBadge number={profile.founderNumber} />}

@@ -22,6 +22,7 @@ import { useMyLikes } from '@/hooks/useMyLikes';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { SwipeContext, UserProfile } from '@/services/firestoreService';
+import { getDisplayAge } from '@/utils/birthDate';
 
 type Tab = 'received' | 'sent';
 
@@ -65,6 +66,8 @@ function LikeCard({
   const promptText = context?.type === 'prompt' ? getPromptText(context.promptId) : '';
   const showRepliedPrompt = context?.type === 'prompt' && !!promptText;
   const showLikedPhotoContext = !!likedPhotoURL && !likedPhotoFailed && context?.type !== 'prompt';
+  // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+  const displayAge = getDisplayAge(profile);
 
   return (
     <AnimatedPressable
@@ -89,7 +92,7 @@ function LikeCard({
         <View style={styles.likerTopRow}>
           <View style={styles.likerNameRow}>
             <Text style={styles.likerName} numberOfLines={1}>
-              {profile.name}, {profile.age}
+              {profile.name}, {displayAge}
             </Text>
             {profile.verified === true && <VerifiedBadge size={14} />}
           </View>

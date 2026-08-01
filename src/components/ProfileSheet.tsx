@@ -16,6 +16,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
+import { getDisplayAge } from '@/utils/birthDate';
 
 // S72-B2 — arrasto pra fechar: fecha se soltar depois de 1/3 da altura do
 // painel OU se o dedo estava se movendo rápido (mesmo sem passar do 1/3).
@@ -81,6 +82,9 @@ export function ProfileSheet({
     transform: [{ translateY: translateY.value }],
   }));
 
+  // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+  const displayAge = getDisplayAge(profile);
+
   return (
     <Animated.View
       pointerEvents={visible ? 'auto' : 'none'}
@@ -96,7 +100,7 @@ export function ProfileSheet({
         <View style={styles.headerNameGroup}>
           <Text style={styles.name} numberOfLines={1}>
             {profile?.name}
-            {profile?.age ? `, ${profile.age}` : ''}
+            {displayAge != null ? `, ${displayAge}` : ''}
           </Text>
           {profile?.verified && <VerifiedBadge size={18} />}
         </View>

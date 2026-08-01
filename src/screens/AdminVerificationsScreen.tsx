@@ -14,6 +14,7 @@ import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import { getPendingVerifications, PendingVerification } from '@/services/verificationService';
+import { getDisplayAge } from '@/utils/birthDate';
 
 type AdminVerificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'AdminVerifications'>;
 
@@ -69,36 +70,40 @@ export default function AdminVerificationsScreen({ navigation }: AdminVerificati
             contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}
             onRefresh={load}
             refreshing={loading}
-            renderItem={({ item }) => (
-              <AnimatedPressable
-                style={styles.card}
-                onPress={() =>
-                  navigation.navigate('AdminVerificationDetail', { uid: item.uid })
-                }
-              >
-                {item.profile?.photoURL ? (
-                  <Image
-                    source={{ uri: item.profile.photoURL }}
-                    style={styles.avatar}
-                    contentFit="cover"
-                    placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                    transition={200}
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={{ fontSize: 24 }}>😊</Text>
+            renderItem={({ item }) => {
+              // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+              const displayAge = getDisplayAge(item.profile);
+              return (
+                <AnimatedPressable
+                  style={styles.card}
+                  onPress={() =>
+                    navigation.navigate('AdminVerificationDetail', { uid: item.uid })
+                  }
+                >
+                  {item.profile?.photoURL ? (
+                    <Image
+                      source={{ uri: item.profile.photoURL }}
+                      style={styles.avatar}
+                      contentFit="cover"
+                      placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={{ fontSize: 24 }}>😊</Text>
+                    </View>
+                  )}
+                  <View style={styles.info}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.profile?.name ?? 'Usuário'}
+                      {displayAge != null ? `, ${displayAge}` : ''}
+                    </Text>
+                    <Text style={styles.subLabel}>Pendente de revisão</Text>
                   </View>
-                )}
-                <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {item.profile?.name ?? 'Usuário'}
-                    {item.profile?.age ? `, ${item.profile.age}` : ''}
-                  </Text>
-                  <Text style={styles.subLabel}>Pendente de revisão</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
-              </AnimatedPressable>
-            )}
+                  <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
+                </AnimatedPressable>
+              );
+            }}
           />
         )}
       </SafeAreaView>

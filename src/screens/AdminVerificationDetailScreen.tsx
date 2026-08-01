@@ -25,6 +25,7 @@ import {
   reviewVerification,
   Verification,
 } from '@/services/verificationService';
+import { getDisplayAge } from '@/utils/birthDate';
 
 type AdminVerificationDetailScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -104,6 +105,9 @@ export default function AdminVerificationDetailScreen({
       ? [profile.photoURL]
       : [];
 
+  // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+  const displayAge = getDisplayAge(profile);
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -157,7 +161,7 @@ export default function AdminVerificationDetailScreen({
             <View style={styles.infoCard}>
               <Text style={styles.name}>
                 {profile?.name ?? 'Usuário'}
-                {profile?.age ? `, ${profile.age}` : ''}
+                {displayAge != null ? `, ${displayAge}` : ''}
               </Text>
               {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
               <Text style={styles.chaveF}>

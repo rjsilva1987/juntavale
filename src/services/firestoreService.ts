@@ -33,6 +33,7 @@ import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
 import { VALES, Vale } from '@/constants/vale';
 import { db, storage } from '@/services/firebase';
+import { getDisplayAge } from '@/utils/birthDate';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -379,7 +380,13 @@ export const getDiscoverProfiles = async (
     const candidate = d.data() as UserProfile;
 
     if (filters) {
-      if (candidate.age < filters.ageMin || candidate.age > filters.ageMax) return;
+      // S76-B2 — idade derivada, não o campo gravado: o filtro roda em
+      // MEMÓRIA (getDocs sem where, ver comentário acima), então dá pra
+      // calcular aqui mesmo. Candidato sem idade calculável é EXCLUÍDO
+      // quando há filtro, seguindo o precedente de `uf` logo abaixo.
+      const candidateAge = getDisplayAge(candidate);
+      if (candidateAge == null || candidateAge < filters.ageMin || candidateAge > filters.ageMax)
+        return;
       if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
       if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
       if (filters.verifiedOnly && candidate.verified !== true) return;

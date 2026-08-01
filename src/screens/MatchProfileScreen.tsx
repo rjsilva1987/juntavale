@@ -30,6 +30,7 @@ import {
   SwipeContext,
   UserProfile,
 } from '@/services/firestoreService';
+import { getDisplayAge } from '@/utils/birthDate';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
@@ -243,6 +244,9 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
 
   const myInterests = useMemo(() => myProfile?.interests ?? [], [myProfile?.interests]);
 
+  // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
+  const displayAge = getDisplayAge(profile);
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -286,7 +290,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
               <View style={styles.nameRow}>
                 <Text style={styles.name} numberOfLines={1}>
                   {profile?.name ?? name}
-                  {profile?.age ? `, ${profile.age}` : ''}
+                  {displayAge != null ? `, ${displayAge}` : ''}
                 </Text>
                 {profile?.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
                 {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
