@@ -57,6 +57,7 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
+import { getDisplayAge } from '@/utils/birthDate';
 import { countCodePoints } from '@/utils/text';
 
 // Ambas contam o mesmo array de matches visíveis hoje (todo match é uma
@@ -112,7 +113,8 @@ export default function ProfileScreen() {
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.name ?? '');
-  const [age, setAge] = useState(String(profile?.age ?? ''));
+  // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
+  const displayAge = getDisplayAge(profile);
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
   const [places, setPlaces] = useState<string[]>(profile?.places ?? []);
@@ -211,7 +213,13 @@ export default function ProfileScreen() {
     try {
       await updateUserProfile(user.uid, {
         name,
-        age: Number(age),
+        // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
+        // perfil assim reconcilia de quebra o `age` armazenado, que o build
+        // antigo ainda lê direto. O fallback existe pra conta sem birthDate:
+        // nesse caso getDisplayAge devolve o próprio age gravado e a
+        // gravação é um no-op, em vez de mandar undefined e quebrar o
+        // isValidProfile.
+        age: displayAge ?? profile?.age ?? 0,
         bio,
         interests,
         places,
@@ -529,7 +537,7 @@ export default function ProfileScreen() {
                 {profile?.verified && <VerifiedBadge size={18} />}
                 {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
-              <Text style={styles.profileAge}>{profile?.age} anos</Text>
+              <Text style={styles.profileAge}>{displayAge} anos</Text>
               {profile?.lookingFor && (
                 <View style={styles.lookingForBadge}>
                   <Text style={styles.lookingForBadgeText}>
@@ -646,7 +654,12 @@ export default function ProfileScreen() {
                   : undefined
               }
             />
-            <Field label="Idade" value={age} onChange={setAge} keyboardType="number-pad" />
+            <Field
+              label="Idade"
+              value={displayAge != null ? String(displayAge) : ''}
+              locked
+              lockedHint="A idade é calculada a partir da sua data de nascimento."
+            />
             <Field label="Bio" value={bio} onChange={setBio} multiline maxLength={MAX_BIO_LENGTH} />
 
             <Text style={styles.fieldLabel}>Gênero</Text>
