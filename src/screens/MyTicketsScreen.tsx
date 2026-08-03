@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { SUPPORT_CATEGORY_LABELS } from '@/constants/supportCategories';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { RootStackParamList } from '@/navigation';
 import { getMyTickets, SupportTicket } from '@/services/supportService';
 
@@ -28,6 +29,7 @@ export default function MyTicketsScreen({ navigation }: MyTicketsScreenProps) {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const { showAlert, markSeen } = useSupportAlert();
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -39,6 +41,14 @@ export default function MyTicketsScreen({ navigation }: MyTicketsScreenProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // S84 — marcar como visto e condicional a showAlert, igual ao
+  // SupportThreadScreen: so carimba quando ha de fato aviso pendente. Sem o
+  // if, abrir a lista marcaria como visto mesmo sem nada novo, e "visto"
+  // passaria a significar coisas diferentes nas duas telas.
+  useEffect(() => {
+    if (showAlert) markSeen();
+  }, [showAlert, markSeen]);
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>

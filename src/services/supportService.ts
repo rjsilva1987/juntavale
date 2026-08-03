@@ -159,6 +159,22 @@ export const sendSupportMessage = async (
   await batch.commit();
 };
 
+// S84 — listener dos chamados do proprio usuario, pro aviso in-app. O
+// getMyTickets ao lado e um getDocs de uma vez, que so roda quando a pessoa
+// abre a tela — nao serve pra acender aviso sem ela entrar la. MESMA forma de
+// query do getMyTickets de proposito: mudar where/orderBy aqui pode exigir
+// indice composto que nao existe.
+export const subscribeMyTickets = (uid: string, callback: (tickets: SupportTicket[]) => void) => {
+  const q = query(collection(db, 'support'), where('uid', '==', uid));
+  return onSnapshot(q, (snap) => {
+    const tickets = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Omit<SupportTicket, 'id'>),
+    }));
+    callback(tickets);
+  });
+};
+
 // S39: histórico em tempo real da thread (SupportThreadScreen). createdAt
 // pode chegar null por 1 frame antes do serverTimestamp() resolver — mesmo
 // comportamento tolerado em listenMessages (firestoreService.ts)/ChatScreen,

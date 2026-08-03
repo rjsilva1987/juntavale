@@ -22,6 +22,7 @@ import { ADMIN_UID } from '@/config/admin';
 import { SUPPORT_CATEGORY_LABELS } from '@/constants/supportCategories';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { RootStackParamList } from '@/navigation';
 import {
   sendSupportMessage,
@@ -51,6 +52,19 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const { showAlert, markSeen } = useSupportAlert();
+
+  // S84 — marcar como visto e REATIVO enquanto esta tela esta aberta, nao um
+  // disparo unico. Motivo: quem grava lastMessageAt e a Cloud Function
+  // onSupportMessageCreated, que roda SEGUNDOS depois do envio. Carimbar no
+  // momento do envio guardaria o valor antigo, e a escrita da function
+  // acenderia o aviso logo em seguida — disparado pela propria mensagem da
+  // pessoa. Reagindo a showAlert, o carimbo sempre alcanca o valor mais novo.
+  // Cobre os tres casos: abrir a tela, enviar, e o admin responder enquanto a
+  // pessoa esta lendo.
+  useEffect(() => {
+    if (showAlert) markSeen();
+  }, [showAlert, markSeen]);
 
   useEffect(() => {
     const unsub = subscribeSupportTicket(ticketId, setTicket);

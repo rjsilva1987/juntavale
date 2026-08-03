@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -103,6 +104,7 @@ function MainTabs() {
   // VerificationScreen), mesmo padrão de "some ao abrir" do badge de
   // Conversas (que some ao ler as mensagens).
   const { showAlert: showVerificationAlert } = useVerificationAlert();
+  const { showAlert: showSupportAlert } = useSupportAlert();
 
   return (
     <Tab.Navigator
@@ -159,7 +161,11 @@ function MainTabs() {
       <Tab.Screen
         name="Perfil"
         options={{
-          tabBarBadge: showVerificationAlert ? ' ' : undefined,
+          // S84 — a bolinha da aba Perfil e COMPARTILHADA entre verificacao e
+          // suporte: ela so diz "tem algo pra ver". Qual das duas coisas e,
+          // quem diz e a propria ProfileScreen, onde cada linha tem seu ponto
+          // (S84-B). Decisao de Raphael, 30/jul.
+          tabBarBadge: showVerificationAlert || showSupportAlert ? ' ' : undefined,
           // theme.colors.error (#E5484D) — nunca usado antes; não é o
           // vermelho padrão do React Navigation, é o nosso token.
           tabBarBadgeStyle: { backgroundColor: theme.colors.error },
