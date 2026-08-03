@@ -82,9 +82,18 @@ export const onMatchCreated = onDocumentCreated(
 
     const { matchId } = event.params;
     const users = snap.data().users as string[];
+    const initiatedBy = snap.data().initiatedBy as string | undefined;
 
     const messages: ExpoPushMessage[] = [];
     for (const uid of users) {
+      // Nao notifica quem FECHOU o match (initiatedBy): essa pessoa acabou de
+      // tocar em curtir e ja esta com a tela do match aberta, entao o push de
+      // "novo match" chega redundante e parece bug. O OUTRO participante (quem
+      // curtiu antes) nao esta com nada aberto e continua recebendo
+      // normalmente. Usamos initiatedBy como proxy de "esta vendo agora"
+      // porque o servidor nao enxerga primeiro plano do app.
+      if (initiatedBy && initiatedBy === uid) continue;
+
       const token = await getPushToken(uid);
       if (!token) continue;
 
