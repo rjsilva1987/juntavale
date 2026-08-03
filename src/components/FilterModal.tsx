@@ -20,10 +20,10 @@ interface FilterModalProps {
   onClose: () => void;
 }
 
-const GENDER_OPTIONS: { label: string; value: Gender | 'all' }[] = [
-  { label: 'Todos', value: 'all' },
+const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Masculino', value: 'masculino' },
   { label: 'Feminino', value: 'feminino' },
+  { label: 'Outro', value: 'outro' },
 ];
 
 const LOOKING_FOR_FILTER_OPTIONS: { label: string; value: LookingFor | 'all' }[] = [
@@ -102,12 +102,19 @@ export function FilterModal({
           <Text style={styles.label}>Gênero</Text>
           <View style={styles.genderRow}>
             {GENDER_OPTIONS.map((option) => {
-              const active = draft.gender === option.value;
+              const active = draft.gender.includes(option.value);
               return (
                 <TouchableOpacity
                   key={option.value}
                   style={[styles.genderOption, active && styles.genderOptionActive]}
-                  onPress={() => setDraft((prev) => ({ ...prev, gender: option.value }))}
+                  onPress={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      gender: active
+                        ? prev.gender.filter((g) => g !== option.value)
+                        : [...prev.gender, option.value],
+                    }))
+                  }
                 >
                   <Text style={[styles.genderText, active && styles.genderTextActive]}>
                     {option.label}
@@ -128,9 +135,7 @@ export function FilterModal({
                   style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
                   onPress={() => setDraft((prev) => ({ ...prev, lookingFor: option.value }))}
                 >
-                  <Text
-                    style={[styles.lookingForText, active && styles.lookingForTextActive]}
-                  >
+                  <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>

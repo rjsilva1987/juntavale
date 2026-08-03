@@ -43,7 +43,7 @@ export interface DiscoverFilters {
   ageMin: number;
   ageMax: number;
   uf: UF | 'all';
-  gender: Gender | 'all';
+  gender: Gender[];
   lookingFor: LookingFor | 'all';
   // S83-B — primeiro filtro de múltipla escolha do app: os outros campos
   // usam sentinela 'all' (um valor só, "sem restrição"); vale é uma lista de
@@ -387,7 +387,14 @@ export const getDiscoverProfiles = async (
       const candidateAge = getDisplayAge(candidate);
       if (candidateAge == null || candidateAge < filters.ageMin || candidateAge > filters.ageMax)
         return;
-      if (filters.gender !== 'all' && candidate.gender !== filters.gender) return;
+      // S90 — multi-selecao: inerte quando nada esta marcado (= todos). Nao
+      // precisa do "< total" do vale porque genero nao tem o problema de
+      // "todos marcados = ninguem" que o vale tinha: aqui lista vazia ja
+      // significa todos, e marcar todos os generos da no mesmo. Candidato sem
+      // genero (undefined) NAO casa nenhum includes, entao so aparece com a
+      // lista vazia — comportamento aceito (as contas sem genero sao dado a
+      // limpar, nao bug do filtro).
+      if (filters.gender.length > 0 && !filters.gender.includes(candidate.gender)) return;
       if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
       if (filters.verifiedOnly && candidate.verified !== true) return;
       // Perfil SEM uf é excluído quando um estado específico está filtrado —

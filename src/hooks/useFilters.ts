@@ -9,7 +9,7 @@ export const DEFAULT_FILTERS: DiscoverFilters = {
   ageMin: 18,
   ageMax: 60,
   uf: 'all',
-  gender: 'all',
+  gender: [],
   lookingFor: 'all',
   // S83-B — começa com os três marcados: seleção total = filtro inerte (ver
   // getDiscoverProfiles), mesmo comportamento de "sem restrição" que os
@@ -28,15 +28,39 @@ interface UseFiltersReturn {
 
 export function useFilters(): UseFiltersReturn {
   const { user, profile, refreshProfile } = useAuth();
-  const [filters, setFilters] = useState<DiscoverFilters>({
+  const merged = {
     ...DEFAULT_FILTERS,
     ...(profile?.filters ?? {}),
-  });
+  };
+  // S90 — o filtro de genero virou array (multi-selecao). Docs criados
+  // antes disto tem filters.gender como STRING ('all' ou um genero). O
+  // spread acima deixa o valor salvo vencer, entao sem normalizar aqui a
+  // string sobreviveria e quebraria o .includes()/.length do filtro novo.
+  // Regra: 'all' e qualquer nao-array viram []  (= sem filtro = todos);
+  // uma string de genero solta vira [genero]. Resolve as contas antigas em
+  // tempo de leitura, sem migracao de dados.
+  if (!Array.isArray(merged.gender)) {
+    merged.gender =
+      merged.gender === 'masculino' || merged.gender === 'feminino' || merged.gender === 'outro'
+        ? [merged.gender]
+        : [];
+  }
+  const [filters, setFilters] = useState<DiscoverFilters>(merged);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    setFilters({ ...DEFAULT_FILTERS, ...(profile?.filters ?? {}) });
+    const merged = {
+      ...DEFAULT_FILTERS,
+      ...(profile?.filters ?? {}),
+    };
+    if (!Array.isArray(merged.gender)) {
+      merged.gender =
+        merged.gender === 'masculino' || merged.gender === 'feminino' || merged.gender === 'outro'
+          ? [merged.gender]
+          : [];
+    }
+    setFilters(merged);
   }, [profile?.filters]);
 
   const saveFilters = useCallback(
