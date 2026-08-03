@@ -43,6 +43,7 @@ import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
 import { useLikers } from '@/hooks/useLikers';
@@ -111,6 +112,7 @@ export default function ProfileScreen() {
   // S78 — mesmo hook do badge da tab bar (navigation/index.tsx); aqui vira
   // o pontinho na linha de verificação, não o badge da aba.
   const { showAlert: showVerificationAlert } = useVerificationAlert();
+  const { showAlert: showSupportAlert } = useSupportAlert();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.name ?? '');
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
@@ -946,6 +948,18 @@ export default function ProfileScreen() {
         >
           <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
           <Text style={styles.blockedUsersText}>Ajuda</Text>
+        </AnimatedPressable>
+
+        {/* S84-B — "Meus chamados" promovido a linha de acao do Perfil (antes
+            so existia como link discreto dentro da tela Ajuda). O ponto de
+            aviso reusa verificationAlertDot e acende com showSupportAlert. */}
+        <AnimatedPressable
+          style={styles.blockedUsersBtn}
+          onPress={() => navigation.navigate('MyTickets')}
+        >
+          <Ionicons name="chatbubbles-outline" size={20} color={theme.colors.textSecondary} />
+          <Text style={styles.blockedUsersText}>Meus chamados</Text>
+          {showSupportAlert && <View style={styles.verificationAlertDot} />}
         </AnimatedPressable>
 
         {/* Painel Admin — só visível pra ADMIN_UID */}
