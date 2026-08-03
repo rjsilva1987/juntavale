@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { CHAVEF_REGEX } from '@/constants/chaveF';
+import { MATRICULA_REGEX } from '@/constants/chaveF';
 import { REJECTION_REASON_LABELS } from '@/constants/rejectionReasons';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -105,10 +105,10 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
 
   const handleTakeSelfie = async () => {
     if (!user) return;
-    if (showChaveFField && !CHAVEF_REGEX.test(chaveF)) {
+    if (showChaveFField && !MATRICULA_REGEX.test(chaveF)) {
       Alert.alert(
-        'Chave F inválida',
-        'A Chave F deve ter o formato F seguido de 7 dígitos (ex: F1234567).',
+        'Matrícula inválida',
+        'A matrícula pode ter até uma letra e até 7 números (ex: F1234567 ou 123456).',
       );
       return;
     }
@@ -132,7 +132,7 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
       // nega o update de novo (S75 — só permite enquanto status ==
       // 'rejected'). Se este await falhar, o catch abaixo interrompe a
       // cadeia aqui mesmo — submitVerification nunca chega a rodar, então
-      // nenhuma selfie é enviada com a Chave F antiga.
+      // nenhuma selfie é enviada com a matrícula antiga.
       if (showChaveFField) {
         if (registration) {
           await updateChaveF(user.uid, chaveF);
@@ -232,10 +232,10 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                   </Text>
                   {showChaveFField && (
                     <View style={styles.chaveFWrap}>
-                      <Text style={styles.chaveFLabel}>Chave F</Text>
+                      <Text style={styles.chaveFLabel}>Matrícula</Text>
                       <TextInput
                         style={styles.chaveFInput}
-                        placeholder="F1234567"
+                        placeholder="Matrícula"
                         placeholderTextColor={theme.colors.textLight}
                         value={chaveF}
                         onChangeText={(t) => setChaveF(t.toUpperCase())}
@@ -258,8 +258,8 @@ export default function VerificationScreen({ navigation }: VerificationScreenPro
                     ) : (
                       <Text style={styles.actionBtnText}>
                         {verification?.status === 'rejected'
-                          ? 'Reenviar selfie e Chave F'
-                          : 'Enviar selfie e Chave F'}
+                          ? 'Reenviar selfie e matrícula'
+                          : 'Enviar selfie e matrícula'}
                       </Text>
                     )}
                   </AnimatedPressable>

@@ -13,7 +13,7 @@ export type RejectionReason =
   | 'requisitos_gerais';
 
 export const REJECTION_REASON_OPTIONS: { value: RejectionReason; label: string }[] = [
-  { value: 'chave_f_invalida', label: 'Chave F não encontrada ou inválida' },
+  { value: 'chave_f_invalida', label: 'Matrícula não encontrada ou inválida' },
   { value: 'selfie_ilegivel', label: 'Selfie sem qualidade ou rosto não identificável' },
   { value: 'rosto_nao_confere', label: 'Rosto da selfie não confere com as fotos do perfil' },
   {

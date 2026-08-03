@@ -1,6 +1,7 @@
 // src/constants/chaveF.ts
 
-// Formato exigido pra ChaveF: letra F maiúscula + exatamente 7 dígitos (ex:
-// F1234567). Usado tanto na validação client-side (VerificationScreen)
-// quanto para normalizar o input (toUpperCase) antes de validar/gravar.
-export const CHAVEF_REGEX = /^F\d{7}$/;
+// Formato da matricula: ate uma letra maiuscula opcional na frente + 1 a 7
+// digitos (ex: F1234567, 123456, A42). Antes era ^F\d{7}$ (so BB); relaxado no
+// S-Matricula pra aceitar CAIXA e BRB, que tem outros formatos. E relaxamento
+// PURO — toda matricula F+7digitos anterior continua casando, sem migracao.
+export const MATRICULA_REGEX = /^[A-Z]?\d{1,7}$/;

@@ -165,7 +165,7 @@ export default function AdminVerificationDetailScreen({
               </Text>
               {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
               <Text style={styles.chaveF}>
-                Chave F: {registration?.chaveF ?? 'não informado'}
+                Matrícula: {registration?.chaveF ?? 'não informado'}
               </Text>
             </View>
 
