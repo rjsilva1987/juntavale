@@ -238,19 +238,19 @@ export const onMessageCreated = onDocumentCreated(
   },
 );
 
-// S85-C2 — quando a ÚLTIMA mensagem da conversa vira lápide ("apagar pros
-// dois", S85-B), o preview em Conversas (MatchesScreen.tsx, campo
-// lastMessage do doc do match) precisa acompanhar — senão continua exibindo
-// o texto/foto/localização que a mensagem já não tem mais.
+// S92+S85-C2 — quando a ÚLTIMA mensagem da conversa vira lápide ("apagar pros
+// dois", S85-B) ou é editada (S92), o preview em Conversas (MatchesScreen.tsx,
+// campo lastMessage do doc do match) precisa acompanhar.
 export const onMessageDeletedForEveryone = onDocumentUpdated(
   { document: 'matches/{matchId}/messages/{messageId}', region: REGION },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!before || !after) return;
-    // Só a transição ausente -> presente é a lápide. Qualquer outro update
-    // (não existe hoje, mas por garantia) sai sem fazer nada.
-    if (before.deletedAt || !after.deletedAt) return;
+
+    const becameTombstone = !before.deletedAt && !!after.deletedAt;
+    const wasEdited = !after.deletedAt && !!after.editedAt && before.text !== after.text;
+    if (!becameTombstone && !wasEdited) return;
 
     const { matchId, messageId } = event.params;
 
@@ -268,13 +268,23 @@ export const onMessageDeletedForEveryone = onDocumentUpdated(
       .get();
     if (lastSnap.empty || lastSnap.docs[0].id !== messageId) return;
 
+    const lastMessageText = becameTombstone
+      ? 'Esta mensagem foi apagada'
+      : wasEdited
+        ? after.text.length > 120
+          ? `${after.text.slice(0, 120)}…`
+          : after.text
+        : null;
+
+    if (!lastMessageText) return;
+
     // Notação de ponto: só o texto muda. senderId e createdAt do lastMessage
     // ficam como estavam — sobrescrever createdAt reordenaria a lista de
     // Conversas, que ordena por ele (MatchesScreen.tsx). Sem push: apagar
-    // não é evento que avisa ninguém.
+    // e editar não são eventos que avisam ninguém.
     try {
       await db.doc(`matches/${matchId}`).update({
-        'lastMessage.text': 'Esta mensagem foi apagada',
+        'lastMessage.text': lastMessageText,
       });
     } catch (error) {
       console.error('[onMessageDeletedForEveryone] falha ao atualizar lastMessage:', error);

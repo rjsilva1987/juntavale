@@ -173,6 +173,7 @@ export interface Message {
   // caso text/imageUrl/location/replyTo ficam ausentes por construção (ver
   // firestore.rules e deleteMessageForEveryone abaixo).
   deletedAt?: Timestamp;
+  editedAt?: Timestamp; // S92 — presente só em mensagem editada
 }
 
 // ─── User ─────────────────────────────────────────────────
@@ -696,11 +697,22 @@ export const deleteMessageForEveryone = async (
     imageUrl: deleteField(),
     location: deleteField(),
     replyTo: deleteField(),
+    // S92 — remove editedAt se a mensagem já foi editada; sem isso o
+    // hasOnly do ramo de edição da rule quebra pra toda mensagem que já
+    // tenha sido editada (tentaria gravar deletedAt + editedAt no resultado).
+    editedAt: deleteField(),
     deletedAt: serverTimestamp(),
   });
   if (imageUrl) {
     await deleteObject(ref(storage, imageUrl)).catch(() => {});
   }
+};
+
+export const editMessage = async (matchId: string, messageId: string, text: string) => {
+  await updateDoc(doc(db, 'matches', matchId, 'messages', messageId), {
+    text,
+    editedAt: serverTimestamp(),
+  });
 };
 
 export const uploadChatImage = async (

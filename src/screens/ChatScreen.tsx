@@ -51,6 +51,7 @@ import {
   listenHiddenMessages,
   hideMessage,
   deleteMessageForEveryone,
+  editMessage,
   markMatchRead,
   sendMessage,
   setMessageReaction,
@@ -96,6 +97,10 @@ const REPLY_DRAG_MAX = 64;
 // REACTION_EMOJIS. É só a guarda de UX (esconder a opção fora do prazo);
 // quem decide de verdade é a rule.
 const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000;
+
+// S92 — janela de edição, em ms. Coincide com a janela do apagar hoje, mas
+// são ramos SEPARADOS da rule — mudar um não pode mudar o outro em silêncio.
+const EDIT_WINDOW_MS = 60 * 60 * 1000;
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -357,6 +362,19 @@ function MessageBubble({
               >
                 {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
               </Text>
+              {/* S92 — "editada" ao lado da hora quando a mensagem foi editada
+                  e não foi apagada. Mesmo estilo discreto da hora. */}
+              {!item.deletedAt && item.editedAt && (
+                <Text
+                  style={[
+                    styles.bubbleTime,
+                    isMe && styles.bubbleTimeMe,
+                    imageUrl && styles.bubbleTimeImage,
+                  ]}
+                >
+                  editada
+                </Text>
+              )}
               {isMe && !item.deletedAt && (
                 <Ionicons
                   name={isRead ? 'checkmark-done' : 'checkmark'}
@@ -408,6 +426,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // persistem — sair da tela sem enviar simplesmente descarta o estado.
   const [replyOptionsTarget, setReplyOptionsTarget] = useState<Message | null>(null);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  // S92 — editTarget: mensagem escolhida pra editar (mostra a barra de
+  // edição acima do input, espelhando replyTarget). Não persiste.
+  const [editTarget, setEditTarget] = useState<Message | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [blockedBy, setBlockedBy] = useState<string[]>([]);
@@ -491,6 +512,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return unsub;
   }, [matchId, uid]);
 
+  // S92 — preenche o input com o texto quando entra em modo edição
+  useEffect(() => {
+    if (editTarget) {
+      setText(editTarget.text);
+    }
+  }, [editTarget]);
+
   // S85-A — ponto único do filtro: a FlatList consome visibleMessages, não
   // messages direto (ver data={visibleMessages} abaixo). hiddenIds é só do
   // dono da tela, então isso nunca afeta o que o outro participante vê.
@@ -510,6 +538,21 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed || !user || isBlocked || isUnverified) return;
+
+    // S92 — modo edição: chamar editMessage em vez de sendMessage
+    if (editTarget) {
+      try {
+        await editMessage(matchId, editTarget.id, trimmed);
+        setText('');
+        setEditTarget(null);
+      } catch (error) {
+        // Falha mantém texto e modo de edição de propósito: a rule pode negar
+        // (fora da janela de 1h) e o usuário não pode perder o que digitou.
+        console.warn('[ChatScreen] falha ao editar mensagem:', error);
+      }
+      return;
+    }
+
     // S79 — cópia truncada, não referência viva: se a mensagem original for
     // apagada um dia (não dá pra hoje, mas rules podem mudar), a citação
     // continua mostrando o que foi escrito.
@@ -707,6 +750,18 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     (!replyOptionsTarget.createdAt ||
       Date.now() - replyOptionsTarget.createdAt.toMillis() < DELETE_FOR_EVERYONE_WINDOW_MS);
 
+  // S92 — guarda de edição: só a própria mensagem de texto, ainda não
+  // apagada, sem foto/localização, dentro da janela de 1h. Mesmo padrão.
+  const canEdit =
+    !!replyOptionsTarget &&
+    !!uid &&
+    replyOptionsTarget.senderId === uid &&
+    !replyOptionsTarget.deletedAt &&
+    !replyOptionsTarget.imageUrl &&
+    !replyOptionsTarget.location &&
+    (!replyOptionsTarget.createdAt ||
+      Date.now() - replyOptionsTarget.createdAt.toMillis() < EDIT_WINDOW_MS);
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container}>
@@ -844,6 +899,25 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   </AnimatedPressable>
                 </View>
               )}
+              {/* S92 — barra de edição, espelhando o modo responder. */}
+              {editTarget && (
+                <View style={styles.replyBar}>
+                  <View style={styles.replyBarAccent} />
+                  <View style={styles.replyBarTextWrap}>
+                    <Text style={styles.replyBarName}>Editando mensagem</Text>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => {
+                      setEditTarget(null);
+                      setText('');
+                    }}
+                    hitSlop={8}
+                    accessibilityLabel="Cancelar edição"
+                  >
+                    <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                  </AnimatedPressable>
+                </View>
+              )}
               <View style={styles.inputRow}>
                 <AnimatedPressable
                   style={styles.inputIcon}
@@ -963,6 +1037,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Responder</Text>
             </AnimatedPressable>
+            {/* S92 — "editar": só em mensagem própria de texto, ainda não
+                apagada, dentro da janela de 1h. Mesma guarda que a rule. */}
+            {canEdit && (
+              <>
+                <View style={styles.sheetDivider} />
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    setEditTarget(replyOptionsTarget);
+                    setReplyOptionsTarget(null);
+                  }}
+                >
+                  <Ionicons name="pencil" size={22} color={theme.colors.text} />
+                  <Text style={styles.sheetOptionText}>Editar</Text>
+                </AnimatedPressable>
+              </>
+            )}
             {/* S85-A — "apagar pra mim": só esconde na própria tela, o doc da
                 mensagem continua intacto e o outro lado não é afetado. Sem
                 desfazer, por isso o Alert de confirmação antes de agir. */}

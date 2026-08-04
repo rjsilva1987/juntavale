@@ -1,4 +1,4 @@
-// rules-stamp: S76-B2 (users/{userId} update: birthDate vira IMUTÁVEL a
+// rules-stamp: S92+S76-B2 (users/{userId} update: birthDate vira IMUTÁVEL a
 // partir da aprovação da verificação, mesmo gatilho get('verified', false)
 // != true do nome — 3 ramos: não verificado livre, verificado sem
 // birthDate libera a 1ª gravação, verificado com birthDate exige valor
@@ -6,7 +6,10 @@
 // getDisplayAge no save do client) + S76-B1 (users/{userId} update: nome vira IMUTÁVEL a partir da
 // aprovação da verificação — resource.data.get('verified', false) != true ||
 // request.resource.data.name == resource.data.name, inserido logo após a
-// guarda write-once do vale) + S85-B (matches/{matchId}/messages/{messageId} ganha update:
+// guarda write-once do vale) + S92 (matches/{matchId}/messages/{messageId} ganha segundo ramo de
+// update pra editar texto — mesma janela de 1h de createdAt, sem lapide,
+// sem foto/localizacao, text editável com truncamento, editedAt obrigatório
+// com serverTimestamp) + S85-B (matches/{matchId}/messages/{messageId} ganha update:
 // "apagar pros dois" vira lápide, nunca deleta o doc — só o próprio
 // senderId, só dentro de 1h de createdAt (duration.value), só uma vez
 // (!('deletedAt' in resource.data)), hasOnly(['senderId','createdAt',
@@ -753,7 +756,8 @@ service cloud.firestore {
         // isso allow delete continua false, separado). Update só transforma
         // texto/foto/localização/citação em nada, nas condições abaixo; não
         // existe edição de conteúdo, só esse único caminho de apagar.
-        allow update: if isSignedIn()
+        allow update: if (
+          isSignedIn()
           && resource.data.senderId == request.auth.uid
           // prazo: 1h a partir do createdAt original, mesma unidade
           // duration.value() já usada em isValidProfile pro cap de idade.
@@ -769,7 +773,24 @@ service cloud.firestore {
           // valor no update, só o shape do doc muda.
           && request.resource.data.senderId == resource.data.senderId
           && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.deletedAt == request.time;
+          && request.resource.data.deletedAt == request.time
+        ) || (
+          // S92 — editar texto de mensagem (ramo separado do apagar, unido por ||):
+          // senderId e createdAt preservados por affectedKeys().hasOnly() abaixo;
+          // lápide não é editável (!('deletedAt' in ...)); sendMessage grava text SEMPRE,
+          // inclusive em foto e localização — por isso a guarda de 'só texto' e a
+          // ausência de imageUrl e location, nunca a presença de text.
+          request.auth.uid == resource.data.senderId
+          && !('deletedAt' in resource.data)
+          && !('imageUrl' in resource.data)
+          && !('location' in resource.data)
+          && request.time < resource.data.createdAt + duration.value(1, 'h')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.editedAt == request.time
+        );
 
         allow delete: if false;
       }
