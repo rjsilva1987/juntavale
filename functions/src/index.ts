@@ -12,6 +12,7 @@ import {
   onDocumentCreated,
   onDocumentDeleted,
   onDocumentUpdated,
+  onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -411,12 +412,54 @@ export const onVerificationReviewed = onDocumentUpdated(
   },
 );
 
+// S94-A — onDocumentWritten de propósito, NÃO onDocumentCreated: o reenvio
+// de selfie (submitVerification, client) faz setDoc SEM merge num doc que
+// já existe quando a pessoa foi rejeitada antes — firestore.rules exige que
+// o write do dono seja sempre hasOnly(['status','selfieUrl','createdAt']),
+// então o reenvio não pode ser um updateDoc parcial, tem que ser o mesmo
+// setDoc sem merge da 1ª submissão. Pro Firestore isso é um evento de
+// UPDATE (o doc já existia), não de CREATE — um onDocumentCreated aqui
+// perderia todo reenvio depois de uma rejeição. NÃO troque pra
+// onDocumentCreated sem entender isso.
+export const onVerificationSubmitted = onDocumentWritten(
+  { document: 'verifications/{uid}', region: REGION },
+  async (event) => {
+    const uid = event.params.uid;
+    const before = event.data?.before.exists ? event.data.before.data() : null;
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+
+    if (!after) return; // doc apagado
+    if (after.status !== 'pending') return; // revisão do admin (approved/rejected)
+    if (before?.status === 'pending') return; // já estava pendente: sem mudança de estado
+    if (uid === ADMIN_UID) return; // admin verificando a si mesmo
+
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const name = (userSnap.data()?.name as string | undefined) ?? 'Alguém';
+
+    const token = await getPushToken(ADMIN_UID);
+    if (!token) return;
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: 'Novo pedido de verificação',
+        body: `${name} enviou uma selfie para revisão`,
+        data: { type: 'verification_new' },
+      },
+    ]);
+  },
+);
+
 // lastMessageAt (S40) é escrito só aqui (Admin SDK), nunca pelo client — ver
 // firestore.rules (support/{ticketId} não libera mais esse campo em create
 // nem em update). Usa o createdAt da MENSAGEM em vez de serverTimestamp():
 // isso torna a function idempotente numa re-execução, mesmo padrão de
 // intenção de lastMessage em matches/{matchId}, só que ali é um objeto e
 // aqui é o timestamp puro do doc pai.
+// lastSenderId (S94-A) segue o mesmo padrão: só o Admin SDK escreve, serve
+// pro contador do admin distinguir "esperando resposta do admin" (última
+// mensagem é do usuário) de "já respondido" (última mensagem é do admin).
 export const onSupportMessageCreated = onDocumentCreated(
   { document: 'support/{ticketId}/messages/{messageId}', region: REGION },
   async (event) => {
@@ -442,7 +485,10 @@ export const onSupportMessageCreated = onDocumentCreated(
     const messageCreatedAt = message.createdAt ?? Timestamp.fromDate(new Date(event.time));
 
     try {
-      await ticketSnap.ref.update({ lastMessageAt: messageCreatedAt });
+      await ticketSnap.ref.update({
+        lastMessageAt: messageCreatedAt,
+        lastSenderId: message.senderId,
+      });
     } catch (error) {
       console.error('[onSupportMessageCreated] falha ao atualizar lastMessageAt:', error);
     }

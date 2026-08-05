@@ -55,6 +55,8 @@ export function useNotifications() {
             navigationRef.navigate('Main', { screen: 'Perfil' });
           } else if (data.type === 'verification_reviewed') {
             navigationRef.navigate('Verification');
+          } else if (data.type === 'verification_new') {
+            navigationRef.navigate('AdminVerifications');
           }
         },
       );

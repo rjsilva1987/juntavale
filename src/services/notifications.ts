@@ -18,7 +18,8 @@ export type PushNotificationData = {
     | 'support'
     | 'match_reminder'
     | 'weekly_prompt'
-    | 'verification_reviewed';
+    | 'verification_reviewed'
+    | 'verification_new';
   matchId?: string;
   otherUid?: string;
   otherName?: string;
