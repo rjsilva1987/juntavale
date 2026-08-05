@@ -9,6 +9,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ADMIN_UID } from '@/config/admin';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSupportAlert } from '@/contexts/SupportAlertContext';
@@ -46,7 +47,9 @@ const ONBOARDING_SEEN_KEY = '@juntavale:onboarding_seen';
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Main: undefined | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' };
+  Main:
+    | undefined
+    | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' | 'Verificacoes' | 'Chamados' };
   Chat: {
     matchId: string;
     otherUid: string;
@@ -72,6 +75,12 @@ export type RootStackParamList = {
   MyTickets: undefined;
   SupportThread: { ticketId: string };
   Verification: undefined;
+  // S95 — AdminVerifications/AdminSupport viraram abas (Tab.Screen
+  // 'Verificacoes'/'Chamados' dentro de Main, ver MainTabs()); as chaves
+  // seguem aqui só pra tipar as props de AdminVerificationsScreen/
+  // AdminSupportScreen (NativeStackScreenProps<RootStackParamList, '...'>),
+  // sem exigir mexer nesses dois arquivos fora do escopo desta sprint. Não
+  // correspondem mais a nenhum Stack.Screen registrado.
   AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
   AdminSupport: undefined;
@@ -93,10 +102,19 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
   Curtidas: { label: 'Curtidas', icon: 'heart' },
   Conversas: { label: 'Conversas', icon: 'chatbubble' },
   Perfil: { label: 'Perfil', icon: 'person' },
+  // S95 — abas exclusivas do admin. Base sem "-outline": o tabBarIcon abaixo
+  // já apêndica "-outline" pro estado não-focado (mesma convenção das 4
+  // acima); usar aqui o nome cheio "briefcase-outline"/"chatbox-ellipses-
+  // outline" (como aparece nos botões do Painel Admin na ProfileScreen)
+  // geraria "briefcase-outline-outline", que não existe no set do Ionicons.
+  Verificacoes: { label: 'Verificações', icon: 'briefcase' },
+  Chamados: { label: 'Chamados', icon: 'chatbox-ellipses' },
 };
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const isAdmin = user?.uid === ADMIN_UID;
   const unreadCount = useUnreadCount();
   // S78 — sem contagem (não é "quantas revisões", é "tem uma nova pra ver"),
   // então o badge não usa número: um espaço só deixa a bolinha visível, sem
@@ -105,6 +123,32 @@ function MainTabs() {
   // Conversas (que some ao ler as mensagens).
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
+
+  // S95 — aba Perfil é idêntica nos dois papéis (mesmo badge de
+  // verificação/suporte, nada ligado a unreadCount de Conversas), então o
+  // JSX é montado uma vez só e reaproveitado nos dois ramos abaixo.
+  const perfilTab = (
+    <Tab.Screen
+      key="Perfil"
+      name="Perfil"
+      options={{
+        // S84 — a bolinha da aba Perfil e COMPARTILHADA entre verificacao e
+        // suporte: ela so diz "tem algo pra ver". Qual das duas coisas e,
+        // quem diz e a propria ProfileScreen, onde cada linha tem seu ponto
+        // (S84-B). Decisao de Raphael, 30/jul.
+        tabBarBadge: showVerificationAlert || showSupportAlert ? ' ' : undefined,
+        // theme.colors.error (#E5484D) — nunca usado antes; não é o
+        // vermelho padrão do React Navigation, é o nosso token.
+        tabBarBadgeStyle: { backgroundColor: theme.colors.error },
+      }}
+    >
+      {() => (
+        <ErrorBoundary>
+          <ProfileScreen />
+        </ErrorBoundary>
+      )}
+    </Tab.Screen>
+  );
 
   return (
     <Tab.Navigator
@@ -130,59 +174,87 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Descobrir">
-        {() => (
-          <ErrorBoundary>
-            <SwipeScreen />
-          </ErrorBoundary>
-        )}
-      </Tab.Screen>
-      <Tab.Screen name="Curtidas">
-        {() => (
-          <ErrorBoundary>
-            <LikesScreen />
-          </ErrorBoundary>
-        )}
-      </Tab.Screen>
-      <Tab.Screen
-        name="Conversas"
-        options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
-      >
-        {({ navigation }) => (
-          <ErrorBoundary>
-            <MatchesScreen
-              navigation={
-                navigation as NativeStackScreenProps<RootStackParamList, 'Main'>['navigation']
-              }
-            />
-          </ErrorBoundary>
-        )}
-      </Tab.Screen>
-      <Tab.Screen
-        name="Perfil"
-        options={{
-          // S84 — a bolinha da aba Perfil e COMPARTILHADA entre verificacao e
-          // suporte: ela so diz "tem algo pra ver". Qual das duas coisas e,
-          // quem diz e a propria ProfileScreen, onde cada linha tem seu ponto
-          // (S84-B). Decisao de Raphael, 30/jul.
-          tabBarBadge: showVerificationAlert || showSupportAlert ? ' ' : undefined,
-          // theme.colors.error (#E5484D) — nunca usado antes; não é o
-          // vermelho padrão do React Navigation, é o nosso token.
-          tabBarBadgeStyle: { backgroundColor: theme.colors.error },
-        }}
-      >
-        {() => (
-          <ErrorBoundary>
-            <ProfileScreen />
-          </ErrorBoundary>
-        )}
-      </Tab.Screen>
+      {isAdmin ? (
+        <>
+          <Tab.Screen name="Verificacoes">
+            {({ navigation, route }) => (
+              <ErrorBoundary>
+                <AdminVerificationsScreen
+                  navigation={
+                    navigation as NativeStackScreenProps<
+                      RootStackParamList,
+                      'AdminVerifications'
+                    >['navigation']
+                  }
+                  route={
+                    route as unknown as NativeStackScreenProps<
+                      RootStackParamList,
+                      'AdminVerifications'
+                    >['route']
+                  }
+                />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Chamados">
+            {({ navigation, route }) => (
+              <ErrorBoundary>
+                <AdminSupportScreen
+                  navigation={
+                    navigation as NativeStackScreenProps<RootStackParamList, 'AdminSupport'>['navigation']
+                  }
+                  route={
+                    route as unknown as NativeStackScreenProps<
+                      RootStackParamList,
+                      'AdminSupport'
+                    >['route']
+                  }
+                />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          {perfilTab}
+        </>
+      ) : (
+        <>
+          <Tab.Screen name="Descobrir">
+            {() => (
+              <ErrorBoundary>
+                <SwipeScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Curtidas">
+            {() => (
+              <ErrorBoundary>
+                <LikesScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen
+            name="Conversas"
+            options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+          >
+            {({ navigation }) => (
+              <ErrorBoundary>
+                <MatchesScreen
+                  navigation={
+                    navigation as NativeStackScreenProps<RootStackParamList, 'Main'>['navigation']
+                  }
+                />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          {perfilTab}
+        </>
+      )}
     </Tab.Navigator>
   );
 }
 
 export default function Navigation() {
   const { user, loading } = useAuth();
+  const isAdmin = user?.uid === ADMIN_UID;
   useNotifications();
   useActivityTracker();
   usePresenceHeartbeat();
@@ -266,10 +338,19 @@ export default function Navigation() {
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />
-            <Stack.Screen name="AdminVerifications" component={AdminVerificationsScreen} />
-            <Stack.Screen name="AdminVerificationDetail" component={AdminVerificationDetailScreen} />
-            <Stack.Screen name="AdminSupport" component={AdminSupportScreen} />
-            <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
+            {/* S95 — AdminVerifications/AdminSupport viraram Tab.Screen (ver
+                MainTabs); só as telas de DETALHE seguem no Stack, e só pro
+                admin — pra quem não é admin elas não têm como ser abertas
+                mesmo (nenhum ponto de entrada aponta pra elas). */}
+            {isAdmin && (
+              <>
+                <Stack.Screen
+                  name="AdminVerificationDetail"
+                  component={AdminVerificationDetailScreen}
+                />
+                <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
+              </>
+            )}
           </Stack.Group>
         )}
       </Stack.Navigator>

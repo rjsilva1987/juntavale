@@ -2,6 +2,7 @@
 import type * as NotificationsType from 'expo-notifications';
 import { useEffect, useRef } from 'react';
 
+import { ADMIN_UID } from '@/config/admin';
 import { useAuth } from '@/contexts/AuthContext';
 import { navigationRef } from '@/navigation/navigationRef';
 import {
@@ -14,6 +15,12 @@ export function useNotifications() {
   const { user } = useAuth();
   const receivedSubscription = useRef<NotificationsType.EventSubscription | null>(null);
   const responseSubscription = useRef<NotificationsType.EventSubscription | null>(null);
+  // S95 — o listener abaixo é montado uma vez só (effect com deps `[]`, não
+  // resubscreve por usuário); pra saber se é admin no momento em que a
+  // notificação chega (não no momento do mount) sem re-subscrever, o uid
+  // atual fica num ref atualizado a cada render.
+  const userRef = useRef(user);
+  userRef.current = user;
 
   useEffect(() => {
     if (isExpoGo || !user) return;
@@ -38,6 +45,22 @@ export function useNotifications() {
             Partial<PushNotificationData> | undefined;
           if (!data?.type || !navigationRef.isReady()) return;
 
+          // S95 — o admin não tem mais as abas Descobrir/Curtidas/Conversas
+          // (só Verificações/Chamados/Perfil, ver MainTabs em
+          // navigation/index.tsx); pushes desses tipos apontam pra rotas que
+          // não existem na sessão dele, então são ignorados nesse caso.
+          const isAdmin = userRef.current?.uid === ADMIN_UID;
+          if (
+            isAdmin &&
+            (data.type === 'match' ||
+              data.type === 'superlike' ||
+              data.type === 'message' ||
+              data.type === 'match_reminder' ||
+              data.type === 'weekly_prompt')
+          ) {
+            return;
+          }
+
           if ((data.type === 'message' || data.type === 'match_reminder') && data.matchId) {
             navigationRef.navigate('Chat', {
               matchId: data.matchId,
@@ -56,7 +79,11 @@ export function useNotifications() {
           } else if (data.type === 'verification_reviewed') {
             navigationRef.navigate('Verification');
           } else if (data.type === 'verification_new') {
-            navigationRef.navigate('AdminVerifications');
+            // Só o admin recebe esse tipo de push; a rota antiga
+            // ('AdminVerifications' como Stack.Screen) não existe mais —
+            // virou a aba 'Verificacoes' dentro de Main (ver item 1/2 desta
+            // sprint em navigation/index.tsx).
+            navigationRef.navigate('Main', { screen: 'Verificacoes' });
           }
         },
       );

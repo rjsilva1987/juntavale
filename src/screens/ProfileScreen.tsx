@@ -109,6 +109,7 @@ const MAX_BIO_LENGTH = 500;
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
+  const isAdmin = user?.uid === ADMIN_UID;
   // S78 — mesmo hook do badge da tab bar (navigation/index.tsx); aqui vira
   // o pontinho na linha de verificação, não o badge da aba.
   const { showAlert: showVerificationAlert } = useVerificationAlert();
@@ -551,8 +552,9 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Stats */}
-        {!editing && (
+        {/* Stats — S95: números de Curtidas/Conversas não fazem sentido pro
+            admin (não usa esse produto), então o bloco inteiro some pra ele. */}
+        {!editing && !isAdmin && (
           <View style={styles.statsRow}>
             <StatCard
               label="Curtidas"
@@ -962,31 +964,9 @@ export default function ProfileScreen() {
           {showSupportAlert && <View style={styles.verificationAlertDot} />}
         </AnimatedPressable>
 
-        {/* Painel Admin — só visível pra ADMIN_UID */}
-        {user?.uid === ADMIN_UID && (
-          <>
-            <AnimatedPressable
-              style={styles.blockedUsersBtn}
-              onPress={() => navigation.navigate('AdminVerifications')}
-            >
-              <Ionicons name="briefcase-outline" size={20} color={theme.colors.textSecondary} />
-              <Text style={styles.blockedUsersText}>Painel Admin</Text>
-            </AnimatedPressable>
-
-            {/* Suporte (admin) — S37 */}
-            <AnimatedPressable
-              style={styles.blockedUsersBtn}
-              onPress={() => navigation.navigate('AdminSupport')}
-            >
-              <Ionicons
-                name="chatbox-ellipses-outline"
-                size={20}
-                color={theme.colors.textSecondary}
-              />
-              <Text style={styles.blockedUsersText}>Suporte (admin)</Text>
-            </AnimatedPressable>
-          </>
-        )}
+        {/* S95 — Painel Admin removido: Verificações/Suporte viraram abas
+            próprias do admin (ver navigation/index.tsx MainTabs), os botões
+            apontariam pra rotas que não existem mais no Stack. */}
 
         {/* Logout */}
         <AnimatedPressable style={styles.logoutBtn} onPress={logout}>
