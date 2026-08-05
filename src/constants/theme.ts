@@ -1,4 +1,17 @@
 // src/constants/theme.ts
+
+// ---- paletas de fundo (S93) ----
+// Trocar de cor ou voltar ao padrao = mudar UMA linha (ACTIVE_PALETTE, abaixo).
+// background = fundo de TELA. surface = fundo de card/sheet/header/tab bar.
+// theme.colors.white NAO entra aqui: e primeiro plano (texto/icone sobre cor).
+const PALETTES = {
+  padrao: { background: '#F9FAFB', surface: '#FFFFFF' },
+  creme: { background: '#FDFAEC', surface: '#FFFFFF' },
+  verde: { background: '#E8F3E9', surface: '#FFFFFF' },
+} as const;
+
+const ACTIVE_PALETTE = PALETTES.verde;
+
 export const theme = {
   colors: {
     // Core palette (blue + yellow tones)
@@ -9,8 +22,8 @@ export const theme = {
     secondaryDark: '#F59E0B',
     secondaryLight: '#FEF3C7',
 
-    background: '#F9FAFB',
-    surface: '#FFFFFF',
+    background: ACTIVE_PALETTE.background,
+    surface: ACTIVE_PALETTE.surface,
 
     text: '#1F2937',
     textSecondary: '#6B7280',
