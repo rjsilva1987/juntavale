@@ -531,6 +531,43 @@ export const onSupportMessageCreated = onDocumentCreated(
   },
 );
 
+// S96-A — mesmo papel de onSupportMessageCreated acima (mantém
+// lastMessageAt/lastSenderId no doc pai em sincronia com a última mensagem
+// da thread), mas para reports/{reportId}/messages. SEM push nesta etapa:
+// a S96-A é só dados/rules, a tela de thread da denúncia (e o aviso por
+// push de resposta) fica pra uma sprint futura.
+export const onReportMessageCreated = onDocumentCreated(
+  { document: 'reports/{reportId}/messages/{messageId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { reportId } = event.params;
+    const message = snap.data() as {
+      senderId: string;
+      text?: string;
+      createdAt?: Timestamp;
+    };
+
+    const reportSnap = await db.doc(`reports/${reportId}`).get();
+    if (!reportSnap.exists) {
+      console.warn('[onReportMessageCreated] denúncia pai não encontrada:', reportId);
+      return;
+    }
+
+    const messageCreatedAt = message.createdAt ?? Timestamp.fromDate(new Date(event.time));
+
+    try {
+      await reportSnap.ref.update({
+        lastMessageAt: messageCreatedAt,
+        lastSenderId: message.senderId,
+      });
+    } catch (error) {
+      console.error('[onReportMessageCreated] falha ao atualizar lastMessageAt:', error);
+    }
+  },
+);
+
 // Primeira scheduled function do projeto (as outras 7 são trigger de
 // Firestore) — 1x por dia, encontra matches criados há 48-72h que nunca
 // tiveram mensagem (lastMessage ausente, escrito só por onMessageCreated)

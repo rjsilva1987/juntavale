@@ -1,4 +1,11 @@
-// rules-stamp: S92+S76-B2 (users/{userId} update: birthDate vira IMUTÁVEL a
+// rules-stamp: S96-A (reports/{reportId} deixa de ser só de ida: allow read
+// isAdmin()||reporterId==auth.uid (denunciado nunca lê); create aceita
+// status ausente — compat com build antigo do reportUser em campo, que
+// ainda não manda o campo — ou 'open', nunca já 'resolved'; allow update
+// restrito a isAdmin(), só trocando status entre 'open'/'resolved' via
+// diff().affectedKeys().hasOnly(['status']); nova subcoleção
+// reports/{reportId}/messages espelhando support/{ticketId}/messages, com
+// reporterId no lugar do uid do ticket) + S92+S76-B2 (users/{userId} update: birthDate vira IMUTÁVEL a
 // partir da aprovação da verificação, mesmo gatilho get('verified', false)
 // != true do nome — 3 ramos: não verificado livre, verificado sem
 // birthDate libera a 1ª gravação, verificado com birthDate exige valor
@@ -880,12 +887,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.blocker == request.auth.uid; // usado por unblockUser()
     }
 
-    // ───────────────────────── reports (S19) ─────────────────────────
+    // ───────────────────────── reports (S19, S96-A) ─────────────────────────
     //
-    // Denúncia é só de ida: ninguém lê, edita ou apaga uma denúncia pelo client
-    // (nem quem denunciou, nem quem foi denunciado) — revisão é manual, via
-    // Console/Cloud Function futura.
+    // Até a S96-A a denúncia era só de ida (ninguém lia, editava ou apagava
+    // pelo client). A partir daqui ganha uma thread, igual a support: quem
+    // denunciou (reporterId) e o admin podem ler e conversar — o
+    // DENUNCIADO (reportedId) segue sem NUNCA ler, decisão de produto que
+    // não mudou.
     match /reports/{reportId} {
+      allow read: if isAdmin() || resource.data.reporterId == request.auth.uid;
+
       allow create: if isSignedIn()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reportedId is string
@@ -904,10 +915,59 @@ service cloud.firestore {
         && (request.resource.data.details.size() == 0
             || request.resource.data.details.matches('.*\\S.*'))
         && request.resource.data.createdAt == request.time
+        // S96-A — status é OPCIONAL no create: testadores em campo estão
+        // rodando um build cujo reportUser (blockService.ts) ainda não
+        // manda esse campo, e exigi-lo quebraria a denúncia deles até
+        // atualizarem o app. Ausente == pendente (mesma leitura em
+        // listenReports, reportService.ts, que por isso não filtra por
+        // status). Quando presente, só pode nascer 'open', nunca já
+        // 'resolved'.
+        && (!('status' in request.resource.data)
+            || request.resource.data.status == 'open')
         && request.resource.data.keys().hasOnly(
-             ['reporterId', 'reportedId', 'reason', 'details', 'createdAt']);
+             ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status']);
 
-      allow read, update, delete: if false;
+      // S96-A — só o admin decide o desfecho, e só alternando status entre
+      // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que
+      // reporterId/reportedId/reason/details/createdAt nunca são reescritos
+      // por essa via, mesmo padrão do update de verifications acima.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['open', 'resolved'];
+
+      allow delete: if false;
+
+      // ─────────────── reports/{reportId}/messages (S96-A) ───────────────
+      //
+      // Thread entre quem denunciou e o admin — mesmo padrão de
+      // support/{ticketId}/messages, trocando o dono do ticket (uid) pelo
+      // reporterId da denúncia. O denunciado nunca lê nem escreve aqui,
+      // mesma decisão de produto do match pai.
+      match /messages/{messageId} {
+        allow read: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/reports/$(reportId)).data.reporterId
+                   == request.auth.uid);
+
+        allow create: if isSignedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && (isAdmin()
+              || getAfter(/databases/$(database)/documents/reports/$(reportId)).data.reporterId
+                   == request.auth.uid)
+          // Mesmo teto de 4000 usado em support/{ticketId}/messages (S77) —
+          // a tela de thread da denúncia ainda não existe nesta sprint
+          // (S96-A é só dados/rules), então não há um maxLength de UI pra
+          // espelhar ainda; quando a tela nascer, o maxLength dela precisa
+          // ficar em 1/4 deste valor, mesmo padrão de guarda de abuso.
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.text.matches('.*\\S.*')
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);
+
+        allow update, delete: if false;
+      }
     }
 
     // ───────────────────────── verifications (S20) ─────────────────────────

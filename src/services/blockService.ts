@@ -42,6 +42,7 @@ export const reportUser = async (
     reason,
     details: details ?? '',
     createdAt: serverTimestamp(),
+    status: 'open',
   });
 };
 
