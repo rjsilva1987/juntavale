@@ -75,15 +75,7 @@ export type RootStackParamList = {
   MyTickets: undefined;
   SupportThread: { ticketId: string };
   Verification: undefined;
-  // S95 — AdminVerifications/AdminSupport viraram abas (Tab.Screen
-  // 'Verificacoes'/'Chamados' dentro de Main, ver MainTabs()); as chaves
-  // seguem aqui só pra tipar as props de AdminVerificationsScreen/
-  // AdminSupportScreen (NativeStackScreenProps<RootStackParamList, '...'>),
-  // sem exigir mexer nesses dois arquivos fora do escopo desta sprint. Não
-  // correspondem mais a nenhum Stack.Screen registrado.
-  AdminVerifications: undefined;
   AdminVerificationDetail: { uid: string };
-  AdminSupport: undefined;
   AdminSupportDetail: { ticketId: string };
   Profile: undefined;
 };
@@ -177,39 +169,16 @@ function MainTabs() {
       {isAdmin ? (
         <>
           <Tab.Screen name="Verificacoes">
-            {({ navigation, route }) => (
+            {() => (
               <ErrorBoundary>
-                <AdminVerificationsScreen
-                  navigation={
-                    navigation as NativeStackScreenProps<
-                      RootStackParamList,
-                      'AdminVerifications'
-                    >['navigation']
-                  }
-                  route={
-                    route as unknown as NativeStackScreenProps<
-                      RootStackParamList,
-                      'AdminVerifications'
-                    >['route']
-                  }
-                />
+                <AdminVerificationsScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>
           <Tab.Screen name="Chamados">
-            {({ navigation, route }) => (
+            {() => (
               <ErrorBoundary>
-                <AdminSupportScreen
-                  navigation={
-                    navigation as NativeStackScreenProps<RootStackParamList, 'AdminSupport'>['navigation']
-                  }
-                  route={
-                    route as unknown as NativeStackScreenProps<
-                      RootStackParamList,
-                      'AdminSupport'
-                    >['route']
-                  }
-                />
+                <AdminSupportScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>

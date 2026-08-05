@@ -1,6 +1,7 @@
 // src/screens/AdminVerificationsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
@@ -16,15 +17,14 @@ import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import { getPendingVerifications, PendingVerification } from '@/services/verificationService';
 import { getDisplayAge } from '@/utils/birthDate';
 
-type AdminVerificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'AdminVerifications'>;
-
 interface PendingEntry {
   uid: string;
   verification: PendingVerification;
   profile?: UserProfile;
 }
 
-export default function AdminVerificationsScreen({ navigation }: AdminVerificationsScreenProps) {
+export default function AdminVerificationsScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [entries, setEntries] = useState<PendingEntry[]>([]);
   const [loading, setLoading] = useState(true);
 

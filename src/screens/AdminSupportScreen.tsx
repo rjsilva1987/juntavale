@@ -1,6 +1,7 @@
 // src/screens/AdminSupportScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
@@ -13,8 +14,6 @@ import { SUPPORT_CATEGORY_LABELS } from '@/constants/supportCategories';
 import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
 import { getSupportTickets, SupportTicket } from '@/services/supportService';
-
-type AdminSupportScreenProps = NativeStackScreenProps<RootStackParamList, 'AdminSupport'>;
 
 // União pra caber header de seção e ticket numa FlatList só (sem seção
 // vazia — "Abertos"/"Resolvidos" só entram no array se tiverem >=1 item).
@@ -29,7 +28,8 @@ function categoryLabel(category: string): string {
   return (SUPPORT_CATEGORY_LABELS as Record<string, string>)[category] ?? category;
 }
 
-export default function AdminSupportScreen({ navigation }: AdminSupportScreenProps) {
+export default function AdminSupportScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
 
