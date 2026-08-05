@@ -113,7 +113,7 @@ function MainTabs() {
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textLight,
         tabBarStyle: {
-          backgroundColor: theme.colors.white,
+          backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
           borderTopWidth: 0.5,
           paddingBottom: 6 + insets.bottom,
@@ -280,7 +280,7 @@ export default function Navigation() {
 const styles = StyleSheet.create({
   splash: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },

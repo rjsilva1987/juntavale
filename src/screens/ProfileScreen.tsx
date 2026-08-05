@@ -1308,7 +1308,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
 
   header: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1321,7 +1321,7 @@ const styles = StyleSheet.create({
   avatarSection: {
     alignItems: 'center',
     paddingVertical: theme.spacing.lg,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   avatarWrap: { position: 'relative', marginBottom: 12 },
   avatar: {
@@ -1371,7 +1371,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -1388,7 +1388,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 2 },
 
   card: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     margin: theme.spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -1408,7 +1408,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: theme.borderRadius.lg,
     overflow: 'hidden',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -1606,7 +1606,7 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing.md,
     marginTop: theme.spacing.md,
     padding: theme.spacing.md,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.lg,
@@ -1686,7 +1686,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.md,
     padding: 12,
   },
@@ -1760,7 +1760,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.borderRadius.xl,
     borderTopRightRadius: theme.borderRadius.xl,
     padding: theme.spacing.md,

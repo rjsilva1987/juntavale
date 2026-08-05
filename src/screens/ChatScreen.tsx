@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   header: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 0.5,
     borderBottomColor: theme.colors.border,
     flexDirection: 'row',
@@ -1263,7 +1263,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   bubbleOther: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1338,7 +1338,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 8,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   progressTrack: {
     flex: 1,
@@ -1356,7 +1356,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.borderRadius.lg,
     borderTopRightRadius: theme.borderRadius.lg,
     padding: theme.spacing.md,
@@ -1405,7 +1405,7 @@ const styles = StyleSheet.create({
   replyBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     paddingVertical: 8,
     paddingHorizontal: 12,
     gap: 8,
@@ -1433,7 +1433,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     padding: theme.spacing.sm,
     paddingHorizontal: 12,
     gap: 8,
@@ -1447,7 +1447,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     padding: theme.spacing.md,
     borderTopWidth: 0.5,
     borderTopColor: theme.colors.border,

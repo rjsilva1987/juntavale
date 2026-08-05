@@ -1028,7 +1028,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   actionBtnDisabled: {
     opacity: 0.35,

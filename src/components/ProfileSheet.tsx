@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.borderRadius.xl,
     borderTopRightRadius: theme.borderRadius.xl,
     overflow: 'hidden',

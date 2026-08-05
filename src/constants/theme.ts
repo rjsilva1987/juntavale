@@ -29,6 +29,8 @@ export const theme = {
     nope: '#E5484D',
     superLike: '#FBBF24',
 
+    // Reservada a primeiro plano: texto e icone desenhados sobre cor. Fundo
+    // de card/modal/header usa `surface`; fundo de tela usa `background`.
     white: '#FFFFFF',
   },
 

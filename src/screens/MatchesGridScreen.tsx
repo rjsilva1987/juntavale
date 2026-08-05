@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingHorizontal: theme.spacing.md,
     paddingBottom: 14,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 0.5,
     borderBottomColor: theme.colors.border,
   },

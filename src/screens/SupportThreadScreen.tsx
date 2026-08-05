@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 12,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 0.5,
     borderBottomColor: theme.colors.border,
     gap: 8,
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   },
   bubbleMe: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
   bubbleOther: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderBottomLeftRadius: 4,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     padding: theme.spacing.sm,
     paddingHorizontal: 12,
     gap: 8,

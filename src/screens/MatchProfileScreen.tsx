@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 12,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 0.5,
     borderBottomColor: theme.colors.border,
   },
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   photosCarousel: { flex: 1 },
 
   infoCard: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     marginHorizontal: theme.spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   nopeBtn: { borderColor: theme.colors.nope },
   likeBtn: { borderColor: theme.colors.like },

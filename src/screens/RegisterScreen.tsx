@@ -408,7 +408,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.white },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flexGrow: 1, padding: theme.spacing.lg, paddingTop: theme.spacing.xl },
 
   topBar: {

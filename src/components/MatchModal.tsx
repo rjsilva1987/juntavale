@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.primary,
   },
   avatarFallback: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     color: theme.colors.onSecondary,
   },
   sendBtn: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.full,
     paddingHorizontal: 48,
     paddingVertical: 15,
