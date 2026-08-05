@@ -10,7 +10,7 @@ const PALETTES = {
   verde: { background: '#E8F3E9', surface: '#FFFFFF' },
 } as const;
 
-const ACTIVE_PALETTE = PALETTES.verde;
+const ACTIVE_PALETTE = PALETTES.padrao;
 
 export const theme = {
   colors: {
