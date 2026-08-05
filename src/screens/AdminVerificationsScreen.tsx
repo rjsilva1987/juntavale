@@ -1,9 +1,9 @@
 // src/screens/AdminVerificationsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,9 +42,18 @@ export default function AdminVerificationsScreen() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // S94-B2 — useFocusEffect em vez de useEffect de montagem: a tela virou
+  // Tab.Screen (S95) e fica montada pra sempre, então um useEffect só
+  // rodaria uma vez e a lista congelaria enquanto o badge do admin
+  // (AdminAlertContext) atualiza ao vivo. Recarrega sempre que a aba ganha
+  // foco, sem duplicar a busca a cada render: `load` é useCallback com deps
+  // vazio (linha acima), então o `useCallback` aqui também tem identidade
+  // estável — o efeito só dispara quando a tela FOCA, não a cada render.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>

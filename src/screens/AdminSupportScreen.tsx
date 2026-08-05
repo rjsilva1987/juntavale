@@ -1,9 +1,9 @@
 // src/screens/AdminSupportScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,9 +39,16 @@ export default function AdminSupportScreen() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // S94-B2 — mesma razão de AdminVerificationsScreen: virou Tab.Screen (S95)
+  // e fica montada pra sempre, então useFocusEffect recarrega a cada troca
+  // de aba em vez de só na 1ª montagem. `load` é useCallback com deps vazio
+  // (linha acima), identidade estável — não dispara a cada render, só
+  // quando a tela FOCA.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   // getSupportTickets já vem ordenado por createdAt desc (query server-side
   // por um único campo — não exige índice composto). Aqui só particiona por
