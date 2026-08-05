@@ -30,6 +30,10 @@ export interface SupportTicket {
   // Ausente em tickets criados antes da S38 — getMyTickets() cai pra
   // createdAt como fallback de ordenação nesse caso.
   lastMessageAt?: Timestamp;
+  // Escrito SÓ pelo Admin SDK (onSupportMessageCreated, functions/src/index.ts,
+  // S94-A), nunca pelo client. Serve pro contador do admin (S94-B)
+  // distinguir "esperando resposta" de "já respondido".
+  lastSenderId?: string;
 }
 
 export interface SupportMessage {

@@ -3,6 +3,7 @@ import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { AdminAlertProvider } from './src/contexts/AdminAlertContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { SupportAlertProvider } from './src/contexts/SupportAlertContext';
 import { VerificationAlertProvider } from './src/contexts/VerificationAlertContext';
@@ -21,8 +22,13 @@ export default function App() {
                 de useAuth via subscribeMyTickets): irmão dele, dentro do
                 AuthProvider, sem depender um do outro. */}
             <SupportAlertProvider>
-              <StatusBar style="light" />
-              <Navigation />
+              {/* S94-B — mesma razão dos dois acima (depende de useAuth pro
+                  uid do admin); irmão deles, dentro do AuthProvider, sem
+                  depender de nenhum dos outros dois. */}
+              <AdminAlertProvider>
+                <StatusBar style="light" />
+                <Navigation />
+              </AdminAlertProvider>
             </SupportAlertProvider>
           </VerificationAlertProvider>
         </AuthProvider>

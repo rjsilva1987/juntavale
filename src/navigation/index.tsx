@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ADMIN_UID } from '@/config/admin';
 import { theme } from '@/constants/theme';
+import { useAdminAlert } from '@/contexts/AdminAlertContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
@@ -115,6 +116,10 @@ function MainTabs() {
   // Conversas (que some ao ler as mensagens).
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
+  // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
+  // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
+  // repetir o isAdmin aqui pra decidir se lê os valores.
+  const { pendingVerifications, pendingTickets } = useAdminAlert();
 
   // S95 — aba Perfil é idêntica nos dois papéis (mesmo badge de
   // verificação/suporte, nada ligado a unreadCount de Conversas), então o
@@ -168,14 +173,22 @@ function MainTabs() {
     >
       {isAdmin ? (
         <>
-          <Tab.Screen name="Verificacoes">
+          <Tab.Screen
+            name="Verificacoes"
+            options={{
+              tabBarBadge: pendingVerifications > 0 ? pendingVerifications : undefined,
+            }}
+          >
             {() => (
               <ErrorBoundary>
                 <AdminVerificationsScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>
-          <Tab.Screen name="Chamados">
+          <Tab.Screen
+            name="Chamados"
+            options={{ tabBarBadge: pendingTickets > 0 ? pendingTickets : undefined }}
+          >
             {() => (
               <ErrorBoundary>
                 <AdminSupportScreen />

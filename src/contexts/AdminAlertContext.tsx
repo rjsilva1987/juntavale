@@ -1,0 +1,78 @@
+// src/contexts/AdminAlertContext.tsx
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+import { ADMIN_UID } from '@/config/admin';
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/services/firebase';
+import { SupportTicket } from '@/services/supportService';
+
+interface AdminAlertContextType {
+  pendingVerifications: number;
+  pendingTickets: number;
+}
+
+const AdminAlertContext = createContext<AdminAlertContextType>({
+  pendingVerifications: 0,
+  pendingTickets: 0,
+});
+
+export const useAdminAlert = () => useContext(AdminAlertContext);
+
+// S94-B — contador de pendencias pras abas Verificacoes/Chamados do admin.
+// GUARDA OBRIGATORIA: firestore.rules só libera list()/onSnapshot em
+// verifications e support pra quem bate com isAdmin() (uid == ADMIN_UID) —
+// mesma checagem de getPendingVerifications em verificationService.ts.
+// Montar estes listeners pra um usuário comum dispararia permission-denied
+// em série a cada snapshot, então sem usuário logado OU com
+// user.uid !== ADMIN_UID nenhum onSnapshot é montado: o Provider devolve
+// 0/0 direto.
+export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.uid === ADMIN_UID;
+  const [pendingVerifications, setPendingVerifications] = useState(0);
+  const [pendingTickets, setPendingTickets] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingVerifications(0);
+      return;
+    }
+    // Sem orderBy de propósito: where sozinho usa o índice single-field
+    // automático, evitando exigir um índice composto novo.
+    const q = query(collection(db, 'verifications'), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, (snap) => {
+      setPendingVerifications(snap.size);
+    });
+    return unsub;
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingTickets(0);
+      return;
+    }
+    // Mesma razão do listener acima: sem orderBy, só where.
+    const q = query(collection(db, 'support'), where('status', '==', 'open'));
+    const unsub = onSnapshot(q, (snap) => {
+      // lastSenderId só passou a ser gravado em 04/08 (S94-A, exclusivo do
+      // Admin SDK — ver functions/src/index.ts). Chamado aberto ANTES dessa
+      // data não tem o campo, e não pode ficar invisível aqui só por isso —
+      // por isso doc SEM lastSenderId também conta como pendente. Só um
+      // ticket cuja ÚLTIMA mensagem foi do próprio admin (lastSenderId ===
+      // ADMIN_UID) fica de fora da contagem.
+      const pending = snap.docs.filter((d) => {
+        const { lastSenderId } = d.data() as SupportTicket;
+        return lastSenderId !== ADMIN_UID;
+      });
+      setPendingTickets(pending.length);
+    });
+    return unsub;
+  }, [isAdmin]);
+
+  return (
+    <AdminAlertContext.Provider value={{ pendingVerifications, pendingTickets }}>
+      {children}
+    </AdminAlertContext.Provider>
+  );
+};
