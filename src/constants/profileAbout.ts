@@ -50,17 +50,33 @@ export const SIGN_OPTIONS: { value: Sign; label: string }[] = SIGNS.map((value) 
   label: SIGN_LABELS[value],
 }));
 
+// ─── Grupos ──────────────────────────────────────────────────
+//
+// S105 — o catálogo cresce por seção da tela, não só por campo. Cada campo
+// declara a que grupo pertence; a tela renderiza um cabeçalho por grupo (na
+// ordem de ABOUT_GROUPS) e, dentro dele, um AboutRow por campo cujo `group`
+// bate — nada de lista de campos escrita à mão na tela (ver ProfileScreen).
+export const ABOUT_GROUPS = ['about', 'lifestyle'] as const;
+
+export type AboutGroup = (typeof ABOUT_GROUPS)[number];
+
+export const ABOUT_GROUP_LABELS: Record<AboutGroup, string> = {
+  about: 'Sobre mim',
+  lifestyle: 'Estilo de vida',
+};
+
 // ─── Catálogo de campos ─────────────────────────────────────
 //
-// Cada campo declara id, rótulo, ícone (Ionicons) e tipo — 'number' pra
-// entrada numérica com faixa/sufixo, 'single' pra seleção única e 'multi'
-// pra múltipla escolha (seletor genérico da S104 só implementa
-// single/number; multi fica pra quando o primeiro campo desse tipo
-// aparecer, ver src/components/AboutPicker.tsx).
+// Cada campo declara id, rótulo, ícone (Ionicons), grupo (S105) e tipo —
+// 'number' pra entrada numérica com faixa/sufixo, 'single' pra seleção
+// única e 'multi' pra múltipla escolha (seletor genérico da S104 só
+// implementa single/number; multi fica pra quando o primeiro campo desse
+// tipo aparecer, ver src/components/AboutPicker.tsx).
 interface AboutFieldBase {
   id: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  group: AboutGroup;
 }
 
 export interface AboutFieldNumber extends AboutFieldBase {
@@ -82,12 +98,16 @@ export interface AboutFieldMulti extends AboutFieldBase {
 
 export type AboutFieldDef = AboutFieldNumber | AboutFieldSingle | AboutFieldMulti;
 
-// Pilotos da S104: Altura (numérico) e Signo (seleção única).
+// Pilotos da S104: Altura (numérico) e Signo (seleção única), grupo
+// 'about'. S105 acrescenta o grupo 'lifestyle': cinco campos de seleção
+// única sobre hábitos (pets, bebida, cigarro, atividade física, redes
+// sociais) — mesmo padrão single de `sign`, só troca as opções.
 export const ABOUT_FIELDS = [
   {
     id: 'height',
     label: 'Altura',
     icon: 'resize-outline',
+    group: 'about',
     type: 'number',
     suffix: 'cm',
     min: 120,
@@ -97,30 +117,99 @@ export const ABOUT_FIELDS = [
     id: 'sign',
     label: 'Signo',
     icon: 'star-outline',
+    group: 'about',
     type: 'single',
     options: SIGN_OPTIONS,
+  },
+  {
+    id: 'pets',
+    label: 'Pets',
+    icon: 'paw-outline',
+    group: 'lifestyle',
+    type: 'single',
+    options: [
+      { value: 'cachorro', label: 'Cachorro' },
+      { value: 'gato', label: 'Gato' },
+      { value: 'passaro', label: 'Pássaro' },
+      { value: 'peixe', label: 'Peixe' },
+      { value: 'reptil', label: 'Réptil' },
+      { value: 'outro', label: 'Outro' },
+      { value: 'nao_tenho', label: 'Não tenho' },
+      { value: 'quero_ter', label: 'Quero ter' },
+    ],
+  },
+  {
+    id: 'drinking',
+    label: 'Bebida',
+    icon: 'wine-outline',
+    group: 'lifestyle',
+    type: 'single',
+    options: [
+      { value: 'nao_bebo', label: 'Não bebo' },
+      { value: 'socialmente', label: 'Socialmente, aos fins de semana' },
+      { value: 'as_vezes', label: 'Bebo às vezes' },
+      { value: 'com_frequencia', label: 'Bebo com frequência' },
+    ],
+  },
+  {
+    id: 'smoking',
+    label: 'Você fuma?',
+    icon: 'logo-no-smoking',
+    group: 'lifestyle',
+    type: 'single',
+    options: [
+      { value: 'nao_fumo', label: 'Não fumo' },
+      { value: 'as_vezes', label: 'Fumo às vezes' },
+      { value: 'fumo', label: 'Fumo' },
+      { value: 'tentando_parar', label: 'Estou tentando parar' },
+    ],
+  },
+  {
+    id: 'exercise',
+    label: 'Atividade física',
+    icon: 'barbell-outline',
+    group: 'lifestyle',
+    type: 'single',
+    options: [
+      { value: 'todo_dia', label: 'Todo dia' },
+      { value: 'frequentemente', label: 'Frequentemente' },
+      { value: 'as_vezes', label: 'Às vezes' },
+      { value: 'quase_nunca', label: 'Quase nunca' },
+    ],
+  },
+  {
+    id: 'socialMedia',
+    label: 'Redes sociais',
+    icon: 'share-social-outline',
+    group: 'lifestyle',
+    type: 'single',
+    options: [
+      { value: 'uso_bastante', label: 'Uso bastante as redes' },
+      { value: 'de_vez_em_quando', label: 'Uso de vez em quando' },
+      { value: 'so_pra_ver', label: 'Uso só pra ver' },
+      { value: 'passo_longe', label: 'Passo longe' },
+    ],
   },
 ] as const satisfies readonly AboutFieldDef[];
 
 export type AboutFieldId = (typeof ABOUT_FIELDS)[number]['id'];
 
 // Busca por `id` em vez de posição — inserir um campo novo NO MEIO de
-// ABOUT_FIELDS não muda pra que campo HEIGHT_FIELD/SIGN_FIELD abaixo
-// apontam (achado da auditoria da S104: `ABOUT_FIELDS[0]`/`[1]` quebrava
+// ABOUT_FIELDS não muda o que uma chamada existente de getAboutField
+// aponta (achado da auditoria da S104: `ABOUT_FIELDS[0]`/`[1]` quebrava
 // silenciosamente numa reordenação entre campos de mesma forma, sem o tsc
 // acusar nada). `Extract` mantém o tipo estreito (o handle de `height`
-// continua expondo `min`/`max`/`suffix`, o de `sign` continua expondo
-// `options`) mesmo buscando por valor em runtime.
+// continua expondo `min`/`max`/`suffix`, o de `sign`/`pets`/etc continua
+// expondo `options`) mesmo buscando por valor em runtime — usado pela
+// ProfileScreen (S105) pra resolver o campo aberto no seletor a partir só
+// do id guardado em estado.
 type AboutFieldById<Id extends AboutFieldId> = Extract<(typeof ABOUT_FIELDS)[number], { id: Id }>;
 
-function getAboutField<Id extends AboutFieldId>(id: Id): AboutFieldById<Id> {
+export function getAboutField<Id extends AboutFieldId>(id: Id): AboutFieldById<Id> {
   const field = ABOUT_FIELDS.find((f): f is AboutFieldById<Id> => f.id === id);
   if (!field) throw new Error(`about field not found: ${id}`);
   return field;
 }
-
-export const HEIGHT_FIELD = getAboutField('height');
-export const SIGN_FIELD = getAboutField('sign');
 
 // Deriva o tipo do VALOR de cada campo a partir da própria definição em
 // ABOUT_FIELDS — um campo novo no catálogo estende AboutValues sozinho,
@@ -136,3 +225,18 @@ type AboutFieldValue<F> = F extends { type: 'number' }
 export type AboutValues = Partial<{
   [F in (typeof ABOUT_FIELDS)[number] as F['id']]: AboutFieldValue<F>;
 }>;
+
+// S105 — formatação do VALOR exibido no AboutRow também sai do catálogo:
+// número junta o sufixo, seleção única troca o value pelo label da opção.
+// A tela nunca faz `if (id === 'height')` — só chama isto pra cada campo.
+// `multi` não está coberto (S104 não implementou esse tipo no seletor,
+// ver AboutPicker.tsx); undefined aqui vira "Adicionar" no AboutRow.
+export function formatAboutFieldValue(
+  field: AboutFieldDef,
+  value: string | number | undefined,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (field.type === 'number') return field.suffix ? `${value} ${field.suffix}` : `${value}`;
+  if (field.type === 'single') return field.options.find((o) => o.value === value)?.label;
+  return undefined;
+}

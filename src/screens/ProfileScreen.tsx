@@ -32,7 +32,15 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
 import { LOOKING_FOR_LABELS, LOOKING_FOR_OPTIONS, LookingFor } from '@/constants/lookingFor';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
-import { HEIGHT_FIELD, SIGN_FIELD, SIGN_LABELS, type Sign } from '@/constants/profileAbout';
+import {
+  ABOUT_FIELDS,
+  ABOUT_GROUPS,
+  ABOUT_GROUP_LABELS,
+  formatAboutFieldValue,
+  getAboutField,
+  type AboutFieldId,
+  type AboutValues,
+} from '@/constants/profileAbout';
 import {
   PROMPTS_CATALOG,
   MAX_PROMPTS,
@@ -137,16 +145,16 @@ export default function ProfileScreen() {
   // definir pela 1ª vez aqui; uma vez setado, só troca entre as 4 opções
   // (rules não permitem remover depois de definido).
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(profile?.lookingFor);
-  // S104 — piloto do perfil estruturado: mapa `about`, só dois campos por
-  // enquanto (ver src/constants/profileAbout.ts). Mesmo padrão de estado
-  // local dos campos acima, salvos junto no mesmo handleSave — mas o
-  // payload final passa por mergeAboutValues antes de gravar (ver abaixo),
-  // porque updateUserProfile é updateDoc puro e substituiria o mapa
-  // `about` inteiro se mandássemos só { height } ou só { sign }.
-  const [aboutHeight, setAboutHeight] = useState<number | null>(profile?.about?.height ?? null);
-  const [aboutSign, setAboutSign] = useState<Sign | null>(profile?.about?.sign ?? null);
-  const [heightPickerVisible, setHeightPickerVisible] = useState(false);
-  const [signPickerVisible, setSignPickerVisible] = useState(false);
+  // S104/S105 — piloto do perfil estruturado: mapa `about`, catálogo em
+  // src/constants/profileAbout.ts (ABOUT_FIELDS). UM estado com os valores
+  // de todos os campos do catálogo (values) e UM com o id do campo aberto
+  // no seletor (openField) — nenhum estado por campo, pra um campo novo no
+  // catálogo não exigir estado novo aqui. Salvos junto no mesmo handleSave,
+  // mas o payload final passa por mergeAboutValues antes de gravar (ver
+  // abaixo), porque updateUserProfile é updateDoc puro e substituiria o
+  // mapa `about` inteiro se mandássemos só os campos tocados nesta edição.
+  const [aboutValues, setAboutValues] = useState<AboutValues>(profile?.about ?? {});
+  const [openAboutField, setOpenAboutField] = useState<AboutFieldId | null>(null);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
@@ -231,15 +239,13 @@ export default function ProfileScreen() {
     }
     setSaving(true);
     try {
-      // S104 — merge em memória com o `about` atual do profile antes de
-      // gravar (mergeAboutValues), nunca `{ about: { height, sign } }`
+      // S104/S105 — merge em memória com o `about` atual do profile antes
+      // de gravar (mergeAboutValues), nunca `{ about: aboutValues }`
       // direto: updateUserProfile é updateDoc puro, substituiria o mapa
-      // inteiro e apagaria qualquer chave que um catálogo futuro (S105/
-      // S106) já tenha gravado ali.
-      const mergedAbout = mergeAboutValues(profile?.about, {
-        height: aboutHeight ?? undefined,
-        sign: aboutSign ?? undefined,
-      });
+      // inteiro e apagaria qualquer chave que um catálogo futuro já tenha
+      // gravado ali. aboutValues já tem o formato Partial<AboutValues> que
+      // mergeAboutValues espera — nenhum campo listado à mão aqui.
+      const mergedAbout = mergeAboutValues(profile?.about, aboutValues);
       await updateUserProfile(user.uid, {
         name,
         // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
@@ -810,23 +816,26 @@ export default function ProfileScreen() {
                 onRemove={(value) => setEvents((prev) => prev.filter((e) => e !== value))}
               />
 
-              {/* S104 — piloto do perfil estruturado (mapa `about`), só
-                  Altura e Signo por enquanto. Exibir isso pra outros
-                  usuários é a S108 — aqui é só a edição do próprio perfil,
-                  mesma guarda !isAdmin do form inteiro. */}
-              <Text style={styles.fieldLabel}>Sobre mim</Text>
-              <AboutRow
-                icon={HEIGHT_FIELD.icon}
-                label={HEIGHT_FIELD.label}
-                value={aboutHeight != null ? `${aboutHeight} ${HEIGHT_FIELD.suffix}` : undefined}
-                onPress={() => setHeightPickerVisible(true)}
-              />
-              <AboutRow
-                icon={SIGN_FIELD.icon}
-                label={SIGN_FIELD.label}
-                value={aboutSign ? SIGN_LABELS[aboutSign] : undefined}
-                onPress={() => setSignPickerVisible(true)}
-              />
+              {/* S104/S105 — piloto do perfil estruturado (mapa `about`),
+                  renderizado a partir do catálogo (ABOUT_FIELDS): um
+                  cabeçalho por grupo, um AboutRow por campo do grupo.
+                  Exibir isso pra outros usuários é a S108 — aqui é só a
+                  edição do próprio perfil, mesma guarda !isAdmin do form
+                  inteiro. */}
+              {ABOUT_GROUPS.map((group) => (
+                <React.Fragment key={group}>
+                  <Text style={styles.fieldLabel}>{ABOUT_GROUP_LABELS[group]}</Text>
+                  {ABOUT_FIELDS.filter((field) => field.group === group).map((field) => (
+                    <AboutRow
+                      key={field.id}
+                      icon={field.icon}
+                      label={field.label}
+                      value={formatAboutFieldValue(field, aboutValues[field.id])}
+                      onPress={() => setOpenAboutField(field.id)}
+                    />
+                  ))}
+                </React.Fragment>
+              ))}
 
               <AnimatedPressable
                 style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
@@ -1121,28 +1130,49 @@ export default function ProfileScreen() {
         onClose={() => setDeleteModalVisible(false)}
       />
 
-      {/* S104 — piloto do perfil estruturado, ver seção "Sobre mim" acima
-          no form de edição. */}
-      <AboutPicker
-        type="number"
-        visible={heightPickerVisible}
-        onClose={() => setHeightPickerVisible(false)}
-        title={HEIGHT_FIELD.label}
-        value={aboutHeight}
-        onChange={setAboutHeight}
-        min={HEIGHT_FIELD.min}
-        max={HEIGHT_FIELD.max}
-        suffix={HEIGHT_FIELD.suffix}
-      />
-      <AboutPicker
-        type="single"
-        visible={signPickerVisible}
-        onClose={() => setSignPickerVisible(false)}
-        title={SIGN_FIELD.label}
-        value={aboutSign}
-        onChange={(value) => setAboutSign(value as Sign)}
-        options={SIGN_FIELD.options}
-      />
+      {/* S104/S105 — piloto do perfil estruturado, ver catálogo renderizado
+          acima no form de edição. UM AboutPicker por tipo (number/single),
+          resolvido a partir de openAboutField via getAboutField — abrir um
+          campo novo do catálogo não pede um AboutPicker novo aqui. */}
+      {(() => {
+        const openField = openAboutField ? getAboutField(openAboutField) : null;
+        const numberField = openField?.type === 'number' ? openField : null;
+        const singleField = openField?.type === 'single' ? openField : null;
+        const openValue = openAboutField ? aboutValues[openAboutField] : undefined;
+        const handleOpenFieldChange = (value: AboutValues[AboutFieldId]) => {
+          if (!openAboutField) return;
+          setAboutValues((prev) => ({ ...prev, [openAboutField]: value }));
+        };
+        return (
+          <>
+            <AboutPicker
+              type="number"
+              visible={!!numberField}
+              onClose={() => setOpenAboutField(null)}
+              title={numberField?.label ?? ''}
+              value={typeof openValue === 'number' ? openValue : null}
+              onChange={handleOpenFieldChange}
+              min={numberField?.min ?? 0}
+              max={numberField?.max ?? 100}
+              suffix={numberField?.suffix}
+            />
+            <AboutPicker
+              type="single"
+              visible={!!singleField}
+              onClose={() => setOpenAboutField(null)}
+              title={singleField?.label ?? ''}
+              value={typeof openValue === 'string' ? openValue : null}
+              // Seletor genérico entrega `string` (S104: options não são
+              // literal-tipadas por campo, ver AboutPicker.tsx) — o valor
+              // sempre vem de singleField.options, então é seguro alargar
+              // pro tipo específico do campo aberto. Mesmo cast pontual que
+              // já existia aqui pra `sign` sozinho antes da S105.
+              onChange={(value) => handleOpenFieldChange(value as AboutValues[AboutFieldId])}
+              options={singleField?.options ?? []}
+            />
+          </>
+        );
+      })()}
 
       {/* Catálogo de prompts — só exibido pra adicionar um novo (prompts já
           usados ficam desabilitados/acinzentados). Editar um já respondido
