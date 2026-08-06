@@ -51,3 +51,6 @@ google-play-key.json
 serviceAccountKey.json
 
 .firebase/
+
+# relatorios de sprint, nao versionados
+docs/
