@@ -43,6 +43,7 @@ import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReportAlert } from '@/contexts/ReportAlertContext';
 import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
@@ -114,6 +115,7 @@ export default function ProfileScreen() {
   // o pontinho na linha de verificação, não o badge da aba.
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
+  const { showAlert: showReportAlert } = useReportAlert();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile?.name ?? '');
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
@@ -978,6 +980,21 @@ export default function ProfileScreen() {
             <Ionicons name="chatbubbles-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={styles.blockedUsersText}>Meus chamados</Text>
             {showSupportAlert && <View style={styles.verificationAlertDot} />}
+          </AnimatedPressable>
+        )}
+
+        {/* S96-C — "Minhas denúncias", mesmo padrão de "Meus chamados" acima
+            (ponto próprio, reusa verificationAlertDot, acende com
+            showReportAlert). Fica dentro da guarda !isAdmin do S95-B: o
+            admin não denuncia ninguém. */}
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('MyReports')}
+          >
+            <Ionicons name="flag-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Minhas denúncias</Text>
+            {showReportAlert && <View style={styles.verificationAlertDot} />}
           </AnimatedPressable>
         )}
 

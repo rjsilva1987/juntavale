@@ -533,9 +533,12 @@ export const onSupportMessageCreated = onDocumentCreated(
 
 // S96-A — mesmo papel de onSupportMessageCreated acima (mantém
 // lastMessageAt/lastSenderId no doc pai em sincronia com a última mensagem
-// da thread), mas para reports/{reportId}/messages. SEM push nesta etapa:
-// a S96-A é só dados/rules, a tela de thread da denúncia (e o aviso por
-// push de resposta) fica pra uma sprint futura.
+// da thread), mas para reports/{reportId}/messages.
+// S96-C — push adicionado agora, só na direção admin → denunciante (o
+// denunciante escrevendo NÃO notifica o admin por push nesta etapa; o
+// painel do admin já tem o contador pendingReports pra isso, ver
+// AdminAlertContext). Mesmo padrão de recipientUid/token/sendExpoNotifications
+// de onSupportMessageCreated acima, sem helper novo.
 export const onReportMessageCreated = onDocumentCreated(
   { document: 'reports/{reportId}/messages/{messageId}', region: REGION },
   async (event) => {
@@ -550,7 +553,8 @@ export const onReportMessageCreated = onDocumentCreated(
     };
 
     const reportSnap = await db.doc(`reports/${reportId}`).get();
-    if (!reportSnap.exists) {
+    const report = reportSnap.data() as { reporterId: string } | undefined;
+    if (!report) {
       console.warn('[onReportMessageCreated] denúncia pai não encontrada:', reportId);
       return;
     }
@@ -565,6 +569,27 @@ export const onReportMessageCreated = onDocumentCreated(
     } catch (error) {
       console.error('[onReportMessageCreated] falha ao atualizar lastMessageAt:', error);
     }
+
+    // Só o admin dispara push nesta etapa — mensagem do próprio denunciante
+    // nunca chega aqui (guarda abaixo também cobriria, mas nem monta o
+    // payload à toa).
+    if (message.senderId !== ADMIN_UID) return;
+
+    const recipientUid = report.reporterId;
+    if (recipientUid === message.senderId) return;
+
+    const token = await getPushToken(recipientUid);
+    if (!token) return;
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: 'Equipe JuntaVale',
+        body: 'Sua denúncia foi respondida',
+        data: { type: 'report', reportId },
+      },
+    ]);
   },
 );
 

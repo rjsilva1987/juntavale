@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AdminAlertProvider } from './src/contexts/AdminAlertContext';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { ReportAlertProvider } from './src/contexts/ReportAlertContext';
 import { SupportAlertProvider } from './src/contexts/SupportAlertContext';
 import { VerificationAlertProvider } from './src/contexts/VerificationAlertContext';
 import Navigation from './src/navigation';
@@ -22,13 +23,18 @@ export default function App() {
                 de useAuth via subscribeMyTickets): irmão dele, dentro do
                 AuthProvider, sem depender um do outro. */}
             <SupportAlertProvider>
-              {/* S94-B — mesma razão dos dois acima (depende de useAuth pro
-                  uid do admin); irmão deles, dentro do AuthProvider, sem
-                  depender de nenhum dos outros dois. */}
-              <AdminAlertProvider>
-                <StatusBar style="light" />
-                <Navigation />
-              </AdminAlertProvider>
+              {/* S96-C — mesma razão dos dois acima (depende de useAuth via
+                  listenMyReports); irmão deles, dentro do AuthProvider, sem
+                  depender de nenhum dos outros. */}
+              <ReportAlertProvider>
+                {/* S94-B — mesma razão dos três acima (depende de useAuth pro
+                    uid do admin); irmão deles, dentro do AuthProvider, sem
+                    depender de nenhum dos outros três. */}
+                <AdminAlertProvider>
+                  <StatusBar style="light" />
+                  <Navigation />
+                </AdminAlertProvider>
+              </ReportAlertProvider>
             </SupportAlertProvider>
           </VerificationAlertProvider>
         </AuthProvider>

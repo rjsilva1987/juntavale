@@ -74,6 +74,8 @@ export function useNotifications() {
             navigationRef.navigate('Main', { screen: 'Curtidas' });
           } else if (data.type === 'support' && data.ticketId) {
             navigationRef.navigate('SupportThread', { ticketId: data.ticketId });
+          } else if (data.type === 'report' && data.reportId) {
+            navigationRef.navigate('ReportThread', { reportId: data.reportId });
           } else if (data.type === 'weekly_prompt') {
             navigationRef.navigate('Main', { screen: 'Perfil' });
           } else if (data.type === 'verification_reviewed') {

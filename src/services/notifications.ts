@@ -16,6 +16,7 @@ export type PushNotificationData = {
     | 'message'
     | 'superlike'
     | 'support'
+    | 'report'
     | 'match_reminder'
     | 'weekly_prompt'
     | 'verification_reviewed'
@@ -25,6 +26,7 @@ export type PushNotificationData = {
   otherName?: string;
   otherPhoto?: string;
   ticketId?: string;
+  reportId?: string;
 };
 
 // expo-notifications não tem módulo nativo no Expo Go (SDK 53+); qualquer

@@ -13,6 +13,7 @@ import { ADMIN_UID } from '@/config/admin';
 import { theme } from '@/constants/theme';
 import { useAdminAlert } from '@/contexts/AdminAlertContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReportAlert } from '@/contexts/ReportAlertContext';
 import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
@@ -35,10 +36,12 @@ import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
+import MyReportsScreen from '@/screens/MyReportsScreen';
 import MyTicketsScreen from '@/screens/MyTicketsScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
+import ReportThreadScreen from '@/screens/ReportThreadScreen';
 import SupportScreen from '@/screens/SupportScreen';
 import SupportThreadScreen from '@/screens/SupportThreadScreen';
 import SwipeScreen from '@/screens/SwipeScreen';
@@ -86,6 +89,8 @@ export type RootStackParamList = {
   Support: undefined;
   MyTickets: undefined;
   SupportThread: { ticketId: string };
+  MyReports: undefined;
+  ReportThread: { reportId: string };
   Verification: undefined;
   AdminVerificationDetail: { uid: string };
   AdminSupportDetail: { ticketId: string };
@@ -130,6 +135,7 @@ function MainTabs() {
   // Conversas (que some ao ler as mensagens).
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
+  const { showAlert: showReportAlert } = useReportAlert();
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.
@@ -147,7 +153,9 @@ function MainTabs() {
         // suporte: ela so diz "tem algo pra ver". Qual das duas coisas e,
         // quem diz e a propria ProfileScreen, onde cada linha tem seu ponto
         // (S84-B). Decisao de Raphael, 30/jul.
-        tabBarBadge: showVerificationAlert || showSupportAlert ? ' ' : undefined,
+        // S96-C — mesmo raciocinio, agora tambem com denuncias (ponto
+        // proprio em "Minhas denuncias", ver ProfileScreen).
+        tabBarBadge: showVerificationAlert || showSupportAlert || showReportAlert ? ' ' : undefined,
         // theme.colors.error (#E5484D) — nunca usado antes; não é o
         // vermelho padrão do React Navigation, é o nosso token.
         tabBarBadgeStyle: { backgroundColor: theme.colors.error },
@@ -344,6 +352,8 @@ export default function Navigation() {
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />
+            <Stack.Screen name="MyReports" component={MyReportsScreen} />
+            <Stack.Screen name="ReportThread" component={ReportThreadScreen} />
             {/* S95 — AdminVerifications/AdminSupport viraram Tab.Screen (ver
                 MainTabs); só as telas de DETALHE seguem no Stack, e só pro
                 admin — pra quem não é admin elas não têm como ser abertas
