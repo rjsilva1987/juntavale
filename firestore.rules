@@ -1,4 +1,11 @@
-// rules-stamp: S97 (users/{userId} update ganha campo paused, bool opcional
+// rules-stamp: S104 (users/{userId} ganha campo about, mapa livre — piloto
+// do perfil estruturado: isValidProfile exige só data.about is map &&
+// data.about.keys().size() <= 30, as chaves de DENTRO do mapa não são
+// validadas — deliberado, pra que um campo novo no catálogo do client
+// (src/constants/profileAbout.ts) não exija mexer nas rules nem fazer
+// deploy; entra no hasOnly do UPDATE apenas, fora do create — conta nova
+// nasce sem o campo; molde exato da cláusula de filters logo acima, só
+// com teto de chaves a mais) + S97 (users/{userId} update ganha campo paused, bool opcional
 // — "pausar perfil"/modo invisível: entra no diff().affectedKeys().hasOnly()
 // ao lado de reengagementOptOut; isValidProfile valida SÓ quando presente
 // (data.paused is bool); NÃO entra no hasOnly do create — conta nova nasce
@@ -55,7 +62,7 @@
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
-// firestore.rules — última alteração: S97 (2026-08-06)
+// firestore.rules — última alteração: S104 (2026-08-06)
 // Regras de PRODUÇÃO — deny by default: toda collection sem regra explícita é bloqueada
 // (ver o "catch-all" no final do arquivo).
 //
@@ -236,6 +243,13 @@ service cloud.firestore {
         && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
         && (!('filters' in data) || data.filters is map)
+        // S104 — `about` é o piloto do perfil estruturado: mapa livre, teto
+        // de 30 chaves pra conter tamanho de doc. As chaves de DENTRO não
+        // são validadas de propósito — permite adicionar campo novo no
+        // catálogo (src/constants/profileAbout.ts) sem exigir rules nem
+        // deploy. Mesmo padrão de `filters` acima. Só entra no hasOnly do
+        // UPDATE (ver allow update abaixo) — conta nova nasce sem o campo.
+        && (!('about' in data) || (data.about is map && data.about.keys().size() <= 30))
         && (!('prompts' in data) || isValidPrompts(data.prompts))
         // S59 — slot único do prompt da semana, separado de prompts[] acima.
         && (!('weeklyPromptAnswer' in data) || isValidWeeklyPromptAnswer(data.weeklyPromptAnswer))
@@ -385,7 +399,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
-              'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer'])
+              'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.

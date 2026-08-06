@@ -21,6 +21,8 @@ import {
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { AboutPicker } from '@/components/AboutPicker';
+import { AboutRow } from '@/components/AboutRow';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { FounderBadge } from '@/components/FounderBadge';
@@ -30,6 +32,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { ADMIN_UID } from '@/config/admin';
 import { LOOKING_FOR_LABELS, LOOKING_FOR_OPTIONS, LookingFor } from '@/constants/lookingFor';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
+import { HEIGHT_FIELD, SIGN_FIELD, SIGN_LABELS, type Sign } from '@/constants/profileAbout';
 import {
   PROMPTS_CATALOG,
   MAX_PROMPTS,
@@ -52,6 +55,7 @@ import { RootStackParamList } from '@/navigation';
 import {
   updateUserProfile,
   addProfilePhoto,
+  mergeAboutValues,
   removeProfilePhoto,
   removeWeeklyPromptAnswer,
   setPrincipalPhoto,
@@ -133,6 +137,16 @@ export default function ProfileScreen() {
   // definir pela 1ª vez aqui; uma vez setado, só troca entre as 4 opções
   // (rules não permitem remover depois de definido).
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(profile?.lookingFor);
+  // S104 — piloto do perfil estruturado: mapa `about`, só dois campos por
+  // enquanto (ver src/constants/profileAbout.ts). Mesmo padrão de estado
+  // local dos campos acima, salvos junto no mesmo handleSave — mas o
+  // payload final passa por mergeAboutValues antes de gravar (ver abaixo),
+  // porque updateUserProfile é updateDoc puro e substituiria o mapa
+  // `about` inteiro se mandássemos só { height } ou só { sign }.
+  const [aboutHeight, setAboutHeight] = useState<number | null>(profile?.about?.height ?? null);
+  const [aboutSign, setAboutSign] = useState<Sign | null>(profile?.about?.sign ?? null);
+  const [heightPickerVisible, setHeightPickerVisible] = useState(false);
+  const [signPickerVisible, setSignPickerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
@@ -217,6 +231,15 @@ export default function ProfileScreen() {
     }
     setSaving(true);
     try {
+      // S104 — merge em memória com o `about` atual do profile antes de
+      // gravar (mergeAboutValues), nunca `{ about: { height, sign } }`
+      // direto: updateUserProfile é updateDoc puro, substituiria o mapa
+      // inteiro e apagaria qualquer chave que um catálogo futuro (S105/
+      // S106) já tenha gravado ali.
+      const mergedAbout = mergeAboutValues(profile?.about, {
+        height: aboutHeight ?? undefined,
+        sign: aboutSign ?? undefined,
+      });
       await updateUserProfile(user.uid, {
         name,
         // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
@@ -236,6 +259,11 @@ export default function ProfileScreen() {
         // update, e as rules toleram a chave ausente igual antes.
         ...(uf ? { uf } : {}),
         ...(lookingFor ? { lookingFor } : {}),
+        // Mesmo padrão de uf/lookingFor acima: só entra na chamada se tiver
+        // pelo menos uma chave. Achado da auditoria — mandar `about: {}`
+        // incondicional gravava ruído em QUALQUER save (mesmo de bio/nome)
+        // em perfis que nunca abriram a seção "Sobre mim".
+        ...(Object.keys(mergedAbout).length > 0 ? { about: mergedAbout } : {}),
       });
       await refreshProfile();
       setEditing(false);
@@ -782,6 +810,24 @@ export default function ProfileScreen() {
                 onRemove={(value) => setEvents((prev) => prev.filter((e) => e !== value))}
               />
 
+              {/* S104 — piloto do perfil estruturado (mapa `about`), só
+                  Altura e Signo por enquanto. Exibir isso pra outros
+                  usuários é a S108 — aqui é só a edição do próprio perfil,
+                  mesma guarda !isAdmin do form inteiro. */}
+              <Text style={styles.fieldLabel}>Sobre mim</Text>
+              <AboutRow
+                icon={HEIGHT_FIELD.icon}
+                label={HEIGHT_FIELD.label}
+                value={aboutHeight != null ? `${aboutHeight} ${HEIGHT_FIELD.suffix}` : undefined}
+                onPress={() => setHeightPickerVisible(true)}
+              />
+              <AboutRow
+                icon={SIGN_FIELD.icon}
+                label={SIGN_FIELD.label}
+                value={aboutSign ? SIGN_LABELS[aboutSign] : undefined}
+                onPress={() => setSignPickerVisible(true)}
+              />
+
               <AnimatedPressable
                 style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
                 onPress={handleSave}
@@ -1073,6 +1119,29 @@ export default function ProfileScreen() {
       <DeleteAccountModal
         visible={deleteModalVisible}
         onClose={() => setDeleteModalVisible(false)}
+      />
+
+      {/* S104 — piloto do perfil estruturado, ver seção "Sobre mim" acima
+          no form de edição. */}
+      <AboutPicker
+        type="number"
+        visible={heightPickerVisible}
+        onClose={() => setHeightPickerVisible(false)}
+        title={HEIGHT_FIELD.label}
+        value={aboutHeight}
+        onChange={setAboutHeight}
+        min={HEIGHT_FIELD.min}
+        max={HEIGHT_FIELD.max}
+        suffix={HEIGHT_FIELD.suffix}
+      />
+      <AboutPicker
+        type="single"
+        visible={signPickerVisible}
+        onClose={() => setSignPickerVisible(false)}
+        title={SIGN_FIELD.label}
+        value={aboutSign}
+        onChange={(value) => setAboutSign(value as Sign)}
+        options={SIGN_FIELD.options}
       />
 
       {/* Catálogo de prompts — só exibido pra adicionar um novo (prompts já

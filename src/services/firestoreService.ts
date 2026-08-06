@@ -28,6 +28,7 @@ import {
 
 import { ADMIN_UID } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
+import { AboutFieldId, AboutValues } from '@/constants/profileAbout';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
@@ -130,6 +131,15 @@ export interface UserProfile {
   // filtra por isto). Filtro de VISIBILIDADE no client, não fronteira de
   // leitura — ver firestore.rules.
   paused?: boolean;
+  // S104 — piloto do perfil estruturado: mapa livre, catálogo em
+  // src/constants/profileAbout.ts (ABOUT_FIELDS). Ausente = perfil sem
+  // nenhum campo do "Sobre mim" preenchido ainda (todo doc existente cai
+  // aqui). Chaves de dentro do mapa NÃO são validadas nas rules de
+  // propósito — ver firestore.rules (S104). Grava-se sempre o mapa
+  // completo (updateDoc substitui o valor da chave `about` inteiro); usar
+  // mergeAboutValues abaixo pra não apagar chaves não tocadas pelo save
+  // atual. Só entra no hasOnly de UPDATE — conta nova nasce sem o campo.
+  about?: AboutValues;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
@@ -230,6 +240,31 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
   await updateDoc(doc(db, 'users', uid), data);
+};
+
+// S104 — updateUserProfile acima é updateDoc puro: gravar { about: { height:
+// 180 } } SUBSTITUI o mapa `about` inteiro, apagando qualquer outra chave já
+// salva (signo, e o que mais o catálogo ganhar nas próximas sprints). Molde
+// do merge em memória: useFilters.ts:31-34/52-56 (mesmo problema, mesma
+// solução, lá pro campo `filters`). Quem for salvar `about` PRECISA montar o
+// patch com mergeAboutValues(profile?.about, novosValores) antes de chamar
+// updateUserProfile — nunca gravar `{ about: novosValores }` direto.
+// Limpar um campo = passar `undefined` pra chave dele no patch; o resultado
+// OMITE a chave (nunca grava null/undefined em nenhuma chave do mapa).
+export const mergeAboutValues = (
+  current: AboutValues | undefined,
+  patch: Partial<AboutValues>,
+): AboutValues => {
+  const merged: AboutValues = { ...(current ?? {}) };
+  (Object.keys(patch) as AboutFieldId[]).forEach((key) => {
+    const value = patch[key];
+    if (value === undefined) {
+      delete merged[key];
+    } else {
+      (merged as Record<AboutFieldId, NonNullable<AboutValues[AboutFieldId]>>)[key] = value;
+    }
+  });
+  return merged;
 };
 
 // ─── Profile photos ───────────────────────────────────────
