@@ -1,0 +1,408 @@
+// src/screens/AdminReportDetailScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import dayjs from 'dayjs';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { ADMIN_UID } from '@/config/admin';
+import { theme } from '@/constants/theme';
+import { RootStackParamList } from '@/navigation';
+import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import {
+  getReport,
+  listenReportMessages,
+  sendReportMessage,
+  setReportStatus,
+  Report,
+  ReportMessage,
+} from '@/services/reportService';
+
+type AdminReportDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'AdminReportDetail'>;
+
+// Conta denunciada/denunciante pode não existir mais — a function de apagar
+// conta não apaga `reports` de propósito (ver reportService.ts). null ==
+// perfil não encontrado, cai pro uid como fallback em vez de travar a tela.
+function partyLabel(uid: string, profile: UserProfile | null | undefined): string {
+  if (profile === null) return 'Conta removida';
+  return profile?.name ?? uid;
+}
+
+export default function AdminReportDetailScreen({
+  route,
+  navigation,
+}: AdminReportDetailScreenProps) {
+  const { reportId } = route.params;
+  // undefined = ainda carregando, null = denúncia não encontrada.
+  const [report, setReport] = useState<Report | null | undefined>(undefined);
+  const [reporterProfile, setReporterProfile] = useState<UserProfile | null | undefined>(undefined);
+  const [reportedProfile, setReportedProfile] = useState<UserProfile | null | undefined>(undefined);
+  const [messages, setMessages] = useState<ReportMessage[]>([]);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    getReport(reportId).then(async (r) => {
+      setReport(r);
+      if (r) {
+        const [reporter, reported] = await Promise.all([
+          getUserProfile(r.reporterId),
+          getUserProfile(r.reportedId),
+        ]);
+        setReporterProfile(reporter);
+        setReportedProfile(reported);
+      }
+    });
+  }, [reportId]);
+
+  useEffect(() => {
+    const unsub = listenReportMessages(reportId, (msgs) => {
+      setMessages(msgs);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+    return unsub;
+  }, [reportId]);
+
+  const isPending = report ? report.status === undefined || report.status === 'open' : false;
+
+  const handleToggleStatus = () => {
+    if (!report) return;
+    const nextStatus = isPending ? 'resolved' : 'open';
+    setUpdating(true);
+    setReportStatus(report.id, nextStatus)
+      .then(() => setReport({ ...report, status: nextStatus }))
+      .catch((err) => {
+        console.error(err);
+        Alert.alert('Erro', 'Não foi possível atualizar o status da denúncia.');
+      })
+      .finally(() => setUpdating(false));
+  };
+
+  const handleSend = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || !report || sending) return;
+    setSending(true);
+    try {
+      await sendReportMessage(reportId, ADMIN_UID, trimmed);
+      setText('');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Erro', 'Não foi possível enviar sua mensagem. Tente novamente.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Thread é só entre quem denunciou e o admin — o denunciado nunca lê nem
+  // escreve aqui (firestore.rules, reports/{reportId}/messages). isMe é
+  // sempre relativo ao admin, que é quem sempre vê esta tela.
+  const renderMessage = ({ item }: { item: ReportMessage }) => {
+    const isMe = item.senderId === ADMIN_UID;
+    const now = dayjs();
+    const createdAt = item.createdAt ? dayjs(item.createdAt.toDate()) : null;
+    const timeLabel = createdAt
+      ? createdAt.isSame(now, 'day')
+        ? createdAt.format('HH:mm')
+        : createdAt.format('DD/MM HH:mm')
+      : '';
+
+    return (
+      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+        <View style={isMe ? styles.bubbleWrapMe : styles.bubbleWrapOther}>
+          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{timeLabel}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const canSend = !!text.trim() && !sending && !!report;
+
+  return (
+    <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <AnimatedPressable
+            onPress={() => navigation.canGoBack() && navigation.goBack()}
+            style={styles.backBtn}
+          >
+            <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
+          </AnimatedPressable>
+          <Text style={styles.headerTitle}>Denúncia</Text>
+          <View style={styles.backBtn} />
+        </View>
+
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
+          {report === undefined ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : report === null ? (
+            <View style={styles.center}>
+              <Text style={styles.notFound}>Denúncia não encontrada.</Text>
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.messagesList}
+              renderItem={renderMessage}
+              ListHeaderComponent={
+                <View style={styles.detailCard}>
+                  <View style={styles.detailTopRow}>
+                    <Text style={styles.reason}>{REPORT_REASON_LABELS[report.reason]}</Text>
+                    <View
+                      style={[styles.badge, isPending ? styles.badgeOpen : styles.badgeResolved]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          isPending ? styles.badgeTextOpen : styles.badgeTextResolved,
+                        ]}
+                      >
+                        {isPending ? 'Pendente' : 'Resolvida'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.date}>
+                    {report.createdAt
+                      ? dayjs(report.createdAt.toDate()).format('DD/MM/YYYY HH:mm')
+                      : ''}
+                  </Text>
+
+                  {!!report.details && (
+                    <>
+                      <Text style={styles.fieldLabel}>Detalhes</Text>
+                      <Text style={styles.fieldValue} selectable>
+                        {report.details}
+                      </Text>
+                    </>
+                  )}
+
+                  <Text style={styles.fieldLabel}>Quem denunciou</Text>
+                  <Text style={styles.fieldValue}>
+                    {partyLabel(report.reporterId, reporterProfile)}
+                  </Text>
+
+                  <Text style={styles.fieldLabel}>Quem foi denunciado</Text>
+                  <Text style={styles.fieldValue}>
+                    {partyLabel(report.reportedId, reportedProfile)}
+                  </Text>
+
+                  <AnimatedPressable
+                    style={[styles.actionBtn, isPending ? styles.resolveBtn : styles.reopenBtn]}
+                    onPress={handleToggleStatus}
+                    disabled={updating}
+                  >
+                    {updating ? (
+                      <ActivityIndicator
+                        color={isPending ? theme.colors.white : theme.colors.primary}
+                      />
+                    ) : (
+                      <Text style={isPending ? styles.resolveBtnText : styles.reopenBtnText}>
+                        {isPending ? 'Marcar como resolvida' : 'Reabrir denúncia'}
+                      </Text>
+                    )}
+                  </AnimatedPressable>
+
+                  <Text style={styles.sectionTitle}>Conversa</Text>
+                </View>
+              }
+            />
+          )}
+
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Escreva sua mensagem..."
+              placeholderTextColor={theme.colors.textLight}
+              value={text}
+              onChangeText={setText}
+              multiline
+              maxLength={4000}
+              editable={!sending && !!report}
+            />
+            <AnimatedPressable
+              style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!canSend}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Ionicons
+                  name="send"
+                  size={18}
+                  color={canSend ? theme.colors.white : theme.colors.textLight}
+                />
+              )}
+            </AnimatedPressable>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  flex: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  notFound: { fontSize: theme.fontSize.md, color: theme.colors.textSecondary },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 0.5,
+    borderBottomColor: theme.colors.border,
+  },
+  backBtn: { padding: 4, width: 34 },
+  headerTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text },
+
+  messagesList: { padding: theme.spacing.md, gap: 10, flexGrow: 1 },
+
+  detailCard: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    gap: 4,
+    marginBottom: theme.spacing.lg,
+    ...theme.shadows.medium,
+  },
+  detailTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  reason: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text },
+  date: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, marginBottom: 4 },
+  fieldLabel: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+  },
+  fieldValue: { fontSize: theme.fontSize.sm, color: theme.colors.text, lineHeight: 20 },
+
+  badge: { borderRadius: theme.borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeOpen: { backgroundColor: theme.colors.secondary },
+  badgeResolved: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  badgeText: { fontSize: theme.fontSize.xs, fontWeight: '700' },
+  badgeTextOpen: { color: theme.colors.onSecondary },
+  badgeTextResolved: { color: theme.colors.textSecondary },
+
+  actionBtn: {
+    marginTop: theme.spacing.lg,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  resolveBtn: { backgroundColor: theme.colors.primary },
+  resolveBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.white },
+  reopenBtn: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface,
+  },
+  reopenBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.primary },
+
+  sectionTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: theme.spacing.lg,
+  },
+
+  msgRow: { flexDirection: 'row' },
+  msgRowMe: { justifyContent: 'flex-end' },
+  msgRowOther: { justifyContent: 'flex-start' },
+
+  bubbleWrapMe: { maxWidth: '75%', alignItems: 'flex-end' },
+  bubbleWrapOther: { maxWidth: '75%', alignItems: 'flex-start' },
+
+  bubble: {
+    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  bubbleMe: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
+  bubbleOther: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderBottomLeftRadius: 4,
+  },
+  bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
+  bubbleTextMe: { color: theme.colors.white },
+  bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
+  bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.sm,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+    maxHeight: 100,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: { backgroundColor: theme.colors.surface },
+});

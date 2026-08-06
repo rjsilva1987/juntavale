@@ -2,6 +2,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -64,6 +65,14 @@ export const listenMyReports = (uid: string, callback: (reports: Report[]) => vo
     const reports = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Report, 'id'>) }));
     callback(reports);
   });
+};
+
+// S96-B — fetch único da denúncia pra AdminReportDetailScreen, mesmo padrão
+// de getSupportTicket em supportService.ts (a tela troca status localmente
+// no state após setReportStatus, sem precisar de listener no doc pai).
+export const getReport = async (reportId: string): Promise<Report | null> => {
+  const snap = await getDoc(doc(db, 'reports', reportId));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Report, 'id'>) } : null;
 };
 
 export const listenReportMessages = (

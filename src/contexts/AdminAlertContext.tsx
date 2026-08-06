@@ -5,33 +5,37 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ADMIN_UID } from '@/config/admin';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
+import { Report } from '@/services/reportService';
 import { SupportTicket } from '@/services/supportService';
 
 interface AdminAlertContextType {
   pendingVerifications: number;
   pendingTickets: number;
+  pendingReports: number;
 }
 
 const AdminAlertContext = createContext<AdminAlertContextType>({
   pendingVerifications: 0,
   pendingTickets: 0,
+  pendingReports: 0,
 });
 
 export const useAdminAlert = () => useContext(AdminAlertContext);
 
-// S94-B — contador de pendencias pras abas Verificacoes/Chamados do admin.
-// GUARDA OBRIGATORIA: firestore.rules só libera list()/onSnapshot em
-// verifications e support pra quem bate com isAdmin() (uid == ADMIN_UID) —
-// mesma checagem de getPendingVerifications em verificationService.ts.
-// Montar estes listeners pra um usuário comum dispararia permission-denied
-// em série a cada snapshot, então sem usuário logado OU com
-// user.uid !== ADMIN_UID nenhum onSnapshot é montado: o Provider devolve
-// 0/0 direto.
+// S94-B (+ S96-B: reports) — contador de pendencias pras abas
+// Verificacoes/Chamados/Denuncias do admin. GUARDA OBRIGATORIA:
+// firestore.rules só libera list()/onSnapshot em verifications, support e
+// reports pra quem bate com isAdmin() (uid == ADMIN_UID) — mesma checagem de
+// getPendingVerifications em verificationService.ts. Montar estes listeners
+// pra um usuário comum dispararia permission-denied em série a cada
+// snapshot, então sem usuário logado OU com user.uid !== ADMIN_UID nenhum
+// onSnapshot é montado: o Provider devolve 0/0/0 direto.
 export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const isAdmin = user?.uid === ADMIN_UID;
   const [pendingVerifications, setPendingVerifications] = useState(0);
   const [pendingTickets, setPendingTickets] = useState(0);
+  const [pendingReports, setPendingReports] = useState(0);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -70,8 +74,30 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return unsub;
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingReports(0);
+      return;
+    }
+    // SEM where de status: ao contrário de verifications/support, `reports`
+    // tem doc legado sem o campo `status` (client antigo do reportUser, S96-A)
+    // — um where('status','==','open') simplesmente ignora doc sem o campo,
+    // deixando denúncia legada de fora da contagem. Mesmo raciocínio de
+    // listenReports (reportService.ts): sem where nenhum, filtra tudo
+    // client-side. Volume baixo (painel admin), mesmo trade-off já aceito lá.
+    const unsub = onSnapshot(collection(db, 'reports'), (snap) => {
+      const pending = snap.docs.filter((d) => {
+        const { status, lastSenderId } = d.data() as Report;
+        const isPending = status === undefined || status === 'open';
+        return isPending && lastSenderId !== ADMIN_UID;
+      });
+      setPendingReports(pending.length);
+    });
+    return unsub;
+  }, [isAdmin]);
+
   return (
-    <AdminAlertContext.Provider value={{ pendingVerifications, pendingTickets }}>
+    <AdminAlertContext.Provider value={{ pendingVerifications, pendingTickets, pendingReports }}>
       {children}
     </AdminAlertContext.Provider>
   );

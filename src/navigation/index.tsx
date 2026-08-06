@@ -22,6 +22,8 @@ import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
+import AdminReportDetailScreen from '@/screens/AdminReportDetailScreen';
+import AdminReportsScreen from '@/screens/AdminReportsScreen';
 import AdminSupportDetailScreen from '@/screens/AdminSupportDetailScreen';
 import AdminSupportScreen from '@/screens/AdminSupportScreen';
 import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScreen';
@@ -50,7 +52,16 @@ export type RootStackParamList = {
   Register: undefined;
   Main:
     | undefined
-    | { screen: 'Descobrir' | 'Curtidas' | 'Conversas' | 'Perfil' | 'Verificacoes' | 'Chamados' };
+    | {
+        screen:
+          | 'Descobrir'
+          | 'Curtidas'
+          | 'Conversas'
+          | 'Perfil'
+          | 'Verificacoes'
+          | 'Chamados'
+          | 'Denuncias';
+      };
   Chat: {
     matchId: string;
     otherUid: string;
@@ -78,6 +89,7 @@ export type RootStackParamList = {
   Verification: undefined;
   AdminVerificationDetail: { uid: string };
   AdminSupportDetail: { ticketId: string };
+  AdminReportDetail: { reportId: string };
   Profile: undefined;
 };
 
@@ -102,6 +114,8 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
   // geraria "briefcase-outline-outline", que não existe no set do Ionicons.
   Verificacoes: { label: 'Verificações', icon: 'briefcase' },
   Chamados: { label: 'Chamados', icon: 'chatbox-ellipses' },
+  // S96-B — 4ª aba do admin, denúncias entre usuários (S96-A criou os dados).
+  Denuncias: { label: 'Denúncias', icon: 'flag' },
 };
 
 function MainTabs() {
@@ -119,7 +133,7 @@ function MainTabs() {
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.
-  const { pendingVerifications, pendingTickets } = useAdminAlert();
+  const { pendingVerifications, pendingTickets, pendingReports } = useAdminAlert();
 
   // S95 — aba Perfil é idêntica nos dois papéis (mesmo badge de
   // verificação/suporte, nada ligado a unreadCount de Conversas), então o
@@ -192,6 +206,16 @@ function MainTabs() {
             {() => (
               <ErrorBoundary>
                 <AdminSupportScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen
+            name="Denuncias"
+            options={{ tabBarBadge: pendingReports > 0 ? pendingReports : undefined }}
+          >
+            {() => (
+              <ErrorBoundary>
+                <AdminReportsScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>
@@ -331,6 +355,7 @@ export default function Navigation() {
                   component={AdminVerificationDetailScreen}
                 />
                 <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
+                <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
               </>
             )}
           </Stack.Group>
