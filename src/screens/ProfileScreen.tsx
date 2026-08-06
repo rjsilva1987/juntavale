@@ -506,13 +506,15 @@ export default function ProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Meu Perfil</Text>
-          <AnimatedPressable onPress={() => setEditing(!editing)}>
-            <Ionicons
-              name={editing ? 'close' : 'create-outline'}
-              size={24}
-              color={theme.colors.primary}
-            />
-          </AnimatedPressable>
+          {!isAdmin && (
+            <AnimatedPressable onPress={() => setEditing(!editing)}>
+              <Ionicons
+                name={editing ? 'close' : 'create-outline'}
+                size={24}
+                color={theme.colors.primary}
+              />
+            </AnimatedPressable>
+          )}
         </View>
 
         {/* Avatar — só exibe a principal (photos[0]/photoURL); edição de
@@ -582,7 +584,7 @@ export default function ProfileScreen() {
 
         {/* Photos — grade 2x2: única superfície de edição (adicionar, definir
             principal, remover). photos[0] é sempre a principal. */}
-        {!editing && (
+        {!editing && !isAdmin && (
           <View style={styles.photosGrid}>
             {Array.from({ length: MAX_PROFILE_PHOTOS }).map((_, index) => {
               const url = photos[index];
@@ -644,171 +646,178 @@ export default function ProfileScreen() {
         )}
 
         {/* Edit form */}
-        {editing ? (
-          <View style={styles.card}>
-            <Field
-              label="Nome"
-              value={name}
-              onChange={setName}
-              maxLength={MAX_NAME_LENGTH}
-              locked={!!profile?.verified}
-              lockedHint={
-                profile?.verified
-                  ? 'Não é possível alterar o nome depois que o perfil é verificado. Precisa corrigir? Fale com o suporte.'
-                  : undefined
-              }
-            />
-            <Field
-              label="Idade"
-              value={displayAge != null ? String(displayAge) : ''}
-              locked
-              lockedHint="A idade é calculada a partir da sua data de nascimento."
-            />
-            <Field label="Bio" value={bio} onChange={setBio} multiline maxLength={MAX_BIO_LENGTH} />
-
-            <Text style={styles.fieldLabel}>Gênero</Text>
-            <View style={styles.genderRow}>
-              {GENDER_OPTIONS.map((option) => {
-                const active = gender === option.value;
-                return (
-                  <AnimatedPressable
-                    key={option.value}
-                    style={[styles.genderOption, active && styles.genderOptionActive]}
-                    onPress={() => setGender(option.value)}
-                  >
-                    <Text style={[styles.genderText, active && styles.genderTextActive]}>
-                      {option.label}
-                    </Text>
-                  </AnimatedPressable>
-                );
-              })}
-            </View>
-
-            {!!profile?.vale && (
+        {!isAdmin &&
+          (editing ? (
+            <View style={styles.card}>
               <Field
-                label="Vale"
-                value={VALE_LABELS[profile.vale]}
-                locked
-                lockedHint="O vale é definido no cadastro e não pode ser alterado."
+                label="Nome"
+                value={name}
+                onChange={setName}
+                maxLength={MAX_NAME_LENGTH}
+                locked={!!profile?.verified}
+                lockedHint={
+                  profile?.verified
+                    ? 'Não é possível alterar o nome depois que o perfil é verificado. Precisa corrigir? Fale com o suporte.'
+                    : undefined
+                }
               />
-            )}
+              <Field
+                label="Idade"
+                value={displayAge != null ? String(displayAge) : ''}
+                locked
+                lockedHint="A idade é calculada a partir da sua data de nascimento."
+              />
+              <Field
+                label="Bio"
+                value={bio}
+                onChange={setBio}
+                multiline
+                maxLength={MAX_BIO_LENGTH}
+              />
 
-            <Text style={styles.fieldLabel}>Estado onde você mora</Text>
-            <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
+              <Text style={styles.fieldLabel}>Gênero</Text>
+              <View style={styles.genderRow}>
+                {GENDER_OPTIONS.map((option) => {
+                  const active = gender === option.value;
+                  return (
+                    <AnimatedPressable
+                      key={option.value}
+                      style={[styles.genderOption, active && styles.genderOptionActive]}
+                      onPress={() => setGender(option.value)}
+                    >
+                      <Text style={[styles.genderText, active && styles.genderTextActive]}>
+                        {option.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
 
-            <Text style={styles.fieldLabel}>O que você busca?</Text>
-            <View style={styles.lookingForGrid}>
-              {LOOKING_FOR_OPTIONS.map((option) => {
-                const active = lookingFor === option.value;
-                return (
-                  <AnimatedPressable
-                    key={option.value}
-                    style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
-                    onPress={() => setLookingFor(option.value)}
-                  >
-                    <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
-                      {option.label}
-                    </Text>
-                  </AnimatedPressable>
-                );
-              })}
-            </View>
-
-            <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
-            <View style={styles.tags}>
-              {INTERESTS.map((item) => {
-                const active = interests.includes(item);
-                return (
-                  <AnimatedPressable
-                    key={item}
-                    style={[styles.tag, active && styles.tagActive]}
-                    onPress={() => toggleInterest(item)}
-                  >
-                    <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
-                  </AnimatedPressable>
-                );
-              })}
-            </View>
-
-            <TagEditor
-              label="Meus lugares"
-              values={places}
-              maxItems={MAX_PLACES}
-              maxLength={MAX_PLACE_LENGTH}
-              placeholder="Ex: Praia do Forte"
-              onAdd={(value) => setPlaces((prev) => [...prev, value])}
-              onRemove={(value) => setPlaces((prev) => prev.filter((p) => p !== value))}
-            />
-
-            <TagEditor
-              label="No meu radar"
-              values={events}
-              maxItems={MAX_EVENTS}
-              maxLength={MAX_EVENT_LENGTH}
-              placeholder="Ex: Show do Jorge & Mateus"
-              onAdd={(value) => setEvents((prev) => [...prev, value])}
-              onRemove={(value) => setEvents((prev) => prev.filter((e) => e !== value))}
-            />
-
-            <AnimatedPressable
-              style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={saving || !gender}
-            >
-              {saving ? (
-                <ActivityIndicator color={theme.colors.onSecondary} />
-              ) : (
-                <Text style={styles.saveBtnText}>Salvar alterações</Text>
+              {!!profile?.vale && (
+                <Field
+                  label="Vale"
+                  value={VALE_LABELS[profile.vale]}
+                  locked
+                  lockedHint="O vale é definido no cadastro e não pode ser alterado."
+                />
               )}
-            </AnimatedPressable>
-          </View>
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Sobre mim</Text>
-            <Text style={styles.bioText}>
-              {profile?.bio || 'Nenhuma bio ainda. Toque em editar!'}
-            </Text>
 
-            {(profile?.interests?.length ?? 0) > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Interesses</Text>
-                <View style={styles.tags}>
-                  {profile?.interests?.map((item) => (
-                    <View key={item} style={styles.tagActive}>
-                      <Text style={styles.tagTextActive}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
+              <Text style={styles.fieldLabel}>Estado onde você mora</Text>
+              <UfPicker value={uf ?? null} onChange={(item) => setUf(item as UF)} />
 
-            {(profile?.places?.length ?? 0) > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Meus lugares</Text>
-                <View style={styles.tags}>
-                  {profile?.places?.map((item) => (
-                    <View key={item} style={styles.tagActive}>
-                      <Text style={styles.tagTextActive}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
+              <Text style={styles.fieldLabel}>O que você busca?</Text>
+              <View style={styles.lookingForGrid}>
+                {LOOKING_FOR_OPTIONS.map((option) => {
+                  const active = lookingFor === option.value;
+                  return (
+                    <AnimatedPressable
+                      key={option.value}
+                      style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
+                      onPress={() => setLookingFor(option.value)}
+                    >
+                      <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
+                        {option.label}
+                      </Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
 
-            {(profile?.events?.length ?? 0) > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>No meu radar</Text>
-                <View style={styles.tags}>
-                  {profile?.events?.map((item) => (
-                    <View key={item} style={styles.tagActive}>
-                      <Text style={styles.tagTextActive}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-          </View>
-        )}
+              <Text style={styles.fieldLabel}>Interesses (máx. 5)</Text>
+              <View style={styles.tags}>
+                {INTERESTS.map((item) => {
+                  const active = interests.includes(item);
+                  return (
+                    <AnimatedPressable
+                      key={item}
+                      style={[styles.tag, active && styles.tagActive]}
+                      onPress={() => toggleInterest(item)}
+                    >
+                      <Text style={[styles.tagText, active && styles.tagTextActive]}>{item}</Text>
+                    </AnimatedPressable>
+                  );
+                })}
+              </View>
+
+              <TagEditor
+                label="Meus lugares"
+                values={places}
+                maxItems={MAX_PLACES}
+                maxLength={MAX_PLACE_LENGTH}
+                placeholder="Ex: Praia do Forte"
+                onAdd={(value) => setPlaces((prev) => [...prev, value])}
+                onRemove={(value) => setPlaces((prev) => prev.filter((p) => p !== value))}
+              />
+
+              <TagEditor
+                label="No meu radar"
+                values={events}
+                maxItems={MAX_EVENTS}
+                maxLength={MAX_EVENT_LENGTH}
+                placeholder="Ex: Show do Jorge & Mateus"
+                onAdd={(value) => setEvents((prev) => [...prev, value])}
+                onRemove={(value) => setEvents((prev) => prev.filter((e) => e !== value))}
+              />
+
+              <AnimatedPressable
+                style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={saving || !gender}
+              >
+                {saving ? (
+                  <ActivityIndicator color={theme.colors.onSecondary} />
+                ) : (
+                  <Text style={styles.saveBtnText}>Salvar alterações</Text>
+                )}
+              </AnimatedPressable>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Sobre mim</Text>
+              <Text style={styles.bioText}>
+                {profile?.bio || 'Nenhuma bio ainda. Toque em editar!'}
+              </Text>
+
+              {(profile?.interests?.length ?? 0) > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Interesses</Text>
+                  <View style={styles.tags}>
+                    {profile?.interests?.map((item) => (
+                      <View key={item} style={styles.tagActive}>
+                        <Text style={styles.tagTextActive}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {(profile?.places?.length ?? 0) > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Meus lugares</Text>
+                  <View style={styles.tags}>
+                    {profile?.places?.map((item) => (
+                      <View key={item} style={styles.tagActive}>
+                        <Text style={styles.tagTextActive}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {(profile?.events?.length ?? 0) > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: 16 }]}>No meu radar</Text>
+                  <View style={styles.tags}>
+                    {profile?.events?.map((item) => (
+                      <View key={item} style={styles.tagActive}>
+                        <Text style={styles.tagTextActive}>{item}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+          ))}
 
         {/* Prompt da semana (S59) — rotação automática por data, destacada no
             topo da área de prompts. Resposta grava no campo próprio
@@ -817,7 +826,7 @@ export default function ProfileScreen() {
             anterior, não acumula. Por isso este card nunca aparece de novo
             na lista "Perguntas" abaixo — as duas seções leem campos
             diferentes do perfil. */}
-        {!editing && (
+        {!editing && !isAdmin && (
           <View style={[styles.card, styles.weeklyPromptCard]}>
             <View style={styles.weeklyPromptHeader}>
               <Ionicons name="calendar-outline" size={14} color={theme.colors.onSecondary} />
@@ -863,7 +872,7 @@ export default function ProfileScreen() {
         {/* Prompts (S33) — edição via modais próprios, independente do form
             de nome/idade/bio/gênero/interesses acima (mesmo padrão da grade
             de fotos: só visível fora do modo de edição). */}
-        {!editing && (
+        {!editing && !isAdmin && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Perguntas</Text>
             <Text style={styles.promptsSubtitle}>Escolha até 4 perguntas para o seu perfil</Text>
@@ -895,29 +904,33 @@ export default function ProfileScreen() {
             existe no grupo "app" independente de `verified`, então navega
             sempre, mesmo já verificado (a própria tela mostra o estado
             "Perfil verificado!" nesse caso). */}
-        <AnimatedPressable
-          style={styles.blockedUsersBtn}
-          onPress={() => navigation.navigate('Verification')}
-        >
-          <Ionicons
-            name={profile?.verified ? 'shield-checkmark' : 'shield-checkmark-outline'}
-            size={20}
-            color={theme.colors.textSecondary}
-          />
-          <Text style={styles.blockedUsersText}>
-            {profile?.verified ? 'Perfil verificado' : 'Verificar perfil'}
-          </Text>
-          {showVerificationAlert && <View style={styles.verificationAlertDot} />}
-        </AnimatedPressable>
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('Verification')}
+          >
+            <Ionicons
+              name={profile?.verified ? 'shield-checkmark' : 'shield-checkmark-outline'}
+              size={20}
+              color={theme.colors.textSecondary}
+            />
+            <Text style={styles.blockedUsersText}>
+              {profile?.verified ? 'Perfil verificado' : 'Verificar perfil'}
+            </Text>
+            {showVerificationAlert && <View style={styles.verificationAlertDot} />}
+          </AnimatedPressable>
+        )}
 
         {/* Usuários bloqueados */}
-        <AnimatedPressable
-          style={styles.blockedUsersBtn}
-          onPress={() => navigation.navigate('BlockedUsers')}
-        >
-          <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
-          <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
-        </AnimatedPressable>
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('BlockedUsers')}
+          >
+            <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
+          </AnimatedPressable>
+        )}
 
         {/* Lembretes e sugestões (S44c) — opt-OUT do re-engajamento por push
             (S44b, ainda não existe). Campo salvo é opt-OUT, mas o Switch
@@ -944,25 +957,29 @@ export default function ProfileScreen() {
         </View>
 
         {/* Ajuda / Fale Conosco (S36) */}
-        <AnimatedPressable
-          style={styles.blockedUsersBtn}
-          onPress={() => navigation.navigate('Support')}
-        >
-          <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
-          <Text style={styles.blockedUsersText}>Ajuda</Text>
-        </AnimatedPressable>
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('Support')}
+          >
+            <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Ajuda</Text>
+          </AnimatedPressable>
+        )}
 
         {/* S84-B — "Meus chamados" promovido a linha de acao do Perfil (antes
             so existia como link discreto dentro da tela Ajuda). O ponto de
             aviso reusa verificationAlertDot e acende com showSupportAlert. */}
-        <AnimatedPressable
-          style={styles.blockedUsersBtn}
-          onPress={() => navigation.navigate('MyTickets')}
-        >
-          <Ionicons name="chatbubbles-outline" size={20} color={theme.colors.textSecondary} />
-          <Text style={styles.blockedUsersText}>Meus chamados</Text>
-          {showSupportAlert && <View style={styles.verificationAlertDot} />}
-        </AnimatedPressable>
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('MyTickets')}
+          >
+            <Ionicons name="chatbubbles-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Meus chamados</Text>
+            {showSupportAlert && <View style={styles.verificationAlertDot} />}
+          </AnimatedPressable>
+        )}
 
         {/* S95 — Painel Admin removido: Verificações/Suporte viraram abas
             próprias do admin (ver navigation/index.tsx MainTabs), os botões
@@ -978,12 +995,14 @@ export default function ProfileScreen() {
             discreta (sem borda/card, fonte menor) e separada do botão de
             logout: é uma ação destrutiva e irreversível, não deve competir
             visualmente com "Sair da conta". */}
-        <AnimatedPressable
-          style={styles.deleteAccountBtn}
-          onPress={() => setDeleteModalVisible(true)}
-        >
-          <Text style={styles.deleteAccountText}>Excluir minha conta</Text>
-        </AnimatedPressable>
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.deleteAccountBtn}
+            onPress={() => setDeleteModalVisible(true)}
+          >
+            <Text style={styles.deleteAccountText}>Excluir minha conta</Text>
+          </AnimatedPressable>
+        )}
       </ScrollView>
 
       <DeleteAccountModal
