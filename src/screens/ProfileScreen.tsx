@@ -136,6 +136,7 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
+  const [pausedSaving, setPausedSaving] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // Prompts (S33) — editados via modais próprios, fora do form de
@@ -329,6 +330,26 @@ export default function ProfileScreen() {
       Alert.alert('Erro', 'Não foi possível salvar essa preferência.');
     } finally {
       setReengagementSaving(false);
+    }
+  };
+
+  // S97 — "Pausar meu perfil". Diferente do Switch de Lembretes acima, aqui
+  // o valor do Switch É o próprio campo (paused), sem opt-out invertido —
+  // ligado = pausado. Mesmo padrão de "aguardar o write": value sempre vem
+  // de profile?.paused, nunca otimista. paused é filtro de VISIBILIDADE no
+  // client (getDiscoverProfiles/useLikers/useMyLikes) — não impede leitura
+  // do doc por quem já tem acesso a ele (matches/conversas existentes
+  // continuam, de propósito — ver useActiveMatches, intocado nesta sprint).
+  const handleTogglePaused = async (value: boolean) => {
+    if (!user) return;
+    setPausedSaving(true);
+    try {
+      await updateUserProfile(user.uid, { paused: value });
+      await refreshProfile();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar essa preferência.');
+    } finally {
+      setPausedSaving(false);
     }
   };
 
@@ -932,6 +953,33 @@ export default function ProfileScreen() {
             <Ionicons name="ban-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={styles.blockedUsersText}>Usuários bloqueados</Text>
           </AnimatedPressable>
+        )}
+
+        {/* Pausar meu perfil (S97) — modo invisível. Diferente do Switch de
+            Lembretes logo abaixo, este fica DENTRO da guarda !isAdmin: a
+            conta admin não tem perfil "descoberto" por ninguém (já some do
+            Descobrir via ADMIN_UID em getDiscoverProfiles), então pausar
+            não faz sentido pra ela. */}
+        {!isAdmin && (
+          <View style={styles.reengagementCard}>
+            <View style={styles.reengagementLabelRow}>
+              <Ionicons name="eye-off-outline" size={20} color={theme.colors.primary} />
+              <View style={styles.reengagementTexts}>
+                <Text style={styles.reengagementLabel}>Pausar meu perfil</Text>
+                <Text style={styles.reengagementSubtitle}>
+                  Some do Descobrir e das curtidas de todo mundo; conversas continuam
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={profile?.paused ?? false}
+              onValueChange={handleTogglePaused}
+              disabled={pausedSaving}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+              thumbColor={theme.colors.white}
+              ios_backgroundColor={theme.colors.border}
+            />
+          </View>
         )}
 
         {/* Lembretes e sugestões (S44c) — opt-OUT do re-engajamento por push

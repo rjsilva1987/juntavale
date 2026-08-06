@@ -123,6 +123,13 @@ export interface UserProfile {
   // S48 — "No meu radar", texto livre, até 3 tags. Mesmo padrão de places
   // acima (opcional, sem migração, só editável no ProfileScreen).
   events?: string[];
+  // S97 — "pausar perfil"/modo invisível. Ausente ou false = visível
+  // (default, nenhum dos docs existentes tem o campo); true = some do
+  // Descobrir e das curtidas (getDiscoverProfiles/useLikers/useMyLikes),
+  // mas matches e conversas continuam normalmente (useActiveMatches não
+  // filtra por isto). Filtro de VISIBILIDADE no client, não fronteira de
+  // leitura — ver firestore.rules.
+  paused?: boolean;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
@@ -379,6 +386,11 @@ export const getDiscoverProfiles = async (
   usersSnap.forEach((d) => {
     if (swipedIds.includes(d.id)) return;
     const candidate = d.data() as UserProfile;
+
+    // S97 — perfil pausado nunca aparece no Descobrir. Mesmo molde dos
+    // filtros em memória abaixo (não o do ADMIN_UID via swipedIds, que é
+    // por uid fixo) — roda incondicionalmente, mesmo sem `filters`.
+    if (candidate.paused) return;
 
     if (filters) {
       // S76-B2 — idade derivada, não o campo gravado: o filtro roda em

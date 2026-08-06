@@ -1,4 +1,12 @@
-// rules-stamp: S96-A (reports/{reportId} deixa de ser só de ida: allow read
+// rules-stamp: S97 (users/{userId} update ganha campo paused, bool opcional
+// — "pausar perfil"/modo invisível: entra no diff().affectedKeys().hasOnly()
+// ao lado de reengagementOptOut; isValidProfile valida SÓ quando presente
+// (data.paused is bool); NÃO entra no hasOnly do create — conta nova nasce
+// sem o campo, ou seja, despausada por default; é filtro de VISIBILIDADE no
+// client (getDiscoverProfiles/useLikers/useMyLikes), não fronteira de
+// leitura — rules não ganham guarda nova, o doc continua lido por qualquer
+// isSignedIn() como hoje, senão quebraria matches/conversas existentes) +
+// S96-A (reports/{reportId} deixa de ser só de ida: allow read
 // isAdmin()||reporterId==auth.uid (denunciado nunca lê); create aceita
 // status ausente — compat com build antigo do reportUser em campo, que
 // ainda não manda o campo — ou 'open', nunca já 'resolved'; allow update
@@ -47,7 +55,7 @@
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
-// firestore.rules
+// firestore.rules — última alteração: S97 (2026-08-06)
 // Regras de PRODUÇÃO — deny by default: toda collection sem regra explícita é bloqueada
 // (ver o "catch-all" no final do arquivo).
 //
@@ -236,7 +244,12 @@ service cloud.firestore {
         // tipo da lista e teto de tamanho, igual `interests` continua sendo
         // hoje — ver achado da sprint) — ver isValidPlaces/isValidEvents.
         && (!('places' in data) || isValidPlaces(data.places))
-        && (!('events' in data) || isValidEvents(data.events));
+        && (!('events' in data) || isValidEvents(data.events))
+        // S97 — paused (pausar perfil/modo invisível): só quando presente,
+        // precisa ser bool. Filtro de VISIBILIDADE no client
+        // (getDiscoverProfiles/useLikers/useMyLikes) — não é fronteira de
+        // leitura, o doc segue lido por qualquer isSignedIn() como hoje.
+        && (!('paused' in data) || data.paused is bool);
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -372,7 +385,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
-              'reengagementOptOut', 'places', 'events', 'weeklyPromptAnswer'])
+              'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.

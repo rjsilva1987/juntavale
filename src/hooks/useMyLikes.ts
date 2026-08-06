@@ -95,9 +95,14 @@ export function useMyLikes(): UseMyLikesReturn {
 
       // Sentido "ele me bloqueou" — checado direto no blockedUsers do perfil
       // do outro (já carregado acima), sem depender de propagação pro meu lado.
+      // S97 — perfil pausado some das curtidas já existentes: mesmo filtro
+      // de bloqueio, checado no doc atual (getUserProfile acima), não numa
+      // cópia congelada do momento do like.
       const valid = withProfiles.filter(
         (entry): entry is MyLike =>
-          entry.profile !== null && !entry.profile.blockedUsers?.includes(user.uid),
+          entry.profile !== null &&
+          !entry.profile.blockedUsers?.includes(user.uid) &&
+          !entry.profile.paused,
       );
       // Super-likes primeiro; sort é estável (ES2019+), então a ordem por
       // recência dentro de cada grupo (já aplicada acima) se mantém.

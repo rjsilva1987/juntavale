@@ -145,7 +145,7 @@ function LikeCard({
 
 export default function LikesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [tab, setTab] = useState<Tab>('received');
   const { likers, loading: loadingReceived, reload: reloadReceived } = useLikers();
   const { profiles: myLikes, loading: loadingSent, reload: reloadSent } = useMyLikes();
@@ -218,6 +218,27 @@ export default function LikesScreen() {
       ...(note ? { note } : {}),
     });
   };
+
+  // S97 — enquanto o PRÓPRIO perfil está pausado, nenhuma das duas abas
+  // mostra suas listas normais (mesmo que ainda tivessem itens carregados
+  // em memória de antes de pausar) — estado dedicado em vez de lista vazia,
+  // que pareceria bug. Cobre as duas abas juntas, não uma checagem por aba.
+  if (profile?.paused) {
+    return (
+      <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Curtidas</Text>
+        </View>
+        <EmptyState
+          icon="eye-off-outline"
+          title="Seu perfil está pausado"
+          subtitle="Enquanto pausado, você não aparece no Descobrir nem nas curtidas de ninguém. Suas conversas continuam normalmente."
+          buttonLabel="Ir para meu perfil"
+          onButtonPress={() => navigation.navigate('Profile')}
+        />
+      </Animated.View>
+    );
+  }
 
   const loading = tab === 'received' ? loadingReceived : loadingSent;
 

@@ -576,6 +576,32 @@ export default function SwipeScreen() {
     );
   }
 
+  // S97 — perfil pausado não vê ninguém no Descobrir. Estado dedicado, não
+  // reusa o EmptyState de "Sem perfis por perto" (currentIndex >= profiles.length
+  // abaixo): lista vazia por pausa é intencional, não "acabaram os perfis" —
+  // mostrar o mesmo texto pareceria bug e não daria caminho pra despausar.
+  if (profile?.paused) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.logoRow}>
+            <Ionicons name="flame" size={26} color={theme.colors.secondary} />
+            <Text style={styles.appTitle}>JuntaVale</Text>
+          </View>
+        </View>
+        <View style={styles.cardArea}>
+          <EmptyState
+            icon="eye-off-outline"
+            title="Seu perfil está pausado"
+            subtitle="Enquanto pausado, você não aparece no Descobrir nem nas curtidas de ninguém. Suas conversas continuam normalmente."
+            buttonLabel="Ir para meu perfil"
+            onButtonPress={() => navigation.navigate('Profile')}
+          />
+        </View>
+      </View>
+    );
+  }
+
   const currentProfile = profiles[currentIndex];
 
   return (
