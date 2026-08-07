@@ -37,6 +37,7 @@ import { ProfileSheet } from '@/components/ProfileSheet';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { SuperLikeNoteModal } from '@/components/SuperLikeNoteModal';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { LOOKING_FOR_EMOJI, LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { VALE_LABELS } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
@@ -879,6 +880,17 @@ function ProfileCard({
             </TouchableOpacity>
           )}
         </View>
+        {/* S107 — logo abaixo do nameRow, mesmo padrão de pill escuro do
+            photoCountBadge acima (rgba(0,0,0,0.55), full radius). Perfil
+            legado sem lookingFor não renderiza nada aqui, mesmo padrão do
+            vale abaixo. */}
+        {profile.lookingFor && (
+          <View style={pcStyles.lookingForBadge} pointerEvents="none">
+            <Text style={pcStyles.lookingForBadgeText}>
+              {LOOKING_FOR_EMOJI[profile.lookingFor]} {LOOKING_FOR_LABELS[profile.lookingFor]}
+            </Text>
+          </View>
+        )}
         {/* S83-B — abaixo do nome, acima da UF. Perfil SEM vale não
             renderiza nada aqui (nem rótulo vazio, nem "não informado", nem
             espaço reservado) — durante a migração manual, vários perfis vão
@@ -1123,6 +1135,19 @@ const pcStyles = StyleSheet.create({
     paddingVertical: 3,
   },
   photoCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.white,
+  },
+  lookingForBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+  },
+  lookingForBadgeText: {
     fontSize: 12,
     fontWeight: '600',
     color: theme.colors.white,

@@ -18,3 +18,11 @@ export const LOOKING_FOR_LABELS: Record<LookingFor, string> = LOOKING_FOR_OPTION
   (acc, option) => ({ ...acc, [option.value]: option.label }),
   {} as Record<LookingFor, string>,
 );
+
+// S107 — emoji por intenção, usado no card do Descobrir junto do rótulo.
+export const LOOKING_FOR_EMOJI: Record<LookingFor, string> = {
+  relacionamento_serio: '💍',
+  casual: '🥂',
+  amizade: '🤝',
+  descobrindo: '👀',
+};
