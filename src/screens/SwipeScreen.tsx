@@ -29,7 +29,6 @@ import Animated, {
 import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
 import { FounderBadge } from '@/components/FounderBadge';
-import { InterestChips } from '@/components/InterestChips';
 import { MatchModal } from '@/components/MatchModal';
 import { PendingVerificationChip } from '@/components/PendingVerificationChip';
 import { PhotoCarousel, type PhotoCarouselHandle } from '@/components/PhotoCarousel';
@@ -57,7 +56,6 @@ import {
 } from '@/services/firestoreService';
 import { getVerificationStatus } from '@/services/verificationService';
 import { getDisplayAge } from '@/utils/birthDate';
-import { getSharedInterestSet } from '@/utils/interests';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -636,7 +634,6 @@ export default function SwipeScreen() {
                 <ProfileCard
                   key={profiles[currentIndex + 1].uid}
                   profile={profiles[currentIndex + 1]}
-                  myInterests={myInterests}
                 />
               </View>
             )}
@@ -647,7 +644,6 @@ export default function SwipeScreen() {
                 <ProfileCard
                   key={currentProfile.uid}
                   profile={currentProfile}
-                  myInterests={myInterests}
                   pagerNativeGesture={pagerNativeGesture}
                   tapGesture={tapGesture}
                   carouselRef={carouselRef}
@@ -804,7 +800,6 @@ export default function SwipeScreen() {
 // ─── ProfileCard ──────────────────────────────────────────
 interface ProfileCardProps {
   profile: UserProfile;
-  myInterests?: string[];
   pagerNativeGesture?: ReturnType<typeof Gesture.Native>;
   tapGesture?: ReturnType<typeof Gesture.Tap>;
   carouselRef?: React.RefObject<PhotoCarouselHandle | null>;
@@ -814,7 +809,6 @@ interface ProfileCardProps {
 
 function ProfileCard({
   profile,
-  myInterests,
   pagerNativeGesture,
   tapGesture,
   carouselRef,
@@ -834,10 +828,6 @@ function ProfileCard({
   const carousel = (
     <PhotoCarousel ref={carouselRef} photos={photos} onIndexChange={handleIndexChange} />
   );
-  // Lista de interesses é pequena — calcular o conjunto compartilhado por
-  // card a cada render é mais barato que memoizar por perfil.
-  const sharedInterests = getSharedInterestSet(myInterests, profile.interests);
-  const chipsMaxVisible = 6;
   // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
   const displayAge = getDisplayAge(profile);
 
@@ -902,21 +892,6 @@ function ProfileCard({
           <View style={pcStyles.ufRow} pointerEvents="none">
             <Ionicons name="location-outline" size={14} color={theme.colors.white} />
             <Text style={pcStyles.ufText}>{profile.uf}</Text>
-          </View>
-        )}
-        {!!profile.interests?.length && (
-          // pointerEvents="none" pra não interceptar as tap zones do
-          // PhotoCarousel nem o gesto de swipe do card.
-          <View pointerEvents="none">
-            <View style={pcStyles.interestsLabelRow}>
-              <Ionicons name="pricetags" size={14} color={theme.colors.white} />
-              <Text style={pcStyles.interestsLabel}>Interesses</Text>
-            </View>
-            <InterestChips
-              interests={profile.interests}
-              sharedSet={sharedInterests}
-              maxVisible={chipsMaxVisible}
-            />
           </View>
         )}
       </View>
@@ -1160,6 +1135,4 @@ const pcStyles = StyleSheet.create({
   },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
   ufText: { fontSize: theme.fontSize.xs, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
-  interestsLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
-  interestsLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.white },
 });
