@@ -13,6 +13,7 @@ import Animated, {
 
 import { ProfileSections } from '@/components/ProfileSections';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
+import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
@@ -119,6 +120,19 @@ export function ProfileSheet({
         </View>
       </View>
 
+      {/* S108-A — badge de intenção (lookingFor) no header FIXO, não dentro
+          do ScrollView: é informação de identidade, tem que continuar
+          visível com o conteúdo rolado. Mesmo estilo já copiado em
+          MatchProfileScreen.tsx e ProfileScreen.tsx — terceira cópia do
+          mesmo objeto, sem extrair componente compartilhado nesta sprint. */}
+      {profile?.lookingFor && (
+        <View style={styles.lookingForRow}>
+          <View style={styles.lookingForBadge}>
+            <Text style={styles.lookingForBadgeText}>{LOOKING_FOR_LABELS[profile.lookingFor]}</Text>
+          </View>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={styles.content}>
         <ProfileSections
           profile={profile}
@@ -183,6 +197,25 @@ const styles = StyleSheet.create({
   replyQuotaText: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textSecondary,
+  },
+  // S108-A — mesmo objeto de MatchProfileScreen.tsx:451-462 /
+  // ProfileScreen.tsx:1530-1541 (primaryLight de fundo, texto primary 700).
+  lookingForRow: {
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+  },
+  lookingForBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  lookingForBadgeText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
   content: {
     paddingHorizontal: theme.spacing.md,

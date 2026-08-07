@@ -338,3 +338,26 @@ export function formatAboutFieldValue(
   }
   return undefined;
 }
+
+// S108-A — variante de exibição em ARRAY: 1 rótulo pra `number`/`single`, N
+// rótulos (na ordem do catálogo) pra `multi`, `[]` quando não há valor —
+// pra telas que renderizam uma chip por valor em vez de uma string única
+// junta por vírgula (ver ProfileSections). NÃO substitui
+// `formatAboutFieldValue` acima — a tela de EDIÇÃO (ProfileScreen/AboutRow)
+// continua dependendo dele devolver string única; este helper vive ao lado,
+// mesma lógica por tipo de campo.
+export function formatAboutFieldLabels(
+  field: AboutFieldDef,
+  value: string | number | string[] | undefined,
+): string[] {
+  if (value === undefined) return [];
+  if (field.type === 'number') return [field.suffix ? `${value} ${field.suffix}` : `${value}`];
+  if (field.type === 'single') {
+    const label = field.options.find((o) => o.value === value)?.label;
+    return label ? [label] : [];
+  }
+  if (field.type === 'multi' && Array.isArray(value)) {
+    return field.options.filter((o) => value.includes(o.value)).map((o) => o.label);
+  }
+  return [];
+}

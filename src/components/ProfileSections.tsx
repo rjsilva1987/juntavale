@@ -4,16 +4,80 @@
 // perfil completo (bio, interesses, lugares, eventos, bilhete, prompts),
 // na mesma ordem e com os mesmos estilos. Refactor puro: nenhum
 // comportamento novo, nada de "Responder" (isso é o S73).
+//
+// S108-A acrescenta os dois grupos do catálogo `about` (ver
+// src/constants/profileAbout.ts) como chip com ícone — NÃO reusa `AboutRow`
+// (chevron + "Adicionar" são gestos de EDIÇÃO; em perfil alheio isso
+// mentiria sobre o que é tocável aqui, que é só leitura).
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { InterestChips } from '@/components/InterestChips';
 import { PromptCard } from '@/components/PromptCard';
+import {
+  ABOUT_FIELDS,
+  ABOUT_GROUP_LABELS,
+  AboutFieldId,
+  AboutGroup,
+  formatAboutFieldLabels,
+} from '@/constants/profileAbout';
 import { REPLY_LIMIT } from '@/constants/reply';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
 import { EMPTY_INTEREST_SET, getSharedInterestSet } from '@/utils/interests';
+
+// S108-A — campos cujas opções são advérbio/adjetivo sem objeto explícito
+// (ex.: "Frequentemente", "Passo longe", "Ainda não sei") — sozinhos ao
+// lado só do ícone, ficam ambíguos. Só estes três mantêm o rótulo do campo
+// na chip (`Rótulo: valor`); os outros 10 campos mostram só ícone + valor
+// (ver relatório da sprint pra a leitura campo a campo). Tipado contra
+// `AboutFieldId` (auditoria da S108-A) — renomear um id no catálogo agora
+// é ERRO DE COMPILAÇÃO aqui, não sumiço silencioso do rótulo.
+const AMBIGUOUS_FIELD_IDS = new Set<AboutFieldId>(['exercise', 'socialMedia', 'family']);
+
+// S108-A — uma seção do catálogo `about` (grupo 'about' ou 'lifestyle'):
+// cabeçalho + uma chip POR VALOR (não uma chip só com os rótulos juntados
+// por vírgula — auditoria pegou que isso estourava a largura em campos
+// `multi`, ex. `languages` com 5 idiomas), só quando sobra ao menos um
+// valor — nunca cabeçalho órfão. NÃO copia o loop de EDIÇÃO da
+// ProfileScreen (que renderiza todo campo incondicionalmente, com
+// "Adicionar" pro vazio); aqui cada campo passa por
+// `formatAboutFieldLabels` e é descartado se vier `[]` (about ausente,
+// `{}` ou campo específico não preenchido — os três casos dão o mesmo
+// resultado: nada).
+function AboutGroupSection({ profile, group }: { profile: UserProfile | null; group: AboutGroup }) {
+  const items = ABOUT_FIELDS.filter((field) => field.group === group)
+    .map((field) => ({
+      field,
+      labels: formatAboutFieldLabels(field, profile?.about?.[field.id]),
+    }))
+    .filter((item) => item.labels.length > 0);
+
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>{ABOUT_GROUP_LABELS[group]}</Text>
+      <View style={styles.aboutChipRow}>
+        {items.flatMap(({ field, labels }) =>
+          // S108-A — ícone só na primeira chip do campo (pedido da spec);
+          // as demais (só existem quando `multi` tem 2+ valores, ex.
+          // `languages`) vêm só com o texto.
+          labels.map((label, index) => (
+            <View key={`${field.id}-${index}`} style={styles.aboutChip}>
+              {index === 0 && <Ionicons name={field.icon} size={14} color={theme.colors.text} />}
+              <Text style={styles.aboutChipText} numberOfLines={1}>
+                {AMBIGUOUS_FIELD_IDS.has(field.id) ? `${field.label}: ${label}` : label}
+              </Text>
+            </View>
+          )),
+        )}
+      </View>
+    </>
+  );
+}
 
 interface ProfileSectionsProps {
   profile: UserProfile | null;
@@ -72,6 +136,8 @@ export function ProfileSections({
         </>
       )}
 
+      <AboutGroupSection profile={profile} group="about" />
+
       {(profile?.interests?.length ?? 0) > 0 && (
         <>
           <Text style={styles.sectionTitle}>Interesses</Text>
@@ -107,6 +173,8 @@ export function ProfileSections({
           />
         </>
       )}
+
+      <AboutGroupSection profile={profile} group="lifestyle" />
 
       {/* S67-complemento — bilhete completo da super curtida (sem
           numberOfLines, ao contrário do preview truncado em 3 linhas
@@ -219,5 +287,38 @@ const styles = StyleSheet.create({
   // padrão `dimmed` do S70): reduz opacidade sem desabilitar o toque nativo.
   replyBtnDimmed: {
     opacity: 0.35,
+  },
+  // S108-A — mesmo container (row + wrap + gap) do InterestChips; chip
+  // própria em vez de reusar InterestChips (não aceita ícone, e é usado por
+  // outras telas — não mexer nele aqui), mas com o MESMO vocabulário
+  // "surface": fundo background, borda border, pill full.
+  aboutChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  aboutChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    // S108-A — rede de segurança pra rótulo comprido (ex. "Socialmente, aos
+    // fins de semana"): sem os dois (maxWidth + flexShrink), o
+    // `numberOfLines={1}` do aboutChipText abaixo não tem largura
+    // restringida pra truncar contra — a chip só mediria o texto inteiro e
+    // estouraria (achado da auditoria da S108-A).
+    maxWidth: '100%',
+    flexShrink: 1,
+  },
+  aboutChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flexShrink: 1,
   },
 });
