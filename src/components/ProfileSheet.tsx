@@ -14,7 +14,6 @@ import Animated, {
 import { ProfileSections } from '@/components/ProfileSections';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
-import { REPLY_LIMIT } from '@/constants/reply';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
@@ -35,8 +34,9 @@ export interface ProfileSheetProps {
   sheetHeight: number;
   // S73 — repassado direto pro ProfileSections; ver comentário lá.
   onReply?: (promptId: string) => void;
-  // S74-B — repassado direto pro ProfileSections, e também mostrado aqui no
-  // header fixo ("2 de 3"). undefined em MatchProfileScreen (que não usa
+  // S74-B — repassado direto pro ProfileSections, que é quem mostra o valor
+  // (no rótulo do botão "Responder"); S110-B tirou a exibição duplicada que
+  // havia aqui no header fixo. undefined em MatchProfileScreen (que não usa
   // ProfileSheet).
   replyQuotaRemaining?: number;
 }
@@ -105,19 +105,9 @@ export function ProfileSheet({
           </Text>
           {profile?.verified && <VerifiedBadge size={18} />}
         </View>
-        {/* S74-B — agrupado num wrapper com o chevron pra o header continuar
-            space-between com só 2 filhos (nome à esquerda, este grupo à
-            direita) em vez de virar 3 filhos soltos. */}
-        <View style={styles.headerRightGroup}>
-          {replyQuotaRemaining !== undefined && (
-            <Text style={styles.replyQuotaText}>
-              {replyQuotaRemaining} de {REPLY_LIMIT}
-            </Text>
-          )}
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-down" size={26} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-down" size={26} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       {/* S108-A — badge de intenção (lookingFor) no header FIXO, não dentro
@@ -186,17 +176,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.text,
     flexShrink: 1,
-  },
-  // S74-B — wrapper à direita do header (contador de "Responder" + chevron
-  // de fechar), pra manter o `header` como space-between de 2 filhos.
-  headerRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  replyQuotaText: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.textSecondary,
   },
   // S108-A — mesmo objeto de MatchProfileScreen.tsx:451-462 /
   // ProfileScreen.tsx:1530-1541 (primaryLight de fundo, texto primary 700).
