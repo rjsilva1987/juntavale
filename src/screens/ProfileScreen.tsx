@@ -1130,18 +1130,27 @@ export default function ProfileScreen() {
         onClose={() => setDeleteModalVisible(false)}
       />
 
-      {/* S104/S105 — piloto do perfil estruturado, ver catálogo renderizado
-          acima no form de edição. UM AboutPicker por tipo (number/single),
-          resolvido a partir de openAboutField via getAboutField — abrir um
-          campo novo do catálogo não pede um AboutPicker novo aqui. */}
+      {/* S104/S105/S106 — piloto do perfil estruturado, ver catálogo
+          renderizado acima no form de edição. UM AboutPicker por tipo
+          (number/single/multi), resolvido a partir de openAboutField via
+          getAboutField — abrir um campo novo do catálogo não pede um
+          AboutPicker novo aqui. */}
       {(() => {
         const openField = openAboutField ? getAboutField(openAboutField) : null;
         const numberField = openField?.type === 'number' ? openField : null;
         const singleField = openField?.type === 'single' ? openField : null;
+        const multiField = openField?.type === 'multi' ? openField : null;
         const openValue = openAboutField ? aboutValues[openAboutField] : undefined;
         const handleOpenFieldChange = (value: AboutValues[AboutFieldId]) => {
           if (!openAboutField) return;
-          setAboutValues((prev) => ({ ...prev, [openAboutField]: value }));
+          // S106/Parte C.f — array vazio (a pessoa desmarcou tudo no multi)
+          // vira undefined aqui, nunca `[]`: mergeAboutValues (ver
+          // firestoreService.ts) só remove a chave do mapa gravado quando o
+          // patch traz undefined; `[]` seria gravado do jeito que está e o
+          // `about` acumularia ruído (mesmo achado da auditoria da S104
+          // com `about: {}`).
+          const normalized = Array.isArray(value) && value.length === 0 ? undefined : value;
+          setAboutValues((prev) => ({ ...prev, [openAboutField]: normalized }));
         };
         return (
           <>
@@ -1156,19 +1165,24 @@ export default function ProfileScreen() {
               max={numberField?.max ?? 100}
               suffix={numberField?.suffix}
             />
-            <AboutPicker
+            <AboutPicker<NonNullable<typeof singleField>['options'][number]['value']>
               type="single"
               visible={!!singleField}
               onClose={() => setOpenAboutField(null)}
               title={singleField?.label ?? ''}
               value={typeof openValue === 'string' ? openValue : null}
-              // Seletor genérico entrega `string` (S104: options não são
-              // literal-tipadas por campo, ver AboutPicker.tsx) — o valor
-              // sempre vem de singleField.options, então é seguro alargar
-              // pro tipo específico do campo aberto. Mesmo cast pontual que
-              // já existia aqui pra `sign` sozinho antes da S105.
-              onChange={(value) => handleOpenFieldChange(value as AboutValues[AboutFieldId])}
+              onChange={handleOpenFieldChange}
               options={singleField?.options ?? []}
+            />
+            <AboutPicker<NonNullable<typeof multiField>['options'][number]['value']>
+              type="multi"
+              visible={!!multiField}
+              onClose={() => setOpenAboutField(null)}
+              title={multiField?.label ?? ''}
+              value={Array.isArray(openValue) ? openValue : null}
+              onChange={handleOpenFieldChange}
+              options={multiField?.options ?? []}
+              maxSelected={multiField?.maxSelected}
             />
           </>
         );

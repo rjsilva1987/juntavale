@@ -6,12 +6,26 @@
 // CONTROLADO (visible/onClose) em vez de embutir o próprio trigger, porque
 // quem dispara a abertura é a linha (AboutRow) que já mostra ícone/rótulo/
 // valor/chevron; ter os dois com Pressable próprio duplicaria o toque.
-// Cobre `type: 'number'` (Altura) além de `type: 'single'` — não é lista,
-// é TextInput com faixa min/max e confirmação. NÃO cobre `type: 'multi'`:
-// S104 só tem campos single/number; se a S106 trouxer o primeiro campo
-// multi, este componente precisa crescer (multi-seleção com toggle por
-// item) ou ganhar irmão — decisão de produto em aberto, ver saída da
-// sprint. Não reaproveita nem altera UfPicker.tsx — ao lado, sem tocar.
+// Cobre `type: 'number'` (Altura) e `type: 'single'` (lista, aplica na
+// hora) além de, desde a S106, `type: 'multi'` (lista com toggle por item,
+// rascunho interno, só aplica no botão "Concluir" — mesma ideia do
+// `number`, que também usa rascunho+confirmação em vez de aplicar a cada
+// tecla). Não reaproveita nem altera UfPicker.tsx — ao lado, sem tocar.
+//
+// GENÉRICO em V (S106, Parte D): `single`/`multi` parametrizam value/
+// options/onChange por V extends string em vez de `string` fixo — é isso
+// que deixa o call site em ProfileScreen.tsx dispensar o cast pro union
+// AboutValues[AboutFieldId]. MAS (achado da auditoria S106-B): V não é o
+// tipo do campo especificamente aberto — o call site instancia V a partir
+// de `singleField`/`multiField`, que são a UNIÃO de todos os campos
+// single/multi do catálogo, porque o campo aberto só existe em runtime (o
+// estado guarda um `AboutFieldId`, union amplo, não um literal por
+// abertura). Então o tipo NÃO impede um valor de outro campo single (ex.:
+// 'cachorro', de `pets`) chegar ao `onChange` enquanto `sign` está aberto
+// — quem garante isso na prática é o componente, que só lista pra toque
+// as `options` recebidas por prop, nunca as de outro campo. Ainda assim é
+// mais estreito que o cast anterior, que aceitava qualquer value do
+// catálogo inteiro, inclusive de campos number e multi.
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
@@ -28,19 +42,30 @@ import {
 
 import { theme } from '@/constants/theme';
 
-interface AboutPickerOption {
-  value: string;
+interface AboutPickerOption<V extends string> {
+  value: V;
   label: string;
 }
 
-interface AboutPickerSingleProps {
+interface AboutPickerSingleProps<V extends string> {
   type: 'single';
   visible: boolean;
   onClose: () => void;
   title: string;
-  value: string | null;
-  onChange: (value: string) => void;
-  options: readonly AboutPickerOption[];
+  value: V | null;
+  onChange: (value: V) => void;
+  options: readonly AboutPickerOption<V>[];
+}
+
+interface AboutPickerMultiProps<V extends string> {
+  type: 'multi';
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  value: V[] | null;
+  onChange: (value: V[]) => void;
+  options: readonly AboutPickerOption<V>[];
+  maxSelected?: number;
 }
 
 interface AboutPickerNumberProps {
@@ -55,23 +80,47 @@ interface AboutPickerNumberProps {
   suffix?: string;
 }
 
-type AboutPickerProps = AboutPickerSingleProps | AboutPickerNumberProps;
+type AboutPickerProps<V extends string> =
+  AboutPickerSingleProps<V> | AboutPickerMultiProps<V> | AboutPickerNumberProps;
 
-export function AboutPicker(props: AboutPickerProps) {
+export function AboutPicker<V extends string = string>(props: AboutPickerProps<V>) {
   const { visible, onClose, title } = props;
-  // Rascunho só do campo numérico — a lista `single` seleciona e fecha na
+  // Rascunho do campo numérico (texto) e do multi (array) — ambos só
+  // aplicam no botão de confirmar. A lista `single` seleciona e fecha na
   // hora, não precisa de estado próprio.
   const [draftText, setDraftText] = useState('');
+  const [draftMulti, setDraftMulti] = useState<V[]>([]);
 
   useEffect(() => {
     if (visible && props.type === 'number') {
       setDraftText(props.value != null ? String(props.value) : '');
     }
+    if (visible && props.type === 'multi') {
+      setDraftMulti(props.value ?? []);
+    }
   }, [visible, props.type, props.value]);
 
-  const handleSelectOption = (value: string) => {
+  const handleSelectOption = (value: V) => {
     if (props.type !== 'single') return;
     props.onChange(value);
+    onClose();
+  };
+
+  const multiMax = props.type === 'multi' ? props.maxSelected : undefined;
+  const multiLimitReached = multiMax != null && draftMulti.length >= multiMax;
+
+  const handleToggleOption = (value: V) => {
+    if (props.type !== 'multi') return;
+    setDraftMulti((prev) => {
+      if (prev.includes(value)) return prev.filter((v) => v !== value);
+      if (multiMax != null && prev.length >= multiMax) return prev;
+      return [...prev, value];
+    });
+  };
+
+  const handleConfirmMulti = () => {
+    if (props.type !== 'multi') return;
+    props.onChange(draftMulti);
     onClose();
   };
 
@@ -123,6 +172,51 @@ export function AboutPicker(props: AboutPickerProps) {
                 }}
                 ItemSeparatorComponent={() => <View style={styles.separator} />}
               />
+            ) : props.type === 'multi' ? (
+              <>
+                <FlatList
+                  data={props.options}
+                  keyExtractor={(item) => item.value}
+                  keyboardShouldPersistTaps="handled"
+                  renderItem={({ item }) => {
+                    const active = draftMulti.includes(item.value);
+                    const disabled = !active && multiLimitReached;
+                    return (
+                      <Pressable
+                        style={[
+                          styles.option,
+                          active && styles.optionActive,
+                          disabled && styles.optionDisabled,
+                        ]}
+                        onPress={() => handleToggleOption(item.value)}
+                        disabled={disabled}
+                      >
+                        <Text
+                          style={[
+                            styles.optionText,
+                            active && styles.optionTextActive,
+                            disabled && styles.optionTextDisabled,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                        {active && (
+                          <Ionicons name="checkmark" size={18} color={theme.colors.onSecondary} />
+                        )}
+                      </Pressable>
+                    );
+                  }}
+                  ItemSeparatorComponent={() => <View style={styles.separator} />}
+                />
+                {multiMax != null && (
+                  <Text style={styles.numberHint}>
+                    Escolha até {multiMax} ({draftMulti.length}/{multiMax})
+                  </Text>
+                )}
+                <Pressable style={styles.confirmBtn} onPress={handleConfirmMulti}>
+                  <Text style={styles.confirmBtnText}>Concluir</Text>
+                </Pressable>
+              </>
             ) : (
               <>
                 <View style={styles.numberInputRow}>
@@ -194,6 +288,9 @@ const styles = StyleSheet.create({
   optionActive: {
     backgroundColor: theme.colors.secondaryLight,
   },
+  optionDisabled: {
+    opacity: 0.4,
+  },
   optionText: {
     fontSize: theme.fontSize.md,
     color: theme.colors.text,
@@ -201,6 +298,9 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: theme.colors.onSecondary,
     fontWeight: '700',
+  },
+  optionTextDisabled: {
+    color: theme.colors.textLight,
   },
   separator: {
     height: 1,

@@ -69,9 +69,8 @@ export const ABOUT_GROUP_LABELS: Record<AboutGroup, string> = {
 //
 // Cada campo declara id, rótulo, ícone (Ionicons), grupo (S105) e tipo —
 // 'number' pra entrada numérica com faixa/sufixo, 'single' pra seleção
-// única e 'multi' pra múltipla escolha (seletor genérico da S104 só
-// implementa single/number; multi fica pra quando o primeiro campo desse
-// tipo aparecer, ver src/components/AboutPicker.tsx).
+// única e 'multi' pra múltipla escolha, com `maxSelected` opcional (S106,
+// ver src/components/AboutPicker.tsx).
 interface AboutFieldBase {
   id: string;
   label: string;
@@ -94,6 +93,7 @@ export interface AboutFieldSingle extends AboutFieldBase {
 export interface AboutFieldMulti extends AboutFieldBase {
   type: 'multi';
   options: readonly { value: string; label: string }[];
+  maxSelected?: number;
 }
 
 export type AboutFieldDef = AboutFieldNumber | AboutFieldSingle | AboutFieldMulti;
@@ -101,7 +101,8 @@ export type AboutFieldDef = AboutFieldNumber | AboutFieldSingle | AboutFieldMult
 // Pilotos da S104: Altura (numérico) e Signo (seleção única), grupo
 // 'about'. S105 acrescenta o grupo 'lifestyle': cinco campos de seleção
 // única sobre hábitos (pets, bebida, cigarro, atividade física, redes
-// sociais) — mesmo padrão single de `sign`, só troca as opções.
+// sociais) — mesmo padrão single de `sign`, só troca as opções. S106
+// acrescenta `languages`, primeiro campo `multi` do catálogo.
 export const ABOUT_FIELDS = [
   {
     id: 'height',
@@ -190,6 +191,28 @@ export const ABOUT_FIELDS = [
       { value: 'ja_tenho_e_quero_mais', label: 'Já tenho e quero mais' },
       { value: 'ja_tenho_e_nao_quero_mais', label: 'Já tenho e não quero mais' },
       { value: 'ainda_nao_sei', label: 'Ainda não sei' },
+    ],
+  },
+  {
+    id: 'languages',
+    label: 'Idiomas que eu falo',
+    icon: 'language-outline',
+    group: 'about',
+    type: 'multi',
+    maxSelected: 5,
+    options: [
+      { value: 'portugues', label: 'Português' },
+      { value: 'ingles', label: 'Inglês' },
+      { value: 'espanhol', label: 'Espanhol' },
+      { value: 'frances', label: 'Francês' },
+      { value: 'alemao', label: 'Alemão' },
+      { value: 'italiano', label: 'Italiano' },
+      { value: 'japones', label: 'Japonês' },
+      { value: 'mandarim', label: 'Mandarim' },
+      { value: 'coreano', label: 'Coreano' },
+      { value: 'arabe', label: 'Árabe' },
+      { value: 'russo', label: 'Russo' },
+      { value: 'libras', label: 'Libras' },
     ],
   },
   {
@@ -297,17 +320,21 @@ export type AboutValues = Partial<{
   [F in (typeof ABOUT_FIELDS)[number] as F['id']]: AboutFieldValue<F>;
 }>;
 
-// S105 — formatação do VALOR exibido no AboutRow também sai do catálogo:
-// número junta o sufixo, seleção única troca o value pelo label da opção.
-// A tela nunca faz `if (id === 'height')` — só chama isto pra cada campo.
-// `multi` não está coberto (S104 não implementou esse tipo no seletor,
-// ver AboutPicker.tsx); undefined aqui vira "Adicionar" no AboutRow.
+// S105/S106 — formatação do VALOR exibido no AboutRow também sai do
+// catálogo: número junta o sufixo, seleção única troca o value pelo label
+// da opção, múltipla escolha junta os labels na ordem do catálogo (não na
+// ordem em que a pessoa marcou). A tela nunca faz `if (id === 'height')` —
+// só chama isto pra cada campo. undefined aqui vira "Adicionar" no AboutRow.
 export function formatAboutFieldValue(
   field: AboutFieldDef,
-  value: string | number | undefined,
+  value: string | number | string[] | undefined,
 ): string | undefined {
   if (value === undefined) return undefined;
   if (field.type === 'number') return field.suffix ? `${value} ${field.suffix}` : `${value}`;
   if (field.type === 'single') return field.options.find((o) => o.value === value)?.label;
+  if (field.type === 'multi' && Array.isArray(value)) {
+    const labels = field.options.filter((o) => value.includes(o.value)).map((o) => o.label);
+    return labels.length > 0 ? labels.join(', ') : undefined;
+  }
   return undefined;
 }
