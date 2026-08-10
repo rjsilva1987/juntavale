@@ -53,7 +53,13 @@ function AboutGroupSection({ profile, group }: { profile: UserProfile | null; gr
       field,
       labels: formatAboutFieldLabels(field, profile?.about?.[field.id]),
     }))
-    .filter((item) => item.labels.length > 0);
+    // S109 — visibilidade por campo: descarta também quem está em
+    // aboutHidden, no mesmo filtro que já descartava campo vazio (ambos os
+    // motivos dão o mesmo resultado pro visitante — nada aparece). A guarda
+    // `items.length === 0` duas linhas abaixo roda DEPOIS deste filtro, com
+    // os dois motivos já aplicados — esconder todo o grupo não deixa
+    // cabeçalho órfão.
+    .filter((item) => item.labels.length > 0 && !profile?.aboutHidden?.includes(item.field.id));
 
   if (items.length === 0) return null;
 

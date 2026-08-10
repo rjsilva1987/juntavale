@@ -1,4 +1,9 @@
-// rules-stamp: S104 (users/{userId} ganha campo about, mapa livre — piloto
+// rules-stamp: S109 (users/{userId} ganha campo aboutHidden, array de
+// AboutFieldId opcional — visibilidade por campo do `about`: isValidProfile
+// exige só data.aboutHidden is list && data.aboutHidden.size() <= 30, molde
+// exato da cláusula de `about` logo abaixo, inserida ao lado dela; entra no
+// hasOnly do UPDATE apenas, fora do create — conta nova nasce sem nada
+// escondido, ou seja, tudo visível por default) + S104 (users/{userId} ganha campo about, mapa livre — piloto
 // do perfil estruturado: isValidProfile exige só data.about is map &&
 // data.about.keys().size() <= 30, as chaves de DENTRO do mapa não são
 // validadas — deliberado, pra que um campo novo no catálogo do client
@@ -250,6 +255,15 @@ service cloud.firestore {
         // deploy. Mesmo padrão de `filters` acima. Só entra no hasOnly do
         // UPDATE (ver allow update abaixo) — conta nova nasce sem o campo.
         && (!('about' in data) || (data.about is map && data.about.keys().size() <= 30))
+        // S109 — visibilidade por campo do `about`: array de AboutFieldId
+        // (ids escondidos do perfil público), SÓ quando presente — ausente
+        // ou vazio = nada escondido (default = tudo visível). Mesmo molde
+        // exato da cláusula de `about` logo acima, com is list no lugar de
+        // is map (não precisa de teto próprio de tamanho por item — só o
+        // teto de 30 entradas, igual about.keys().size()). Não valida que
+        // cada item seja de fato um AboutFieldId do catálogo — mesma
+        // decisão de about acima: catálogo muda no client, sem deploy.
+        && (!('aboutHidden' in data) || (data.aboutHidden is list && data.aboutHidden.size() <= 30))
         && (!('prompts' in data) || isValidPrompts(data.prompts))
         // S59 — slot único do prompt da semana, separado de prompts[] acima.
         && (!('weeklyPromptAnswer' in data) || isValidWeeklyPromptAnswer(data.weeklyPromptAnswer))
@@ -399,7 +413,8 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
-              'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about'])
+              'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about',
+              'aboutHidden'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.

@@ -17,6 +17,7 @@ import {
   Timestamp,
   writeBatch,
   arrayUnion,
+  type FieldValue,
 } from 'firebase/firestore';
 import {
   ref,
@@ -140,6 +141,14 @@ export interface UserProfile {
   // mergeAboutValues abaixo pra não apagar chaves não tocadas pelo save
   // atual. Só entra no hasOnly de UPDATE — conta nova nasce sem o campo.
   about?: AboutValues;
+  // S109 — visibilidade por campo do `about`: ids (AboutFieldId) escondidos
+  // do perfil público, os 13 campos do catálogo são igualmente escondíveis
+  // (sem exceção — não existe `alwaysVisible`). Ausente ou [] = nada
+  // escondido (default = tudo visível, doc legado já está correto sem
+  // migração). Só entra no hasOnly de UPDATE, igual about — ver
+  // firestore.rules (S109). Gravado como snapshot completo a cada save
+  // (não é merge por chave como about — ver handleSave em ProfileScreen).
+  aboutHidden?: AboutFieldId[];
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
@@ -238,7 +247,19 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
-export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
+// S109 (correção, estreitada por auditoria) — Partial<UserProfile> puro
+// barrava deleteField() em about/aboutHidden (FieldValue não é atribuível a
+// AboutValues | AboutFieldId[]). UpdateData<UserProfile> (tentativa
+// anterior) resolvia isso mas alargava TODA chave, inclusive obrigatórias
+// como `name` — deleteField() num campo obrigatório passaria pelo tsc sem
+// acusar nada. UserProfileUpdate alarga só as duas chaves que a sprint
+// apaga; as outras continuam com o tipo estrito de Partial<UserProfile>.
+type UserProfileUpdate = Partial<Omit<UserProfile, 'about' | 'aboutHidden'>> & {
+  about?: AboutValues | FieldValue;
+  aboutHidden?: AboutFieldId[] | FieldValue;
+};
+
+export const updateUserProfile = async (uid: string, data: UserProfileUpdate) => {
   await updateDoc(doc(db, 'users', uid), data);
 };
 

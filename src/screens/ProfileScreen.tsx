@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import { deleteField } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
   View,
@@ -23,6 +24,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AboutPicker } from '@/components/AboutPicker';
 import { AboutRow } from '@/components/AboutRow';
+import { AboutVisibilityModal } from '@/components/AboutVisibilityModal';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { FounderBadge } from '@/components/FounderBadge';
@@ -174,6 +176,12 @@ export default function ProfileScreen() {
     return initial;
   });
   const [openAboutField, setOpenAboutField] = useState<AboutFieldId | null>(null);
+  // S109 — visibilidade por campo do `about`: snapshot completo (não merge
+  // por chave como aboutValues acima) — cada save grava a lista inteira de
+  // escondidos, então não precisa reconciliar com o profile atual como
+  // mergeAboutValues faz. Editado só pelo AboutVisibilityModal (ver render).
+  const [aboutHidden, setAboutHidden] = useState<AboutFieldId[]>(profile?.aboutHidden ?? []);
+  const [visibilityModalVisible, setVisibilityModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
   const [reengagementSaving, setReengagementSaving] = useState(false);
@@ -265,6 +273,22 @@ export default function ProfileScreen() {
       // gravado ali. aboutValues já tem o formato Partial<AboutValues> que
       // mergeAboutValues espera — nenhum campo listado à mão aqui.
       const mergedAbout = mergeAboutValues(profile?.about, aboutValues);
+      // S109 (correção, simétrica ao aboutHidden logo abaixo) — mapa vazio
+      // (todo campo do `about` zerado nesta edição) NÃO pode ser omitido do
+      // payload: updateUserProfile é updateDoc puro, só toca chaves
+      // presentes — omitir preservaria o mapa antigo no Firestore pra
+      // sempre (mesmo mecanismo do bug do aboutHidden, achado por
+      // rastreamento no relatório da correção anterior). deleteField()
+      // apaga a chave de vez; mesmo padrão de removeWeeklyPromptAnswer
+      // (firestoreService.ts). Perfil que nunca teve `about` continua sem
+      // ruído: deleteField() numa chave que já não existe no doc é no-op.
+      const aboutPatch = Object.keys(mergedAbout).length > 0 ? mergedAbout : deleteField();
+      // S109 (correção) — array vazio (nada escondido) NÃO pode ser
+      // omitido do payload, mesmo mecanismo e mesma correção do about
+      // acima: deleteField() no lugar da chave ausente. Snapshot completo,
+      // não merge — aboutHidden é só editado pelo AboutVisibilityModal,
+      // nunca pelos AboutRow acima.
+      const aboutHiddenPatch = aboutHidden.length > 0 ? aboutHidden : deleteField();
       await updateUserProfile(user.uid, {
         name,
         // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
@@ -284,11 +308,8 @@ export default function ProfileScreen() {
         // update, e as rules toleram a chave ausente igual antes.
         ...(uf ? { uf } : {}),
         ...(lookingFor ? { lookingFor } : {}),
-        // Mesmo padrão de uf/lookingFor acima: só entra na chamada se tiver
-        // pelo menos uma chave. Achado da auditoria — mandar `about: {}`
-        // incondicional gravava ruído em QUALQUER save (mesmo de bio/nome)
-        // em perfis que nunca abriram a seção "Sobre mim".
-        ...(Object.keys(mergedAbout).length > 0 ? { about: mergedAbout } : {}),
+        about: aboutPatch,
+        aboutHidden: aboutHiddenPatch,
       });
       await refreshProfile();
       setEditing(false);
@@ -856,6 +877,21 @@ export default function ProfileScreen() {
                 </React.Fragment>
               ))}
 
+              {/* S109 — ponto de entrada logo após os grupos do catálogo
+                  (about/lifestyle) que ela controla, antes do botão
+                  principal "Salvar alterações" — não compete visualmente
+                  com o CTA de salvar o form inteiro, mas fica colada na
+                  seção a que se refere, em vez de solta lá embaixo perto de
+                  Sair/Excluir conta (ações de conta, não de conteúdo do
+                  perfil). */}
+              <AnimatedPressable
+                style={styles.visibilityLink}
+                onPress={() => setVisibilityModalVisible(true)}
+              >
+                <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
+                <Text style={styles.visibilityLinkText}>Editar visibilidade</Text>
+              </AnimatedPressable>
+
               <AnimatedPressable
                 style={[styles.saveBtn, !gender && styles.saveBtnDisabled]}
                 onPress={handleSave}
@@ -1229,6 +1265,17 @@ export default function ProfileScreen() {
           </>
         );
       })()}
+
+      {/* S109 — modal próprio, mesmo contrato de rascunho+confirmação do
+          AboutPicker multi (fechar pelo backdrop descarta). Controla
+          aboutHidden, que só é gravado no handleSave geral do form, junto
+          com o resto — o Switch aqui não escreve no Firestore sozinho. */}
+      <AboutVisibilityModal
+        visible={visibilityModalVisible}
+        onClose={() => setVisibilityModalVisible(false)}
+        hiddenFields={aboutHidden}
+        onSave={setAboutHidden}
+      />
 
       {/* Catálogo de prompts — só exibido pra adicionar um novo (prompts já
           usados ficam desabilitados/acinzentados). Editar um já respondido
@@ -1869,6 +1916,20 @@ const styles = StyleSheet.create({
   },
   deleteAccountText: {
     color: theme.colors.error,
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+  },
+
+  visibilityLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  visibilityLinkText: {
+    color: theme.colors.primary,
     fontSize: theme.fontSize.sm,
     fontWeight: '600',
   },
