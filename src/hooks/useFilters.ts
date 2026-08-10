@@ -10,7 +10,7 @@ export const DEFAULT_FILTERS: DiscoverFilters = {
   ageMax: 60,
   uf: 'all',
   gender: [],
-  lookingFor: 'all',
+  lookingFor: [],
   // S83-B — começa com os três marcados: seleção total = filtro inerte (ver
   // getDiscoverProfiles), mesmo comportamento de "sem restrição" que os
   // outros campos expressam com 'all'.
@@ -45,6 +45,21 @@ export function useFilters(): UseFiltersReturn {
         ? [merged.gender]
         : [];
   }
+  // S111 — mesmo padrao do S90 acima, agora pra lookingFor: o filtro virou
+  // array (multi-selecao). Docs criados antes disto tem filters.lookingFor
+  // como STRING ('all' ou um valor). Regra: 'all' e qualquer nao-array viram
+  // []  (= sem filtro = todos); uma string de lookingFor solta vira
+  // [valor]. Resolve as contas antigas em tempo de leitura, sem migracao de
+  // dados.
+  if (!Array.isArray(merged.lookingFor)) {
+    merged.lookingFor =
+      merged.lookingFor === 'relacionamento_serio' ||
+      merged.lookingFor === 'casual' ||
+      merged.lookingFor === 'amizade' ||
+      merged.lookingFor === 'descobrindo'
+        ? [merged.lookingFor]
+        : [];
+  }
   const [filters, setFilters] = useState<DiscoverFilters>(merged);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -58,6 +73,15 @@ export function useFilters(): UseFiltersReturn {
       merged.gender =
         merged.gender === 'masculino' || merged.gender === 'feminino' || merged.gender === 'outro'
           ? [merged.gender]
+          : [];
+    }
+    if (!Array.isArray(merged.lookingFor)) {
+      merged.lookingFor =
+        merged.lookingFor === 'relacionamento_serio' ||
+        merged.lookingFor === 'casual' ||
+        merged.lookingFor === 'amizade' ||
+        merged.lookingFor === 'descobrindo'
+          ? [merged.lookingFor]
           : [];
     }
     setFilters(merged);

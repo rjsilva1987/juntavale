@@ -45,7 +45,7 @@ export interface DiscoverFilters {
   ageMax: number;
   uf: UF | 'all';
   gender: Gender[];
-  lookingFor: LookingFor | 'all';
+  lookingFor: LookingFor[];
   // S83-B — primeiro filtro de múltipla escolha do app: os outros campos
   // usam sentinela 'all' (um valor só, "sem restrição"); vale é uma lista de
   // valores marcados. Ver getDiscoverProfiles pra como isso é interpretado
@@ -443,7 +443,8 @@ export const getDiscoverProfiles = async (
       // lista vazia — comportamento aceito (as contas sem genero sao dado a
       // limpar, nao bug do filtro).
       if (filters.gender.length > 0 && !filters.gender.includes(candidate.gender)) return;
-      if (filters.lookingFor !== 'all' && candidate.lookingFor !== filters.lookingFor) return;
+      if (filters.lookingFor.length > 0 && !filters.lookingFor.includes(candidate.lookingFor))
+        return;
       if (filters.verifiedOnly && candidate.verified !== true) return;
       // Perfil SEM uf é excluído quando um estado específico está filtrado —
       // comportamento intencional (S44).

@@ -26,10 +26,9 @@ const GENDER_OPTIONS: { label: string; value: Gender }[] = [
   { label: 'Outro', value: 'outro' },
 ];
 
-const LOOKING_FOR_FILTER_OPTIONS: { label: string; value: LookingFor | 'all' }[] = [
-  { label: 'Todos', value: 'all' },
-  ...LOOKING_FOR_OPTIONS.map((option) => ({ label: option.label, value: option.value })),
-];
+const LOOKING_FOR_FILTER_OPTIONS: { label: string; value: LookingFor }[] = LOOKING_FOR_OPTIONS.map(
+  (option) => ({ label: option.label, value: option.value }),
+);
 
 export function FilterModal({
   visible,
@@ -124,16 +123,25 @@ export function FilterModal({
             })}
           </View>
 
-          {/* Busca (lookingFor) */}
+          {/* Busca (lookingFor) — S111: virou multi-selecao, mesmo molde do
+              Vale logo abaixo (o onPress alterna a presenca no array em vez
+              de substituir um valor unico). */}
           <Text style={styles.label}>Busca</Text>
           <View style={styles.lookingForRow}>
             {LOOKING_FOR_FILTER_OPTIONS.map((option) => {
-              const active = draft.lookingFor === option.value;
+              const active = draft.lookingFor.includes(option.value);
               return (
                 <TouchableOpacity
                   key={option.value}
                   style={[styles.lookingForOption, active && styles.lookingForOptionActive]}
-                  onPress={() => setDraft((prev) => ({ ...prev, lookingFor: option.value }))}
+                  onPress={() =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      lookingFor: active
+                        ? prev.lookingFor.filter((v) => v !== option.value)
+                        : [...prev.lookingFor, option.value],
+                    }))
+                  }
                 >
                   <Text style={[styles.lookingForText, active && styles.lookingForTextActive]}>
                     {option.label}
