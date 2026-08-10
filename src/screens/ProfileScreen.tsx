@@ -36,9 +36,11 @@ import {
   ABOUT_FIELDS,
   ABOUT_GROUPS,
   ABOUT_GROUP_LABELS,
+  coerceAboutValue,
   formatAboutFieldValue,
   getAboutField,
   type AboutFieldId,
+  type AboutFieldMulti,
   type AboutValues,
 } from '@/constants/profileAbout';
 import {
@@ -153,7 +155,24 @@ export default function ProfileScreen() {
   // mas o payload final passa por mergeAboutValues antes de gravar (ver
   // abaixo), porque updateUserProfile é updateDoc puro e substituiria o
   // mapa `about` inteiro se mandássemos só os campos tocados nesta edição.
-  const [aboutValues, setAboutValues] = useState<AboutValues>(profile?.about ?? {});
+  // S112 — hidratação passa por coerceAboutValue campo a campo: um doc que
+  // gravou `about.pets` como STRING (de quando o campo era `single`) tem
+  // que virar `[string]` aqui, senão o campo aparenta estar vazio pro
+  // resto da tela (achado do recon S112). Mesmo cast de mergeAboutValues
+  // (firestoreService.ts) pro TS aceitar escrever um valor cujo tipo só se
+  // sabe por campo, não pelo union `AboutFieldId` genérico do laço.
+  const [aboutValues, setAboutValues] = useState<AboutValues>(() => {
+    const raw = profile?.about;
+    const initial: AboutValues = {};
+    ABOUT_FIELDS.forEach((field) => {
+      const value = coerceAboutValue(field, raw?.[field.id]);
+      if (value !== undefined) {
+        (initial as Record<AboutFieldId, NonNullable<AboutValues[AboutFieldId]>>)[field.id] =
+          value as NonNullable<AboutValues[AboutFieldId]>;
+      }
+    });
+    return initial;
+  });
   const [openAboutField, setOpenAboutField] = useState<AboutFieldId | null>(null);
   const [saving, setSaving] = useState(false);
   const [photoActionPending, setPhotoActionPending] = useState(false);
@@ -1139,7 +1158,18 @@ export default function ProfileScreen() {
         const openField = openAboutField ? getAboutField(openAboutField) : null;
         const numberField = openField?.type === 'number' ? openField : null;
         const singleField = openField?.type === 'single' ? openField : null;
-        const multiField = openField?.type === 'multi' ? openField : null;
+        // S112 — dois campos `multi` agora no catálogo (`languages` com
+        // `maxSelected` sem `exclusiveGroup`, `pets` com `exclusiveGroup` sem
+        // `maxSelected`): a união literal dos dois NÃO tem as mesmas chaves,
+        // então acessar `.maxSelected`/`.exclusiveGroup` direto quebra o tsc
+        // (nenhuma delas existe nos DOIS ao mesmo tempo). `multiFieldRaw`
+        // mantém a união exata pra derivar V (o domínio de values do campo
+        // aberto); o cast pra `AboutFieldMulti<V>` widening é seguro porque
+        // toda entrada `multi` do catálogo já satisfaz essa interface
+        // estruturalmente (as duas chaves são opcionais nela).
+        const multiFieldRaw = openField?.type === 'multi' ? openField : null;
+        type MultiFieldValue = NonNullable<typeof multiFieldRaw>['options'][number]['value'];
+        const multiField: AboutFieldMulti<MultiFieldValue> | null = multiFieldRaw;
         const openValue = openAboutField ? aboutValues[openAboutField] : undefined;
         const handleOpenFieldChange = (value: AboutValues[AboutFieldId]) => {
           if (!openAboutField) return;
@@ -1174,15 +1204,27 @@ export default function ProfileScreen() {
               onChange={handleOpenFieldChange}
               options={singleField?.options ?? []}
             />
-            <AboutPicker<NonNullable<typeof multiField>['options'][number]['value']>
+            <AboutPicker<MultiFieldValue>
               type="multi"
               visible={!!multiField}
               onClose={() => setOpenAboutField(null)}
               title={multiField?.label ?? ''}
               value={Array.isArray(openValue) ? openValue : null}
-              onChange={handleOpenFieldChange}
+              // S112 — cast pontual: com DOIS campos `multi` agora (antes só
+              // `languages`), `MultiFieldValue[]` (pets ∪ languages, domínio
+              // combinado) deixou de bater estruturalmente com
+              // `AboutValues[AboutFieldId]` — arrays não se achatam por
+              // união como escalares (LanguageValue[] e PetsValue[] ficam
+              // membros SEPARADOS do union grande, `handleOpenFieldChange`
+              // não aceita o array combinado). Mesmo quirk que o comentário
+              // de AboutPicker.tsx:15-28 já documenta pra singleField/
+              // multiField: quem garante o valor certo pro campo certo é o
+              // componente (só lista as `options` recebidas por prop), não o
+              // tipo. Sem isso o tsc quebra; não muda comportamento.
+              onChange={handleOpenFieldChange as (value: MultiFieldValue[]) => void}
               options={multiField?.options ?? []}
               maxSelected={multiField?.maxSelected}
+              exclusiveGroup={multiField?.exclusiveGroup}
             />
           </>
         );

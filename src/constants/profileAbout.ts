@@ -90,10 +90,22 @@ export interface AboutFieldSingle extends AboutFieldBase {
   options: readonly { value: string; label: string }[];
 }
 
-export interface AboutFieldMulti extends AboutFieldBase {
+export interface AboutFieldMulti<V extends string = string> extends AboutFieldBase {
   type: 'multi';
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: V; label: string }[];
   maxSelected?: number;
+  // S112 — pra campos multi com dois subgrupos mutuamente exclusivos (ex.:
+  // `pets`: os 6 bichos vs. as 2 opções sem-bicho). Tipado contra os PRÓPRIOS
+  // values do campo (V), não `string[]` solto — mesma correção que
+  // AMBIGUOUS_FIELD_IDS levou na S108-A (era `Set<string>`, virou
+  // `Set<AboutFieldId>`). `NoInfer<V>` é o que faz essa amarração valer de
+  // verdade: sem ele, o `V` do generic seria inferido A PARTIR do PRÓPRIO
+  // `exclusiveGroup` também (achado ao testar de propósito com um value
+  // errado, tipo 'cachorr0' — sem NoInfer o tsc aceitava, só alargava V pra
+  // incluir o erro). Com NoInfer, V só vem de `options`; exclusiveGroup é
+  // checado contra esse V já fixo, e um value fora dali quebra o tsc de
+  // verdade. Ausente = sem grupo exclusivo, toggle comum (ver AboutPicker.tsx).
+  exclusiveGroup?: readonly NoInfer<V>[];
 }
 
 export type AboutFieldDef = AboutFieldNumber | AboutFieldSingle | AboutFieldMulti;
@@ -220,7 +232,12 @@ export const ABOUT_FIELDS = [
     label: 'Pets',
     icon: 'paw-outline',
     group: 'lifestyle',
-    type: 'single',
+    type: 'multi',
+    // S112 — sem `maxSelected` (decisão de produto: sem limite). Os 6 bichos
+    // e as 2 opções sem-bicho ('nao_tenho'/'quero_ter') formam grupos
+    // mutuamente exclusivos — ver `exclusiveGroup` acima e o toggle genérico
+    // em AboutPicker.tsx.
+    exclusiveGroup: ['nao_tenho', 'quero_ter'],
     options: [
       { value: 'cachorro', label: 'Cachorro' },
       { value: 'gato', label: 'Gato' },
@@ -305,6 +322,25 @@ export function getAboutField<Id extends AboutFieldId>(id: Id): AboutFieldById<I
   return field;
 }
 
+// S112 — asserção em tempo de compilação: `exclusiveGroup?: readonly V[]`
+// no field def sozinho NÃO é barrado pelo tsc contra os values do PRÓPRIO
+// campo — `satisfies` numa união de interfaces genéricas com type param
+// default (`AboutFieldMulti<V = string>`) não especializa V por objeto, só
+// usa o default (comprovado testando de propósito com um value errado em
+// `exclusiveGroup`: passou batido, mesmo com `NoInfer<V>` na interface).
+// Isto aqui é o enforcement de verdade: `AboutFieldById<'pets'>` (mesmo
+// `Extract` que `getAboutField` já usa pra narrow por id) fixa o tipo exato
+// da entrada `pets`; `PetsValue` deriva os values ali; o `extends` abaixo só
+// é `true` se `exclusiveGroup` for de fato `readonly PetsValue[]` — um value
+// certo. Digitar errado um value em `exclusiveGroup` faz `_AssertPetsExclusive`
+// virar `never`, e a linha seguinte (tipada `true`) quebra o tsc.
+type PetsField = AboutFieldById<'pets'>;
+type PetsValue = PetsField['options'][number]['value'];
+type _AssertPetsExclusive = PetsField extends { exclusiveGroup: readonly PetsValue[] }
+  ? true
+  : never;
+const _assertPetsExclusive: _AssertPetsExclusive = true;
+
 // Deriva o tipo do VALOR de cada campo a partir da própria definição em
 // ABOUT_FIELDS — um campo novo no catálogo estende AboutValues sozinho,
 // sem precisar tocar neste arquivo de novo.
@@ -320,6 +356,20 @@ export type AboutValues = Partial<{
   [F in (typeof ABOUT_FIELDS)[number] as F['id']]: AboutFieldValue<F>;
 }>;
 
+// S112 — dado legado: um doc que gravou `about.pets` como STRING (de quando
+// o campo ainda era `single`) faz o guard `Array.isArray` abaixo falhar assim
+// que o catálogo declara `type: 'multi'` — o campo aparentaria estar vazio
+// pra sempre, silenciosamente (achado do recon S112-recon, item 3). O tsc não
+// pega isso porque a leitura é genérica sobre AboutFieldId, sem
+// `if (id === 'pets')` em lugar nenhum. Função pura, sem efeito colateral.
+export function coerceAboutValue(
+  field: AboutFieldDef,
+  value: string | number | string[] | undefined,
+): string | number | string[] | undefined {
+  if (field.type === 'multi' && typeof value === 'string') return [value];
+  return value;
+}
+
 // S105/S106 — formatação do VALOR exibido no AboutRow também sai do
 // catálogo: número junta o sufixo, seleção única troca o value pelo label
 // da opção, múltipla escolha junta os labels na ordem do catálogo (não na
@@ -327,8 +377,9 @@ export type AboutValues = Partial<{
 // só chama isto pra cada campo. undefined aqui vira "Adicionar" no AboutRow.
 export function formatAboutFieldValue(
   field: AboutFieldDef,
-  value: string | number | string[] | undefined,
+  rawValue: string | number | string[] | undefined,
 ): string | undefined {
+  const value = coerceAboutValue(field, rawValue);
   if (value === undefined) return undefined;
   if (field.type === 'number') return field.suffix ? `${value} ${field.suffix}` : `${value}`;
   if (field.type === 'single') return field.options.find((o) => o.value === value)?.label;
@@ -348,8 +399,9 @@ export function formatAboutFieldValue(
 // mesma lógica por tipo de campo.
 export function formatAboutFieldLabels(
   field: AboutFieldDef,
-  value: string | number | string[] | undefined,
+  rawValue: string | number | string[] | undefined,
 ): string[] {
+  const value = coerceAboutValue(field, rawValue);
   if (value === undefined) return [];
   if (field.type === 'number') return [field.suffix ? `${value} ${field.suffix}` : `${value}`];
   if (field.type === 'single') {

@@ -66,6 +66,10 @@ interface AboutPickerMultiProps<V extends string> {
   onChange: (value: V[]) => void;
   options: readonly AboutPickerOption<V>[];
   maxSelected?: number;
+  // S112 — dois subgrupos mutuamente exclusivos dentro do mesmo campo multi
+  // (ex.: `pets`). Ausente = sem grupo exclusivo, toggle comum (mesmo
+  // comportamento de sempre — `languages` não declara isso).
+  exclusiveGroup?: readonly V[];
 }
 
 interface AboutPickerNumberProps {
@@ -108,13 +112,23 @@ export function AboutPicker<V extends string = string>(props: AboutPickerProps<V
 
   const multiMax = props.type === 'multi' ? props.maxSelected : undefined;
   const multiLimitReached = multiMax != null && draftMulti.length >= multiMax;
+  const exclusiveGroup = props.type === 'multi' ? props.exclusiveGroup : undefined;
 
   const handleToggleOption = (value: V) => {
     if (props.type !== 'multi') return;
     setDraftMulti((prev) => {
       if (prev.includes(value)) return prev.filter((v) => v !== value);
-      if (multiMax != null && prev.length >= multiMax) return prev;
-      return [...prev, value];
+      // S112 — marcar um valor de um dos dois subgrupos exclusivos limpa
+      // tudo do OUTRO subgrupo do rascunho antes de somar o novo valor;
+      // dentro do mesmo subgrupo continua livre. Sem exclusiveGroup
+      // declarado (ex.: `languages`), `base` é só `prev` — comportamento
+      // idêntico ao de antes da S112.
+      const inGroup = exclusiveGroup?.includes(value) ?? false;
+      const base = exclusiveGroup
+        ? prev.filter((v) => exclusiveGroup.includes(v) === inGroup)
+        : prev;
+      if (multiMax != null && base.length >= multiMax) return base;
+      return [...base, value];
     });
   };
 
