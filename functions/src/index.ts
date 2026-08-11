@@ -1126,13 +1126,18 @@ export const deleteAccount = onCall(
     }
 
     // d) support — tickets abertos pelo usuário; recursiveDelete leva a
-    // subcoleção messages de cada ticket junto.
+    // subcoleção messages de cada ticket junto. images/support/{uid}/ (S113,
+    // fotos anexadas na thread) some junto — mesmo padrão de images/chats na
+    // etapa a) de matches, acima: path já nasce com o uid no prefixo
+    // justamente pra permitir essa varredura em UMA chamada, sem precisar
+    // iterar ticket por ticket.
     try {
       const ticketsSnap = await db.collection('support').where('uid', '==', uid).get();
       console.log(`[deleteAccount] tickets de suporte encontrados: ${ticketsSnap.size}`);
       for (const ticketDoc of ticketsSnap.docs) {
         await db.recursiveDelete(ticketDoc.ref);
       }
+      await bucket.deleteFiles({ prefix: `images/support/${uid}/` });
       console.log(`[deleteAccount] tickets de suporte apagados: ${ticketsSnap.size}`);
     } catch (error) {
       console.error('[deleteAccount] falha ao apagar tickets de suporte:', uid, error);
@@ -1183,10 +1188,11 @@ export const deleteAccount = onCall(
       console.error('[deleteAccount] falha ao apagar doc users:', uid, error);
     }
 
-    // NÃO apaga a coleção `reports`: denúncias feitas pelo usuário
-    // (reporterId) ou recebidas por ele (reportedId) são registro de
-    // moderação e permanecem por decisão de produto, mesmo após a exclusão
-    // da conta.
+    // NÃO apaga a coleção `reports` NEM images/reports/ (S113): denúncias
+    // feitas pelo usuário (reporterId) ou recebidas por ele (reportedId) são
+    // registro de moderação e permanecem por decisão de produto, fotos
+    // anexadas incluídas, mesmo após a exclusão da conta. Não "consertar"
+    // isso depois adicionando um bucket.deleteFiles aqui.
 
     // h) Auth — por último, e de propósito FORA do padrão try/catch-e-loga
     // das etapas acima: se apagar a conta em si falhar, o erro precisa

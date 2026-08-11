@@ -1,4 +1,10 @@
-// rules-stamp: S109 (users/{userId} ganha campo aboutHidden, array de
+// rules-stamp: S113 (reports/{reportId}/messages e support/{ticketId}/messages
+// ganham campo imageUrl opcional, mesmo molde de matches/{matchId}/messages:
+// string quando presente, entra no hasOnly do create; text deixa de exigir
+// tamanho mínimo — vazio só é aceito quando há imageUrl, guarda de "texto OU
+// foto" via `text.size() > 0 || 'imageUrl' in request.resource.data`; guarda
+// de abuso .matches('.*\\S.*') contra string só-espaço passa a só se aplicar
+// quando text não está vazio) + S109 (users/{userId} ganha campo aboutHidden, array de
 // AboutFieldId opcional — visibilidade por campo do `about`: isValidProfile
 // exige só data.aboutHidden is list && data.aboutHidden.size() <= 30, molde
 // exato da cláusula de `about` logo abaixo, inserida ao lado dela; entra no
@@ -1002,11 +1008,19 @@ service cloud.firestore {
           // espelhar ainda; quando a tela nascer, o maxLength dela precisa
           // ficar em 1/4 deste valor, mesmo padrão de guarda de abuso.
           && request.resource.data.text is string
-          && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 4000
-          && request.resource.data.text.matches('.*\\S.*')
+          && (request.resource.data.text.size() == 0
+              || request.resource.data.text.matches('.*\\S.*'))
+          // S113 — imageUrl opcional, mesmo molde do create de
+          // matches/{matchId}/messages: string quando presente; mensagem
+          // precisa ter texto OU foto (nunca as duas ausentes).
+          && (!('imageUrl' in request.resource.data)
+              || request.resource.data.imageUrl is string)
+          && (request.resource.data.text.size() > 0
+              || 'imageUrl' in request.resource.data)
           && request.resource.data.createdAt == request.time
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);
+          && request.resource.data.keys().hasOnly(
+               ['senderId', 'text', 'createdAt', 'imageUrl']);
 
         allow update, delete: if false;
       }
@@ -1141,11 +1155,19 @@ service cloud.firestore {
           // S77 — 4000 = 4x o maxLength do SupportThreadScreen.tsx (1000),
           // mesmo raciocínio de guarda de abuso do create do ticket acima.
           && request.resource.data.text is string
-          && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 4000
-          && request.resource.data.text.matches('.*\\S.*')
+          && (request.resource.data.text.size() == 0
+              || request.resource.data.text.matches('.*\\S.*'))
+          // S113 — imageUrl opcional, mesmo molde do create de
+          // matches/{matchId}/messages: string quando presente; mensagem
+          // precisa ter texto OU foto (nunca as duas ausentes).
+          && (!('imageUrl' in request.resource.data)
+              || request.resource.data.imageUrl is string)
+          && (request.resource.data.text.size() > 0
+              || 'imageUrl' in request.resource.data)
           && request.resource.data.createdAt == request.time
-          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);
+          && request.resource.data.keys().hasOnly(
+               ['senderId', 'text', 'createdAt', 'imageUrl']);
 
         allow update, delete: if false;
       }

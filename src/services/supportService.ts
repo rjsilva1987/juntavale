@@ -13,9 +13,10 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 import { SupportCategory } from '@/constants/supportCategories';
-import { db } from '@/services/firebase';
+import { db, storage } from '@/services/firebase';
 import { countCodePoints } from '@/utils/text';
 
 export type SupportTicketStatus = 'open' | 'resolved';
@@ -41,6 +42,10 @@ export interface SupportMessage {
   senderId: string;
   text: string;
   createdAt: Timestamp;
+  // S113 — foto anexada, mesmo campo/molde de imageUrl em Message
+  // (firestoreService.ts) e ReportMessage (reportService.ts). Uma foto por
+  // mensagem; apagada junto da conta (deleteAccount varre images/support/{uid}/).
+  imageUrl?: string;
 }
 
 interface SubmitSupportTicketParams {
@@ -135,13 +140,21 @@ export const updateTicketStatus = async (
 // Cloud Function onSupportMessageCreated (S40, Admin SDK), que usa o
 // createdAt da própria mensagem em vez de serverTimestamp() pra ficar
 // idempotente, mesmo padrão de lastMessage em matches/{matchId}.
+// S113 — imageUrl opcional: mensagem só-imagem é permitida (texto vazio +
+// imageUrl), mesma regra de conteúdo do firestore.rules (texto OU foto,
+// nunca as duas ausentes) — daí o throw continuar exigindo texto quando não
+// há imagem, e deixar de exigi-lo quando há.
 export const sendSupportMessage = async (
   ticketId: string,
   senderId: string,
   text: string,
+  imageUrl?: string,
 ): Promise<void> => {
   const trimmed = text.trim();
-  if (countCodePoints(trimmed) === 0 || countCodePoints(trimmed) > 1000) {
+  if (!imageUrl && countCodePoints(trimmed) === 0) {
+    throw new Error('Mensagem inválida');
+  }
+  if (countCodePoints(trimmed) > 1000) {
     throw new Error('Mensagem inválida');
   }
 
@@ -156,11 +169,42 @@ export const sendSupportMessage = async (
     senderId,
     text: trimmed,
     createdAt: serverTimestamp(),
+    ...(imageUrl ? { imageUrl } : {}),
   });
   if (shouldReopen) {
     batch.update(ticketRef, { status: 'open' });
   }
   await batch.commit();
+};
+
+// S113 — irmã de uploadChatImage (firestoreService.ts), mesmo molde:
+// images/support/{ownerUid}/{ticketId}/{ts}.jpg. ownerUid é sempre o dono do
+// TICKET (ticket.uid), nunca o senderId de quem está anexando — quando é o
+// admin respondendo, o arquivo ainda precisa cair sob o prefixo do dono, ou
+// o deleteAccount (functions/src/index.ts) não o alcança, e storage.rules
+// (images/support/{uid}/{ticketId}) rejeitaria o upload por não bater o
+// dono do ticket no path.
+export const uploadSupportImage = async (
+  ticketId: string,
+  ownerUid: string,
+  localUri: string,
+  onProgress: (percent: number) => void,
+): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `images/support/${ownerUid}/${ticketId}/${Date.now()}.jpg`);
+  const task = uploadBytesResumable(storageRef, blob);
+
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(snapshot.bytesTransferred / snapshot.totalBytes),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  return getDownloadURL(storageRef);
 };
 
 // S84 — listener dos chamados do proprio usuario, pro aviso in-app. O

@@ -12,9 +12,10 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
 import { ReportReason } from '@/services/blockService';
-import { db } from '@/services/firebase';
+import { db, storage } from '@/services/firebase';
 import { countCodePoints } from '@/utils/text';
 
 export type ReportStatus = 'open' | 'resolved';
@@ -42,6 +43,10 @@ export interface ReportMessage {
   senderId: string;
   text: string;
   createdAt: Timestamp;
+  // S113 — foto anexada, mesmo campo/molde de imageUrl em Message
+  // (firestoreService.ts). Uma foto por mensagem; "sem limite" se resolve
+  // mandando várias mensagens, decisão de produto.
+  imageUrl?: string;
 }
 
 // S96-A — painel do admin: TODAS as denúncias, mais recentes primeiro.
@@ -86,18 +91,56 @@ export const listenReportMessages = (
   });
 };
 
+// S113 — imageUrl opcional: mensagem só-imagem é permitida (texto vazio +
+// imageUrl), mesma regra de conteúdo do firestore.rules (texto OU foto,
+// nunca as duas ausentes) — daí o throw continuar exigindo texto quando não
+// há imagem, e deixar de exigi-lo quando há.
 export const sendReportMessage = async (
   reportId: string,
   senderId: string,
   text: string,
+  imageUrl?: string,
 ): Promise<void> => {
   const trimmed = text.trim();
-  if (countCodePoints(trimmed) === 0 || countCodePoints(trimmed) > 4000) {
+  if (!imageUrl && countCodePoints(trimmed) === 0) {
+    throw new Error('Mensagem inválida');
+  }
+  if (countCodePoints(trimmed) > 4000) {
     throw new Error('Mensagem inválida');
   }
 
   const messageRef = doc(collection(db, 'reports', reportId, 'messages'));
-  await setDoc(messageRef, { senderId, text: trimmed, createdAt: serverTimestamp() });
+  await setDoc(messageRef, {
+    senderId,
+    text: trimmed,
+    createdAt: serverTimestamp(),
+    ...(imageUrl ? { imageUrl } : {}),
+  });
+};
+
+// S113 — irmã de uploadChatImage (firestoreService.ts), mesmo molde:
+// images/reports/{reportId}/{ts}.jpg, autorização espelhada em storage.rules
+// (reporterId da denúncia ou admin).
+export const uploadReportImage = async (
+  reportId: string,
+  localUri: string,
+  onProgress: (percent: number) => void,
+): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `images/reports/${reportId}/${Date.now()}.jpg`);
+  const task = uploadBytesResumable(storageRef, blob);
+
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(snapshot.bytesTransferred / snapshot.totalBytes),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  return getDownloadURL(storageRef);
 };
 
 // Só o admin consegue de fato escrever isso (firestore.rules restringe a

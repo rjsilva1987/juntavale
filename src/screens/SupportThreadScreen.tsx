@@ -2,6 +2,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -19,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { ADMIN_UID } from '@/config/admin';
+import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { SUPPORT_CATEGORY_LABELS } from '@/constants/supportCategories';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +31,7 @@ import {
   sendSupportMessage,
   subscribeSupportMessages,
   subscribeSupportTicket,
+  uploadSupportImage,
   SupportMessage,
   SupportTicket,
 } from '@/services/supportService';
@@ -51,6 +55,7 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const { showAlert, markSeen } = useSupportAlert();
 
@@ -94,6 +99,63 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
     }
   };
 
+  // S113 — mesmo padrão de handleSendImage do ChatScreen: sobe a foto,
+  // manda a mensagem com texto vazio + imageUrl. ownerUid é sempre
+  // ticket.uid, não user.uid — quando é o admin respondendo, o arquivo
+  // precisa cair sob o prefixo do DONO do chamado (ver comentário de
+  // uploadSupportImage em supportService.ts).
+  const handleSendImage = async (uri: string) => {
+    if (!user || !ticket) return;
+    setUploadProgress(0);
+    try {
+      const imageUrl = await uploadSupportImage(ticketId, ticket.uid, uri, setUploadProgress);
+      await sendSupportMessage(ticketId, user.uid, '', imageUrl);
+    } catch (error) {
+      console.error('Erro ao enviar imagem:', error);
+      Alert.alert('Erro', 'Não foi possível enviar a imagem.');
+    } finally {
+      setUploadProgress(null);
+    }
+  };
+
+  // Esta tela não tem Modal (sem attach sheet como o do ChatScreen) — o
+  // Alert.alert nativo abaixo não corre o mesmo risco de picker travado no
+  // iOS que o Modal do ChatScreen corre, então a proteção
+  // pendingAttachActionRef/onDismiss não se aplica aqui (ver conclusão da
+  // sprint S113).
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à câmera nas configurações.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (result.canceled || !result.assets[0]) return;
+    handleSendImage(result.assets[0].uri);
+  };
+
+  const handlePickFromLibrary = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à galeria nas configurações.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    handleSendImage(result.assets[0].uri);
+  };
+
+  const handleAttachPhoto = () => {
+    Alert.alert('Anexar foto', undefined, [
+      { text: 'Tirar foto', onPress: handleTakePhoto },
+      { text: 'Escolher da galeria', onPress: handlePickFromLibrary },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
   const renderMessage = ({ item }: { item: SupportMessage }) => {
     const isMe = item.senderId === user?.uid;
     const isFromAdmin = item.senderId === ADMIN_UID;
@@ -114,9 +176,29 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
               <Text style={styles.adminLabelText}>Equipe JuntaVale</Text>
             </View>
           )}
-          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
-            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{timeLabel}</Text>
+          <View
+            style={[
+              item.imageUrl ? styles.bubbleImageWrap : styles.bubble,
+              isMe ? styles.bubbleMe : styles.bubbleOther,
+            ]}
+          >
+            {item.imageUrl ? (
+              <>
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.bubbleImage}
+                  contentFit="cover"
+                  placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                  transition={200}
+                />
+                <Text style={[styles.bubbleTime, styles.bubbleTimeImage]}>{timeLabel}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+                <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{timeLabel}</Text>
+              </>
+            )}
           </View>
         </View>
       </View>
@@ -207,7 +289,22 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
             </View>
           )}
 
+          {uploadProgress !== null && (
+            <View style={styles.progressRow}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <View style={styles.progressTrack}>
+                <View
+                  style={[styles.progressFill, { width: `${Math.round(uploadProgress * 100)}%` }]}
+                />
+              </View>
+              <Text style={styles.progressText}>{Math.round(uploadProgress * 100)}%</Text>
+            </View>
+          )}
+
           <View style={styles.inputRow}>
+            <AnimatedPressable style={styles.attachBtn} onPress={handleAttachPhoto}>
+              <Ionicons name="camera-outline" size={22} color={theme.colors.textSecondary} />
+            </AnimatedPressable>
             <TextInput
               style={styles.input}
               placeholder="Escreva sua mensagem..."
@@ -317,6 +414,15 @@ const styles = StyleSheet.create({
   bubbleTime: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, alignSelf: 'flex-end' },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
 
+  bubbleImageWrap: { borderRadius: theme.borderRadius.lg, overflow: 'hidden' },
+  bubbleImage: { width: 200, height: 200, borderRadius: theme.borderRadius.lg },
+  bubbleTimeImage: {
+    position: 'absolute',
+    bottom: 6,
+    right: 10,
+    color: theme.colors.white,
+  },
+
   resolvedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -328,6 +434,24 @@ const styles = StyleSheet.create({
   },
   resolvedBannerText: { fontSize: theme.fontSize.sm, color: theme.colors.text, flexShrink: 1 },
 
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    backgroundColor: theme.colors.surface,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.surface,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', backgroundColor: theme.colors.primary },
+  progressText: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, width: 36 },
+
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -338,6 +462,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: theme.colors.border,
   },
+  attachBtn: { padding: 8 },
   input: {
     flex: 1,
     backgroundColor: theme.colors.surface,

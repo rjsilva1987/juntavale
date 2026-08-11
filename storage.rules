@@ -79,6 +79,50 @@ service firebase.storage {
       allow delete: if isParticipant();
     }
 
+    // ───────────────────────── report images (S113) ─────────────────────────
+    //
+    // Anexo de foto na thread reports/{reportId}/messages. Mesmo mecanismo de
+    // images/chats/{matchId} acima: firestore.get() cross-service pra achar
+    // quem é parte da denúncia, trocando "participante do match" por
+    // "denunciante ou admin" — mesma dupla que já pode ler/escrever a
+    // subcoleção messages em firestore.rules. O denunciado nunca entra aqui,
+    // mesma decisão de produto de lá.
+    match /images/reports/{reportId}/{fileName} {
+      function isReportParty() {
+        return isSignedIn()
+          && (request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3'
+              || request.auth.uid ==
+                 firestore.get(/databases/(default)/documents/reports/$(reportId)).data.reporterId);
+      }
+
+      allow read: if isReportParty();
+      allow create, update: if isReportParty() && isValidImage();
+      allow delete: if isReportParty();
+    }
+
+    // ───────────────────────── support images (S113) ─────────────────────────
+    //
+    // Anexo de foto na thread support/{ticketId}/messages. O path carrega
+    // {uid} ANTES de {ticketId} de propósito — deleteAccount varre por
+    // prefixo images/support/{uid}/ (functions/src/index.ts), então o dono
+    // precisa estar no início do caminho. Autorização espelha o mesmo
+    // firestore.get() de images/chats/{matchId}: em vez de checar
+    // participante de match, checa dono do ticket (ou admin) — mesma dupla
+    // que já pode ler/escrever a subcoleção messages em firestore.rules — e
+    // ainda amarra o segmento {uid} do path ao dono real do ticket, pra um
+    // upload nunca cair fora do prefixo que o deleteAccount espera.
+    match /images/support/{uid}/{ticketId}/{fileName} {
+      function isTicketParty() {
+        return isSignedIn()
+          && (request.auth.uid == uid || request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3')
+          && firestore.get(/databases/(default)/documents/support/$(ticketId)).data.uid == uid;
+      }
+
+      allow read: if isTicketParty();
+      allow create, update: if isTicketParty() && isValidImage();
+      allow delete: if isTicketParty();
+    }
+
     // ───────────────────────── verifications (S20) ─────────────────────────
     //
     // Selfie de verificação de perfil. NUNCA pública: só o dono sobe, só o
