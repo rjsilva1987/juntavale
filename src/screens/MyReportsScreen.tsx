@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,14 +14,37 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useReportAlert } from '@/contexts/ReportAlertContext';
 import { RootStackParamList } from '@/navigation';
 import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { getUserProfile } from '@/services/firestoreService';
 import { listenMyReports, Report } from '@/services/reportService';
 
 type MyReportsScreenProps = NativeStackScreenProps<RootStackParamList, 'MyReports'>;
+
+// S114 (correção por auditoria) — três ramos, não dois: undefined cobre
+// "ainda não buscado" E "busca falhou" (o cache nunca grava em erro de rede,
+// ver useEffect abaixo — mentir "Conta excluída" por causa de um timeout
+// seria pior que só repetir o motivo). null = perfil não encontrado de fato
+// (conta excluída, denúncias sobrevivem à exclusão de propósito, mesmo
+// raciocínio de partyLabel em AdminReportsScreen.tsx, mas sem o fallback pro
+// uid que a tela do admin tem). Nome vazio/só espaço (dado legado) cai no
+// mesmo "só motivo" — nunca um "·" solto.
+function reportedTitle(reason: Report['reason'], name: string | null | undefined): string {
+  const label = REPORT_REASON_LABELS[reason];
+  if (name === null) return `${label} · Conta excluída`;
+  if (name && name.trim().length > 0) return `${label} · ${name}`;
+  return label;
+}
 
 export default function MyReportsScreen({ navigation }: MyReportsScreenProps) {
   const { user } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reportedNames, setReportedNames] = useState<Record<string, string | null>>({});
+  // S114 (correção por auditoria) — Set de uids JÁ PEDIDOS, não só os já
+  // resolvidos. Ref de propósito: marcar aqui não deve provocar render nem
+  // entrar em deps do efeito abaixo (isso é o que evitava rastrear "em voo"
+  // e causava pedido duplicado quando dois uids novos resolviam em tempos
+  // diferentes).
+  const requestedUidsRef = useRef<Set<string>>(new Set());
   const { showAlert, markSeen } = useReportAlert();
 
   // Diferente de MyTicketsScreen (getMyTickets, um getDocs só): reportService
@@ -45,6 +68,37 @@ export default function MyReportsScreen({ navigation }: MyReportsScreenProps) {
     });
     return unsub;
   }, [user]);
+
+  // S114 (correção por auditoria) — nome do denunciado, buscado sob demanda
+  // por uid novo visto na lista. `requestedUidsRef` (não `reportedNames`) é
+  // quem decide o que falta pedir, por isso o efeito só depende de `reports`
+  // — a chegada de uma resposta não reroda o efeito e não pode disparar
+  // pedido duplicado pra outro uid do mesmo lote ainda pendente.
+  useEffect(() => {
+    let cancelled = false;
+    const missing = [...new Set(reports.map((r) => r.reportedId))].filter(
+      (uid) => !requestedUidsRef.current.has(uid),
+    );
+    missing.forEach((uid) => {
+      // Marcado ANTES da chamada: mesmo se a promise nunca resolver (unmount)
+      // ou rejeitar (ver .catch), o uid não volta pra fila.
+      requestedUidsRef.current.add(uid);
+      getUserProfile(uid)
+        .then((profile) => {
+          if (cancelled) return;
+          setReportedNames((prev) => ({ ...prev, [uid]: profile?.name ?? null }));
+        })
+        .catch(() => {
+          // Sem retry (uid já está em requestedUidsRef) e sem gravar no
+          // cache: `null` significa "conta excluída" e afirmar isso por
+          // causa de uma falha de rede seria mentira na tela. `reportedTitle`
+          // trata a ausência da chave igual a "ainda não buscado".
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reports]);
 
   // S84 — mesmo padrão de MyTicketsScreen/SupportThreadScreen: marcar como
   // visto é condicional a showAlert, não um disparo único.
@@ -85,7 +139,7 @@ export default function MyReportsScreen({ navigation }: MyReportsScreenProps) {
                 <View style={styles.info}>
                   <View style={styles.cardTopRow}>
                     <Text style={styles.reason} numberOfLines={1}>
-                      {REPORT_REASON_LABELS[item.reason]}
+                      {reportedTitle(item.reason, reportedNames[item.reportedId])}
                     </Text>
                     <View
                       style={[
