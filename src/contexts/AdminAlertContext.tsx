@@ -2,7 +2,7 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { Report } from '@/services/reportService';
@@ -25,14 +25,14 @@ export const useAdminAlert = () => useContext(AdminAlertContext);
 // S94-B (+ S96-B: reports) — contador de pendencias pras abas
 // Verificacoes/Chamados/Denuncias do admin. GUARDA OBRIGATORIA:
 // firestore.rules só libera list()/onSnapshot em verifications, support e
-// reports pra quem bate com isAdmin() (uid == ADMIN_UID) — mesma checagem de
+// reports pra quem bate com isAdmin() (uid in ADMIN_UIDS) — mesma checagem de
 // getPendingVerifications em verificationService.ts. Montar estes listeners
 // pra um usuário comum dispararia permission-denied em série a cada
-// snapshot, então sem usuário logado OU com user.uid !== ADMIN_UID nenhum
+// snapshot, então sem usuário logado OU com !isAdminUid(user?.uid) nenhum
 // onSnapshot é montado: o Provider devolve 0/0/0 direto.
 export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
+  const isAdmin = isAdminUid(user?.uid);
   const [pendingVerifications, setPendingVerifications] = useState(0);
   const [pendingTickets, setPendingTickets] = useState(0);
   const [pendingReports, setPendingReports] = useState(0);
@@ -63,11 +63,11 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       // Admin SDK — ver functions/src/index.ts). Chamado aberto ANTES dessa
       // data não tem o campo, e não pode ficar invisível aqui só por isso —
       // por isso doc SEM lastSenderId também conta como pendente. Só um
-      // ticket cuja ÚLTIMA mensagem foi do próprio admin (lastSenderId ===
-      // ADMIN_UID) fica de fora da contagem.
+      // ticket cuja ÚLTIMA mensagem foi de QUALQUER admin (isAdminUid(lastSenderId))
+      // fica de fora da contagem.
       const pending = snap.docs.filter((d) => {
         const { lastSenderId } = d.data() as SupportTicket;
-        return lastSenderId !== ADMIN_UID;
+        return !isAdminUid(lastSenderId);
       });
       setPendingTickets(pending.length);
     });
@@ -89,7 +89,7 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const pending = snap.docs.filter((d) => {
         const { status, lastSenderId } = d.data() as Report;
         const isPending = status === undefined || status === 'open';
-        return isPending && lastSenderId !== ADMIN_UID;
+        return isPending && !isAdminUid(lastSenderId);
       });
       setPendingReports(pending.length);
     });

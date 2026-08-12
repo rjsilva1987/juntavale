@@ -20,7 +20,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -157,7 +157,7 @@ export default function ReportThreadScreen({ route, navigation }: ReportThreadSc
   // quem está vendo a tela (o denunciante), nunca ao admin.
   const renderMessage = ({ item }: { item: ReportMessage }) => {
     const isMe = item.senderId === user?.uid;
-    const isFromAdmin = item.senderId === ADMIN_UID;
+    const isFromAdmin = isAdminUid(item.senderId);
     const now = dayjs();
     const createdAt = item.createdAt ? dayjs(item.createdAt.toDate()) : null;
     const timeLabel = createdAt

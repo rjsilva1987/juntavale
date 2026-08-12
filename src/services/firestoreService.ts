@@ -27,7 +27,7 @@ import {
   deleteObject,
 } from 'firebase/storage';
 
-import { ADMIN_UID } from '@/config/admin';
+import { ADMIN_UIDS } from '@/config/admin';
 import { LookingFor } from '@/constants/lookingFor';
 import { AboutFieldId, AboutValues } from '@/constants/profileAbout';
 import { REPLY_LIMIT } from '@/constants/reply';
@@ -430,8 +430,9 @@ export const getDiscoverProfiles = async (
     query(collection(db, 'swipes'), where('from', '==', currentUid)),
   );
   const swipedIds = swipesSnap.docs.map((d) => d.data().to as string);
-  // ADMIN_UID nunca aparece no Descobrir, mesmo sem bloqueio/swipe prévio.
-  swipedIds.push(currentUid, ADMIN_UID, ...(blockedUsers ?? []));
+  // S115 — nenhum dos admins (ADMIN_UIDS) aparece no Descobrir, mesmo sem
+  // bloqueio/swipe prévio.
+  swipedIds.push(currentUid, ...ADMIN_UIDS, ...(blockedUsers ?? []));
 
   // Fetch all users not yet swiped (Firestore doesn't support NOT IN > 10 easily,
   // so for production use a Cloud Function or pagination). Age/gender/UF

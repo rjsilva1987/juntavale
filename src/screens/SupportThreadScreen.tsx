@@ -20,7 +20,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { SUPPORT_CATEGORY_LABELS } from '@/constants/supportCategories';
 import { theme } from '@/constants/theme';
@@ -47,7 +47,7 @@ function categoryLabel(category: string): string {
 export default function SupportThreadScreen({ route, navigation }: SupportThreadScreenProps) {
   const { ticketId } = route.params;
   const { user } = useAuth();
-  const isAdminViewer = user?.uid === ADMIN_UID;
+  const isAdminViewer = isAdminUid(user?.uid);
 
   // undefined = ainda carregando o primeiro snapshot, null = não
   // encontrado/sem permissão (ticket apagado, por exemplo).
@@ -158,7 +158,7 @@ export default function SupportThreadScreen({ route, navigation }: SupportThread
 
   const renderMessage = ({ item }: { item: SupportMessage }) => {
     const isMe = item.senderId === user?.uid;
-    const isFromAdmin = item.senderId === ADMIN_UID;
+    const isFromAdmin = isAdminUid(item.senderId);
     const now = dayjs();
     const createdAt = item.createdAt ? dayjs(item.createdAt.toDate()) : null;
     const timeLabel = createdAt

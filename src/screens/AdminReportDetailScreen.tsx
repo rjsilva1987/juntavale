@@ -20,9 +20,10 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
@@ -51,6 +52,7 @@ export default function AdminReportDetailScreen({
   navigation,
 }: AdminReportDetailScreenProps) {
   const { reportId } = route.params;
+  const { user } = useAuth();
   // undefined = ainda carregando, null = denúncia não encontrada.
   const [report, setReport] = useState<Report | null | undefined>(undefined);
   const [reporterProfile, setReporterProfile] = useState<UserProfile | null | undefined>(undefined);
@@ -101,10 +103,10 @@ export default function AdminReportDetailScreen({
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !report || sending) return;
+    if (!trimmed || !report || !user || sending) return;
     setSending(true);
     try {
-      await sendReportMessage(reportId, ADMIN_UID, trimmed);
+      await sendReportMessage(reportId, user.uid, trimmed);
       setText('');
     } catch (err) {
       console.error(err);
@@ -117,11 +119,11 @@ export default function AdminReportDetailScreen({
   // S113 — mesmo padrão de handleSendImage do ChatScreen: sobe a foto,
   // manda a mensagem com texto vazio + imageUrl.
   const handleSendImage = async (uri: string) => {
-    if (!report) return;
+    if (!report || !user) return;
     setUploadProgress(0);
     try {
       const imageUrl = await uploadReportImage(reportId, uri, setUploadProgress);
-      await sendReportMessage(reportId, ADMIN_UID, '', imageUrl);
+      await sendReportMessage(reportId, user.uid, '', imageUrl);
     } catch (error) {
       console.error('Erro ao enviar imagem:', error);
       Alert.alert('Erro', 'Não foi possível enviar a imagem.');
@@ -172,7 +174,7 @@ export default function AdminReportDetailScreen({
   // escreve aqui (firestore.rules, reports/{reportId}/messages). isMe é
   // sempre relativo ao admin, que é quem sempre vê esta tela.
   const renderMessage = ({ item }: { item: ReportMessage }) => {
-    const isMe = item.senderId === ADMIN_UID;
+    const isMe = isAdminUid(item.senderId);
     const now = dayjs();
     const createdAt = item.createdAt ? dayjs(item.createdAt.toDate()) : null;
     const timeLabel = createdAt

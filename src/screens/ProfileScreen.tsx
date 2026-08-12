@@ -31,7 +31,7 @@ import { FounderBadge } from '@/components/FounderBadge';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { UfPicker } from '@/components/UfPicker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { LOOKING_FOR_LABELS, LOOKING_FOR_OPTIONS, LookingFor } from '@/constants/lookingFor';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import {
@@ -126,7 +126,7 @@ const MAX_BIO_LENGTH = 500;
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
+  const isAdmin = isAdminUid(user?.uid);
   // S78 — mesmo hook do badge da tab bar (navigation/index.tsx); aqui vira
   // o pontinho na linha de verificação, não o badge da aba.
   const { showAlert: showVerificationAlert } = useVerificationAlert();

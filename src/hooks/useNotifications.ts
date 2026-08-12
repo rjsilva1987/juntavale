@@ -2,7 +2,7 @@
 import type * as NotificationsType from 'expo-notifications';
 import { useEffect, useRef } from 'react';
 
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { useAuth } from '@/contexts/AuthContext';
 import { navigationRef } from '@/navigation/navigationRef';
 import {
@@ -49,7 +49,7 @@ export function useNotifications() {
           // (só Verificações/Chamados/Perfil, ver MainTabs em
           // navigation/index.tsx); pushes desses tipos apontam pra rotas que
           // não existem na sessão dele, então são ignorados nesse caso.
-          const isAdmin = userRef.current?.uid === ADMIN_UID;
+          const isAdmin = isAdminUid(userRef.current?.uid);
           if (
             isAdmin &&
             (data.type === 'match' ||

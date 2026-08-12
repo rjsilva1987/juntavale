@@ -23,6 +23,15 @@ import {
 import { removePushToken } from '@/services/notifications';
 import { calculateAge } from '@/utils/birthDate';
 
+// S115 — apelido de login pros dois admins, resolvido em login() abaixo
+// (cobre qualquer chamador, não só a LoginScreen). Mapa EXPLÍCITO e fechado:
+// só os dois apelidos abaixo viram e-mail; qualquer outro texto passa intacto
+// pro Firebase, sem completar domínio genericamente.
+const ADMIN_LOGIN_ALIASES: Record<string, string> = {
+  admin: 'admin@admin.com',
+  admin2: 'admin2@admin.com',
+};
+
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
@@ -136,7 +145,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
+    const alias = ADMIN_LOGIN_ALIASES[email.trim().toLowerCase()];
+    const cred = await signInWithEmailAndPassword(auth, alias ?? email, password);
     const p = await getUserProfile(cred.user.uid);
     setProfile(p);
   };

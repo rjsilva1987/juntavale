@@ -24,10 +24,15 @@ const bucket = getStorage().bucket();
 const expo = new Expo();
 const REGION = 'southamerica-east1';
 
-// Uid da conta admin, hardcoded de propósito — mesmo padrão de
-// src/config/admin.ts e do literal em firestore.rules: nenhum dos três
-// arquivos importa o outro, então precisam ficar em sincronia manual.
-const ADMIN_UID = 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3';
+// S115 — dois uids admin, hardcoded de propósito — mesmo padrão de
+// src/config/admin.ts e dos literais em firestore.rules/storage.rules: nenhum
+// destes arquivos importa o outro, então precisam ficar em sincronia manual.
+// ADMIN_UID segue apontando pro uid ORIGINAL: usado como VALOR (destinatário/
+// remetente de push, linhas 439/509), não só comparação — sem "qual dos dois
+// admins" pra decidir ali.
+const ADMIN_UIDS = ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3'];
+const ADMIN_UID = ADMIN_UIDS[0];
+const isAdminUid = (uid?: string | null): boolean => !!uid && ADMIN_UIDS.includes(uid);
 
 // Réplica mínima de SUPPORT_CATEGORY_LABELS (src/constants/supportCategories.ts)
 // — functions não importa código do app, então este mapa precisa ficar em
@@ -431,7 +436,7 @@ export const onVerificationSubmitted = onDocumentWritten(
     if (!after) return; // doc apagado
     if (after.status !== 'pending') return; // revisão do admin (approved/rejected)
     if (before?.status === 'pending') return; // já estava pendente: sem mudança de estado
-    if (uid === ADMIN_UID) return; // admin verificando a si mesmo
+    if (isAdminUid(uid)) return; // admin verificando a si mesmo
 
     const userSnap = await db.doc(`users/${uid}`).get();
     const name = (userSnap.data()?.name as string | undefined) ?? 'Alguém';
@@ -501,7 +506,7 @@ export const onSupportMessageCreated = onDocumentCreated(
     let recipientUid: string;
     let title: string;
     let body: string;
-    if (message.senderId === ADMIN_UID) {
+    if (isAdminUid(message.senderId)) {
       recipientUid = ticket.uid;
       title = 'Equipe JuntaVale';
       body = 'Sua solicitação foi respondida';
@@ -573,7 +578,7 @@ export const onReportMessageCreated = onDocumentCreated(
     // Só o admin dispara push nesta etapa — mensagem do próprio denunciante
     // nunca chega aqui (guarda abaixo também cobriria, mas nem monta o
     // payload à toa).
-    if (message.senderId !== ADMIN_UID) return;
+    if (!isAdminUid(message.senderId)) return;
 
     const recipientUid = report.reporterId;
     if (recipientUid === message.senderId) return;
@@ -1011,7 +1016,7 @@ export const assignFounderNumber = onDocumentCreated(
 
     // Admin nunca recebe número, mesmo com o contador ligado — checado antes
     // da transação pra não gastar uma leitura/escrita à toa.
-    if (uid === ADMIN_UID) {
+    if (isAdminUid(uid)) {
       console.log('[assignFounderNumber] uid admin, ignorado:', uid);
       return;
     }

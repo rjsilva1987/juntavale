@@ -9,7 +9,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ADMIN_UID } from '@/config/admin';
+import { isAdminUid } from '@/config/admin';
 import { theme } from '@/constants/theme';
 import { useAdminAlert } from '@/contexts/AdminAlertContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -126,7 +126,7 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
+  const isAdmin = isAdminUid(user?.uid);
   const unreadCount = useUnreadCount();
   // S78 — sem contagem (não é "quantas revisões", é "tem uma nova pra ver"),
   // então o badge não usa número: um espaço só deixa a bolinha visível, sem
@@ -268,7 +268,7 @@ function MainTabs() {
 
 export default function Navigation() {
   const { user, loading } = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
+  const isAdmin = isAdminUid(user?.uid);
   useNotifications();
   useActivityTracker();
   usePresenceHeartbeat();

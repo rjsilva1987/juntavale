@@ -90,7 +90,7 @@ service firebase.storage {
     match /images/reports/{reportId}/{fileName} {
       function isReportParty() {
         return isSignedIn()
-          && (request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3'
+          && (request.auth.uid in ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3']
               || request.auth.uid ==
                  firestore.get(/databases/(default)/documents/reports/$(reportId)).data.reporterId);
       }
@@ -114,7 +114,8 @@ service firebase.storage {
     match /images/support/{uid}/{ticketId}/{fileName} {
       function isTicketParty() {
         return isSignedIn()
-          && (request.auth.uid == uid || request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3')
+          && (request.auth.uid == uid
+              || request.auth.uid in ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3'])
           && firestore.get(/databases/(default)/documents/support/$(ticketId)).data.uid == uid;
       }
 
@@ -126,13 +127,14 @@ service firebase.storage {
     // ───────────────────────── verifications (S20) ─────────────────────────
     //
     // Selfie de verificação de perfil. NUNCA pública: só o dono sobe, só o
-    // dono ou o admin leem. Uid do admin hardcoded de propósito — Storage
-    // Rules não importa src/config/admin.ts, então este valor precisa ficar
-    // em sincronia manual com ADMIN_UID no app e com o mesmo literal em
-    // firestore.rules.
+    // dono ou o admin leem. S115 — dois uids admin, hardcoded de propósito —
+    // Storage Rules não importa src/config/admin.ts, então esta lista precisa
+    // ficar em sincronia manual com ADMIN_UIDS no app e com os mesmos
+    // literais em firestore.rules.
     match /verifications/{uid}/{fileName} {
       allow read: if isSignedIn()
-        && (request.auth.uid == uid || request.auth.uid == 'Gd0pJi8WjYS60JHOnhIx9R6vktJ3');
+        && (request.auth.uid == uid
+            || request.auth.uid in ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3']);
       allow write: if isSignedIn() && request.auth.uid == uid && isValidImage();
     }
 
