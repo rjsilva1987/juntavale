@@ -15,7 +15,9 @@ import {
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import nodemailer from 'nodemailer';
 
 initializeApp();
 
@@ -23,6 +25,7 @@ const db = getFirestore();
 const bucket = getStorage().bucket();
 const expo = new Expo();
 const REGION = 'southamerica-east1';
+const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 
 // S115 — dois uids admin, hardcoded de propósito — mesmo padrão de
 // src/config/admin.ts e dos literais em firestore.rules/storage.rules: nenhum
@@ -1207,5 +1210,39 @@ export const deleteAccount = onCall(
 
     console.log('[deleteAccount] concluído:', uid);
     return { success: true };
+  },
+);
+
+// S117 — notifica por e-mail (via Gmail) toda vez que a landing (site/index.html)
+// grava um novo cadastro em testerSignups. Mesmo padrão estrutural do
+// onReportMessageCreated acima: event.data/snap.data() com cast de tipo
+// inline, try/catch não-fatal em torno do efeito colateral (lá é push, aqui
+// é e-mail) — falha de envio não deve derrubar a function.
+export const onTesterSignupCreated = onDocumentCreated(
+  { document: 'testerSignups/{signupId}', region: REGION, secrets: [GMAIL_APP_PASSWORD] },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const data = snap.data() as { email: string; createdAt?: Timestamp; source?: string };
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'contato.juntavale@gmail.com',
+        pass: GMAIL_APP_PASSWORD.value(),
+      },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: 'JuntaVale <contato.juntavale@gmail.com>',
+        to: 'contato.juntavale@gmail.com',
+        subject: 'Novo testador quer participar do JuntaVale',
+        text: `Novo cadastro na landing:\n\nE-mail: ${data.email}\n\nConfira e envie o convite pelo Play Console (Testadores internos/fechados).`,
+      });
+    } catch (error) {
+      console.error('[onTesterSignupCreated] falha ao enviar e-mail:', error);
+    }
   },
 );
