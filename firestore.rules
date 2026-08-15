@@ -1,4 +1,11 @@
-// rules-stamp: S115 (segundo uid admin — isAdmin() passa a aceitar 2 uids via
+// rules-stamp: S116 (nova collection testerSignups — captação de testadores
+// pela landing: allow create público (sem auth) restrito a exatamente 3
+// campos via hasOnly+hasAll — email (string, 5<len<=200, regex simples),
+// createdAt (== request.time) e source (== 'site'); allow read/update/delete
+// bloqueado pra todo mundo, leitura é só via Console/Admin SDK, que ignora
+// rules; cada `match` é isolado — testerSignups não herda nada do
+// catch-all {document=**}=>false no fim do arquivo, só cobre esse; nenhuma
+// regra existente foi tocada) + S115 (segundo uid admin — isAdmin() passa a aceitar 2 uids via
 // `in [...]`, mesma sintaxe já usada em `status in [...]` mais abaixo; regra
 // de create de matches/{matchId} ganha 2ª cláusula !('uid2' in ...users)
 // cobrindo o admin novo, ao lado da já existente do admin original) + S113
@@ -1214,6 +1221,23 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['lastSeenAt']);
 
       allow delete: if false;
+    }
+
+    // ───────────────────────── testerSignups ─────────────────────────
+    // Captação de testadores pela landing (site/index.html) — formulário
+    // público, sem autenticação. Só create, com exatamente 3 campos; leitura
+    // é feita pelo Console (Admin SDK ignora rules), nunca pelo client.
+    match /testerSignups/{signupId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'source'])
+        && request.resource.data.keys().hasAll(['email', 'createdAt', 'source'])
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 5
+        && request.resource.data.email.size() <= 200
+        && request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && request.resource.data.source == 'site'
+        && request.resource.data.createdAt == request.time;
+
+      allow read, update, delete: if false;
     }
 
     // ───────────────────────── deny by default ─────────────────────────
