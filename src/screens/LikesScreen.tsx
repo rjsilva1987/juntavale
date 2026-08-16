@@ -228,13 +228,19 @@ export default function LikesScreen() {
   );
 
   const goToProfile = (profile: UserProfile, alreadyLiked?: boolean, note?: string) => {
-    // S119 — não-verificado nunca chega ao MatchProfile a partir daqui; mesmo
-    // texto novo (sem sobreposição com os outros 3 pontos de gate do
-    // projeto — aqueles falam de Super Like/conversar, não de ver curtidas).
+    // S119-B — não-verificado nunca chega ao MatchProfile a partir daqui;
+    // mesmo formato de Alert.alert de MatchesScreen.tsx:54-61 (título,
+    // mensagem, Cancelar/Verificar agora, navigate('Verification') pelo
+    // `navigation` local, não navigationRef) — antes só mostrava um Alert
+    // de botão único, sem caminho direto pra Verificação.
     if (!isVerified) {
       Alert.alert(
-        'Recurso para verificados',
-        'Apenas perfis verificados podem ver quem curtiu você e suas curtidas. Verifique seu perfil para desbloquear.',
+        'Verifique seu perfil para ver as curtidas',
+        'Você precisa verificar seu perfil antes de ver quem curtiu você.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Verificar agora', onPress: () => navigation.navigate('Verification') },
+        ],
       );
       return;
     }
