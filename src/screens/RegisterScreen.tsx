@@ -1,5 +1,6 @@
 // src/screens/RegisterScreen.tsx
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import {
   View,
@@ -25,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { Gender } from '@/services/firestoreService';
 import { BirthParseReason, parseBirthInput } from '@/utils/birthDate';
+import { pickFromCamera, pickFromGallery } from '@/utils/pickPhoto';
 import { countCodePoints } from '@/utils/text';
 
 // S77 — alinhado com MAX_BIO_LENGTH do ProfileScreen (mesma edição de bio,
@@ -96,12 +98,23 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [lookingFor, setLookingFor] = useState<LookingFor | undefined>(undefined);
   const [vale, setVale] = useState<Vale | undefined>(undefined);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const toggleInterest = (item: string) => {
     setSelectedInterests((prev) =>
       prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item],
     );
+  };
+
+  const handlePickSelfie = async () => {
+    const pick = await pickFromCamera();
+    if (pick.uri) setPhotoUri(pick.uri);
+  };
+
+  const handlePickGallery = async () => {
+    const pick = await pickFromGallery();
+    if (pick.uri) setPhotoUri(pick.uri);
   };
 
   const handleRegister = async () => {
@@ -125,6 +138,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
       Alert.alert('Gênero obrigatório', 'Selecione seu gênero.');
       return;
     }
+    if (!photoUri) {
+      Alert.alert('Foto obrigatória', 'Adicione uma foto pra continuar.');
+      return;
+    }
     const birthResult = parseBirthInput(birthDateText);
     if (birthResult.ok === false) {
       Alert.alert('Data de nascimento', BIRTH_ERROR_MESSAGES[birthResult.reason]);
@@ -143,6 +160,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         uf,
         vale,
         gender,
+        photoUri,
       );
     } catch (e) {
       // S62 — mensagem em português via catálogo (nunca e.message cru).
@@ -169,7 +187,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </AnimatedPressable>
             )}
             <View style={styles.steps}>
-              {[1, 2, 3].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <View key={s} style={[styles.stepDot, step >= s && styles.stepDotActive]} />
               ))}
             </View>
@@ -389,9 +407,47 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               </View>
 
               <AnimatedPressable
-                style={[styles.btnPrimary, (loading || !lookingFor || !vale) && { opacity: 0.7 }]}
+                style={[styles.btnPrimary, !(lookingFor && vale) && { opacity: 0.7 }]}
+                disabled={!lookingFor || !vale}
+                onPress={() => setStep(4)}
+              >
+                <Text style={styles.btnPrimaryText}>Continuar</Text>
+              </AnimatedPressable>
+            </View>
+          )}
+
+          {/* Step 4 — Foto de perfil */}
+          {step === 4 && (
+            <View style={styles.card}>
+              <Text style={styles.title}>Sua foto</Text>
+              <Text style={styles.subtitle}>Obrigatória — pelo menos 1 foto pra continuar</Text>
+
+              {photoUri ? (
+                <View style={styles.photoPreviewWrap}>
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={styles.photoPreview}
+                    contentFit="cover"
+                  />
+                  <AnimatedPressable onPress={() => setPhotoUri(null)}>
+                    <Text style={styles.linkText}>Trocar foto</Text>
+                  </AnimatedPressable>
+                </View>
+              ) : (
+                <View style={styles.photoButtonsRow}>
+                  <AnimatedPressable style={styles.photoOptionBtn} onPress={handlePickSelfie}>
+                    <Text style={styles.photoOptionText}>Tirar selfie</Text>
+                  </AnimatedPressable>
+                  <AnimatedPressable style={styles.photoOptionBtn} onPress={handlePickGallery}>
+                    <Text style={styles.photoOptionText}>Escolher da galeria</Text>
+                  </AnimatedPressable>
+                </View>
+              )}
+
+              <AnimatedPressable
+                style={[styles.btnPrimary, (loading || !photoUri) && { opacity: 0.7 }]}
                 onPress={handleRegister}
-                disabled={loading || !lookingFor || !vale}
+                disabled={loading || !photoUri}
               >
                 {loading ? (
                   <ActivityIndicator color={theme.colors.onSecondary} />
@@ -539,4 +595,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   lookingForTextActive: { color: theme.colors.onPrimary },
+
+  photoPreviewWrap: { alignItems: 'center', marginTop: theme.spacing.md, gap: theme.spacing.sm },
+  photoPreview: { width: 160, height: 160, borderRadius: 80, backgroundColor: theme.colors.border },
+  photoButtonsRow: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md },
+  photoOptionBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  photoOptionText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: '600',
+  },
 });

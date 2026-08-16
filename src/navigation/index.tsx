@@ -9,6 +9,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { RequirePhotoModal } from '@/components/RequirePhotoModal';
 import { isAdminUid } from '@/config/admin';
 import { theme } from '@/constants/theme';
 import { useAdminAlert } from '@/contexts/AdminAlertContext';
@@ -371,6 +372,11 @@ export default function Navigation() {
           </Stack.Group>
         )}
       </Stack.Navigator>
+      {/* S120 — montado só pro grupo "app" (usuário logado) acima, mesmo gate
+          `user` do Stack.Group; não pode ir DENTRO do Stack.Group porque ele
+          só aceita Stack.Screen como filho — Modal do RN é overlay nativo,
+          cobre a tela toda igual de qualquer jeito, sendo irmão aqui. */}
+      {user && <RequirePhotoModal />}
     </NavigationContainer>
   );
 }

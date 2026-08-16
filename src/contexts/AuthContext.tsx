@@ -1,6 +1,7 @@
 // src/contexts/AuthContext.tsx
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
@@ -18,6 +19,7 @@ import {
   clearSessionSwipes,
   getUserProfile,
   Gender,
+  uploadProfilePhoto,
   UserProfile,
 } from '@/services/firestoreService';
 import { removePushToken } from '@/services/notifications';
@@ -47,6 +49,7 @@ interface AuthContextType {
     uf: UF,
     vale: Vale,
     gender: Gender,
+    photoUri: string,
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -111,37 +114,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     uf: UF,
     vale: Vale,
     gender: Gender,
+    photoUri: string,
   ) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName: name });
-    // S76-A — age é derivado de birthDate, calculado uma vez aqui no cadastro.
-    const age = calculateAge(birthDate, new Date());
-    const newProfile: Omit<UserProfile, 'uid'> = {
-      name,
-      age,
-      bio,
-      photoURL: '',
-      photos: [],
-      interests,
-      lookingFor,
-      uf,
-      vale,
-      gender,
-    };
-    // createUserWithEmailAndPassword acima fica fora deste setDoc de
-    // propósito — Auth não é Firestore, as duas operações não podem ser
-    // atômicas entre si. Se o setDoc abaixo falhar, sobra uma conta Auth sem
-    // doc no Firestore. O ChaveF (users/{uid}/private/registration) não é
-    // mais capturado aqui — passou a ser pedido na VerificationScreen, junto
-    // do envio da selfie (ver submitRegistrationPrivate em firestoreService.ts).
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      ...newProfile,
-      uid: cred.user.uid,
-      birthDate,
-      createdAt: serverTimestamp(),
-    });
+    // S120 — createUserWithEmailAndPassword acima ainda fica fora do try:
+    // se ELE falhar, nenhuma conta Auth chega a existir, não há o que
+    // desfazer. A partir daqui (updateProfile, upload da foto, setDoc), a
+    // conta Auth já existe — Auth e Firestore/Storage continuam não-atômicos
+    // entre si, então qualquer falha destas três chamadas cai no catch, que
+    // desfaz a conta Auth recém-criada (deleteUser) antes de relançar o
+    // erro. Isso fecha a janela de conta órfã que existia antes (setDoc sem
+    // rollback); a única forma de ainda sobrar órfã é o próprio deleteUser
+    // falhar (ex.: sem rede no momento do catch) — caso residual, tratado
+    // abaixo com console.error identificando o uid órfão, sem mascarar o
+    // erro original que já vai pro Alert da tela (o throw continua o mesmo).
+    // O ChaveF
+    // (users/{uid}/private/registration) não é capturado aqui — segue pedido
+    // na VerificationScreen, junto do envio da selfie de verificação (ver
+    // submitRegistrationPrivate em firestoreService.ts) — não confundir com
+    // a foto de perfil deste cadastro.
+    try {
+      await updateProfile(cred.user, { displayName: name });
+      // S76-A — age é derivado de birthDate, calculado uma vez aqui no cadastro.
+      const age = calculateAge(birthDate, new Date());
+      const photoURL = await uploadProfilePhoto(cred.user.uid, photoUri);
+      const newProfile: Omit<UserProfile, 'uid'> = {
+        name,
+        age,
+        bio,
+        photoURL,
+        photos: [photoURL],
+        interests,
+        lookingFor,
+        uf,
+        vale,
+        gender,
+      };
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        ...newProfile,
+        uid: cred.user.uid,
+        birthDate,
+        createdAt: serverTimestamp(),
+      });
 
-    setProfile({ ...newProfile, uid: cred.user.uid });
+      setProfile({ ...newProfile, uid: cred.user.uid });
+    } catch (e) {
+      await deleteUser(cred.user).catch((rollbackError) => {
+        // S120 — o erro original (e) já vai pro Alert da tela via throw
+        // abaixo; este console.error é só pra não perder o rastro de QUAL
+        // conta ficou órfã quando o próprio rollback falha (caso residual
+        // documentado no comentário acima).
+        console.error(
+          `[AuthContext.register] rollback falhou — uid ${cred.user.uid} pode ter ficado órfão no Auth`,
+          rollbackError,
+        );
+      });
+      throw e;
+    }
   };
 
   const login = async (email: string, password: string) => {

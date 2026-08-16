@@ -1,4 +1,8 @@
-// rules-stamp: S116 (nova collection testerSignups — captação de testadores
+// rules-stamp: S120 (isValidProfile: teto de data.photos passa de <=6 pra
+// <=4, alinhando com MAX_PROFILE_PHOTOS do client em firestoreService.ts —
+// só o número mudou, hasOnly de create/update de users/{userId} continuam
+// intactos, `photos` já estava nas duas listas antes desta sprint) + S116
+// (nova collection testerSignups — captação de testadores
 // pela landing: allow create público (sem auth) restrito a exatamente 3
 // campos via hasOnly+hasAll — email (string, 5<len<=200, regex simples),
 // createdAt (== request.time) e source (== 'site'); allow read/update/delete
@@ -261,7 +265,7 @@ service cloud.firestore {
              && request.time - data.birthDate < duration.value(36890, 'd')))
         && data.bio is string && data.bio.size() <= 2000
         && data.photoURL is string
-        && data.photos is list && data.photos.size() <= 6
+        && data.photos is list && data.photos.size() <= 4
         && data.interests is list && data.interests.size() <= 15
         && (!('gender' in data) || data.gender in ['masculino', 'feminino', 'outro'])
         && (!('location' in data) || (data.location.lat is number && data.location.lng is number))
