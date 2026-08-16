@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import React, { useCallback, useState } from 'react';
@@ -38,6 +39,12 @@ interface LikeCardProps {
   // respondido). Mesmo padrão do `note?` acima: só "Quem curtiu você" passa
   // adiante (useMyLikes não expõe, ver hook).
   context?: SwipeContext;
+  // S119 — true quando o usuário LOGADO não é verificado: cobre o card com
+  // blur (não remove o conteúdo, só esconde visualmente), mesmo card das
+  // duas abas. Verified vem de profile?.verified do próprio usuário
+  // (useAuth), nunca de profile.verified do card exibido (esse já existe
+  // acima, é outro campo — ver comentário de VerifiedBadge).
+  blurred: boolean;
   onPress: () => void;
   onMenuPress: () => void;
 }
@@ -50,6 +57,7 @@ function LikeCard({
   likedPhotoURL,
   note,
   context,
+  blurred,
   onPress,
   onMenuPress,
 }: LikeCardProps) {
@@ -139,6 +147,17 @@ function LikeCard({
       <View style={styles.heartBadge}>
         <Ionicons name="heart" size={16} color={theme.colors.onSecondary} />
       </View>
+      {/* S119 — não-verificado: card continua montado (estrutura/layout
+          intactos), só fica coberto por blur. onPress do card (goToProfile)
+          já barra a navegação e mostra o Alert nesse caso, ver LikesScreen. */}
+      {blurred && (
+        <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={styles.lockOverlay}>
+            <Ionicons name="lock-closed" size={28} color={theme.colors.onSecondary} />
+            <Text style={styles.lockText}>Verifique-se para ver</Text>
+          </View>
+        </BlurView>
+      )}
     </AnimatedPressable>
   );
 }
@@ -149,6 +168,10 @@ export default function LikesScreen() {
   const [tab, setTab] = useState<Tab>('received');
   const { likers, loading: loadingReceived, reload: reloadReceived } = useLikers();
   const { profiles: myLikes, loading: loadingSent, reload: reloadSent } = useMyLikes();
+  // S119 — gate client-side, mesmo padrão de SwipeScreen/MatchesScreen
+  // (Alert.alert + navegação bloqueada; garantia de verdade fica pro
+  // client, não há regra nova em firestore.rules pra swipes/ nesta sprint).
+  const isVerified = profile?.verified === true;
 
   // Menu (denunciar/bloquear) do card — compartilhado pelas duas abas porque
   // o LikeCard também é compartilhado (ver comentário acima do componente).
@@ -205,6 +228,16 @@ export default function LikesScreen() {
   );
 
   const goToProfile = (profile: UserProfile, alreadyLiked?: boolean, note?: string) => {
+    // S119 — não-verificado nunca chega ao MatchProfile a partir daqui; mesmo
+    // texto novo (sem sobreposição com os outros 3 pontos de gate do
+    // projeto — aqueles falam de Super Like/conversar, não de ver curtidas).
+    if (!isVerified) {
+      Alert.alert(
+        'Recurso para verificados',
+        'Apenas perfis verificados podem ver quem curtiu você e suas curtidas. Verifique seu perfil para desbloquear.',
+      );
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('MatchProfile', {
       uid: profile.uid,
@@ -305,6 +338,7 @@ export default function LikesScreen() {
                   likedPhotoURL={item.likedPhotoURL}
                   note={item.note}
                   context={item.context}
+                  blurred={!isVerified}
                   onPress={() => goToProfile(item.profile, undefined, item.note)}
                   onMenuPress={() => openMenu(item.profile)}
                 />
@@ -329,6 +363,7 @@ export default function LikesScreen() {
             <LikeCard
               profile={item.profile}
               isSuperLike={item.isSuperLike}
+              blurred={!isVerified}
               onPress={() => goToProfile(item.profile, true)}
               onMenuPress={() => openMenu(item.profile)}
             />
@@ -539,6 +574,22 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // S119 — conteúdo de quem não é verificado, cobrindo o card inteiro
+  // (BlurView tint="light" por trás); cor do ícone/texto é onSecondary
+  // (navy) de propósito — contraste sobre o fundo claro do blur.
+  lockOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  lockText: {
+    color: theme.colors.onSecondary,
+    fontWeight: '600',
+    fontSize: theme.fontSize.xs,
+    textAlign: 'center',
   },
 
   sheetBackdrop: {
