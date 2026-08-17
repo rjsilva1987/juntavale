@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.juntavale.app",
       "buildNumber": "1",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Para enviar fotos no chat e tirar sua selfie de verificação de perfil.",
         "NSPhotoLibraryUsageDescription": "Para usar sua foto de perfil.",
         "NSLocationWhenInUseUsageDescription": "Para compartilhar sua localização em uma conversa, quando você escolher."
