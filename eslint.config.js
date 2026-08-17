@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import globals from 'globals';
 import typescript from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
@@ -21,6 +22,7 @@ export default [
         ecmaFeatures: { jsx: true },
       },
       globals: {
+        ...globals.commonjs,
         console: 'readonly',
         process: 'readonly',
         global: 'readonly',

@@ -26,6 +26,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 
+import { BrandMark } from '@/components/BrandMark';
 import { EmptyState } from '@/components/EmptyState';
 import { FilterModal } from '@/components/FilterModal';
 import { FounderBadge } from '@/components/FounderBadge';
@@ -553,7 +554,7 @@ export default function SwipeScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Ionicons name="flame" size={26} color={theme.colors.secondary} />
+            <BrandMark size={26} />
             <Text style={styles.appTitle}>JuntaVale</Text>
           </View>
         </View>
@@ -584,7 +585,7 @@ export default function SwipeScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <Ionicons name="flame" size={26} color={theme.colors.secondary} />
+            <BrandMark size={26} />
             <Text style={styles.appTitle}>JuntaVale</Text>
           </View>
         </View>
@@ -608,7 +609,7 @@ export default function SwipeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.logoRow}>
-          <Ionicons name="flame" size={26} color={theme.colors.secondary} />
+          <BrandMark size={26} />
           <Text style={styles.appTitle}>JuntaVale</Text>
         </View>
         <TouchableOpacity onPress={() => setFilterModalVisible(true)}>

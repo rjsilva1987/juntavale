@@ -1,5 +1,4 @@
 // src/screens/LoginScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import {
@@ -16,6 +15,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { BrandMark } from '@/components/BrandMark';
 import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
 import { getAuthErrorMessage } from '@/constants/authErrors';
 import { theme } from '@/constants/theme';
@@ -59,7 +59,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
-              <Ionicons name="flame" size={34} color={theme.colors.secondary} />
+              <BrandMark size={34} />
               <Text style={styles.appName}>JuntaVale</Text>
             </View>
             <Text style={styles.tagline}>Conecte-se com quem tem a ver com você</Text>
