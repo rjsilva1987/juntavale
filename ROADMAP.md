@@ -61,10 +61,21 @@ Alguém marca um encontro (ex.: happy hour) e quem topa entra numa lista de
 participantes. Mesmo custo de moderação da S124.
 
 ### S126 — Enquete no perfil
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** ABERTA · EM IMPLEMENTAÇÃO (aguardando auditoria) · decisões
+tomadas · recon feita
 
 Pergunta no perfil respondida direto do card do Descobrir, sem precisar
 curtir. Barata: se pendura em estruturas que já existem.
+
+**Implementado, ainda NÃO auditado nem deployado** — `poll`/`pollCounts` em
+`users/{uid}`, nova collection `users/{ownerUid}/pollVotes/{voterUid}`
+(create-only, dono nunca lê quem votou o quê), duas Cloud Functions novas
+(`onPollVoteCreated`, `onPollChanged`) e client (ProfileScreen edita,
+SwipeScreen/ProfileSheet/ProfileSections votam). `npx tsc --noEmit` (raiz e
+`functions/`) e `npx eslint .` rodados, sem regressão de baseline — ver
+relatório da sprint. **NÃO mover pra "Fechadas recentemente" até a auditoria
+aprovar** (regra do processo: sprint bloqueada nunca aparece como fechada
+aqui).
 
 ### S127 — Marcos e selos
 **Status:** ABERTA · sem decisões · sem recon
@@ -130,6 +141,25 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 
 - S101, S122, S129-A, S130, S131 (bateria a definir).
 
+**Aguarda deploy de rules + functions (S126 — Enquete no perfil):** nada
+disto é testável antes do deploy (Raphael) de `firestore.rules` E das duas
+functions novas (`onPollVoteCreated`, `onPollChanged`) — client sozinho não
+faz nada sem o backend no ar.
+
+- Criar enquete no ProfileScreen (2 a 4 opções), editar e remover; conferir
+  que remover/editar zera `pollCounts` e apaga `pollVotes/*` de verdade
+  (`onPollChanged`).
+- Votar a partir do Descobrir (ProfileSheet) com uma conta B, sem ter dado
+  like antes; conferir que o dono recebe o push anônimo e vê a contagem
+  agregada subir, sem nenhum jeito de descobrir quem votou (nem no Console,
+  sem usar Admin SDK).
+- Votar duas vezes rápido (dois toques, ou dois devices/telas com a mesma
+  conta) — conferir que o segundo toque não derruba a UI com Alert de erro
+  (deve cair no ramo `permission-denied` = "já votou", ver
+  `handleVotePoll`).
+- Perfil sem enquete: card "Enquete" no Descobrir simplesmente não aparece;
+  ProfileScreen mostra só o botão "Criar enquete".
+
 ---
 
 ## Decisões de produto que valem para o projeto inteiro
@@ -162,6 +192,19 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   do **outro** usuário, não "documento inexistente" — toda tela que ouve um
   match tem que tratar `permission-denied` como "match desfeito" e sair,
   nunca como erro genérico.
+
+## Padrões de escrita no Firestore (valem para o projeto inteiro)
+
+- **Escrita create-only** (rule com `allow update: if false`, sem contar
+  `deleteField()`/reset explícito de outra fonte) que falha com
+  `permission-denied` numa corrida (dois toques, dois devices/telas
+  simultâneos) **não é erro** — é sinal de que o estado já existe (swipe já
+  registrado, voto já dado). O client trata como sucesso silencioso
+  (estado otimista já está certo), **nunca** Alert genérico de erro. Padrão
+  usado em `getSwipe`/`recordSwipe` (S49, MatchProfileScreen), `unmatch`
+  (S102-B, apagar match) e `castPollVote` (S126, `pollVotes/{voterUid}`) —
+  qualquer collection nova com o mesmo desenho (1 doc por par de uids,
+  create-only) deve seguir o mesmo tratamento no catch.
 
 ## Baseline técnica
 

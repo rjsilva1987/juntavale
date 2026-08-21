@@ -156,6 +156,16 @@ export interface UserProfile {
   // firestore.rules (S109). Gravado como snapshot completo a cada save
   // (não é merge por chave como about — ver handleSave em ProfileScreen).
   aboutHidden?: AboutFieldId[];
+  // S126 — Enquete no perfil: pergunta fixa + 2 a 4 opções de texto livre,
+  // gravada pelo DONO via updateUserProfile (ver firestore.rules — só entra
+  // no hasOnly do UPDATE, cadastro nunca nasce com enquete). Ausente = perfil
+  // sem enquete. Ver src/constants/poll.ts pros tetos.
+  poll?: { question: string; options: string[] };
+  // S126 — mapa esparso de contagem por opção (chave = índice como string).
+  // Escrito SÓ pela Cloud Function onPollVoteCreated (Admin SDK) — o client,
+  // inclusive o dono, NUNCA grava este campo (ver firestore.rules: não entra
+  // em hasOnly nenhum). Chave ausente = contagem zero pra aquela opção.
+  pollCounts?: Record<string, number>;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
@@ -261,9 +271,12 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 // como `name` — deleteField() num campo obrigatório passaria pelo tsc sem
 // acusar nada. UserProfileUpdate alarga só as duas chaves que a sprint
 // apaga; as outras continuam com o tipo estrito de Partial<UserProfile>.
-type UserProfileUpdate = Partial<Omit<UserProfile, 'about' | 'aboutHidden'>> & {
+// S126 — `poll` entra na mesma exceção de about/aboutHidden acima:
+// handleRemovePoll (ProfileScreen) precisa gravar deleteField() nele.
+type UserProfileUpdate = Partial<Omit<UserProfile, 'about' | 'aboutHidden' | 'poll'>> & {
   about?: AboutValues | FieldValue;
   aboutHidden?: AboutFieldId[] | FieldValue;
+  poll?: { question: string; options: string[] } | FieldValue;
 };
 
 export const updateUserProfile = async (uid: string, data: UserProfileUpdate) => {
@@ -705,6 +718,35 @@ export const undoSwipe = async (
     const matchId = [fromUid, toUid].sort().join('_');
     await deleteDoc(doc(db, 'matches', matchId));
   }
+};
+
+// ─── Enquete no perfil (S126) ─────────────────────────────
+//
+// Pipeline independente de swipes/matches: responder à enquete não exige
+// curtida, não toca em `swipes/`, `recordSwipe` nem no pipeline de match.
+// Um voto por par dono/visitante, em users/{ownerUid}/pollVotes/{voterUid},
+// create-only (rules negam update) — ver firestore.rules.
+
+export const getMyPollVote = async (ownerUid: string, voterUid: string): Promise<number | null> => {
+  const snap = await getDoc(doc(db, 'users', ownerUid, 'pollVotes', voterUid));
+  return snap.exists() ? (snap.data().optionIndex as number) : null;
+};
+
+// setDoc sem merge: se o doc já existir (corrida — voto em outro
+// aparelho/tela ao mesmo tempo), as rules negam o update (allow update: if
+// false) e a Promise rejeita com permission-denied. Isso é ESPERADO, não é
+// bug — o chamador (SwipeScreen.handleVotePoll) trata como "já votou", nunca
+// como Alert genérico de erro (mesmo espírito da armadilha do
+// permission-denied em match apagado, S102-B).
+export const castPollVote = async (
+  ownerUid: string,
+  voterUid: string,
+  optionIndex: number,
+): Promise<void> => {
+  await setDoc(doc(db, 'users', ownerUid, 'pollVotes', voterUid), {
+    optionIndex,
+    createdAt: serverTimestamp(),
+  });
 };
 
 // ─── Matches ──────────────────────────────────────────────

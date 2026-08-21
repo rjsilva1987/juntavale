@@ -1,4 +1,10 @@
-// rules-stamp: S120 (isValidProfile: teto de data.photos passa de <=6 pra
+// rules-stamp: S126 (21/08/2026 — Enquete no perfil: users/{userId} ganha
+// campo `poll`, mapa {question, options} opcional, validado em
+// isValidProfile e liberado só no hasOnly do UPDATE — cadastro nunca nasce
+// com enquete; `pollCounts` de propósito NÃO entra em hasOnly nenhum, só
+// Admin SDK escreve; nova collection users/{ownerUid}/pollVotes/{voterUid},
+// create-only, allow read restrito ao próprio votante — dono nunca lê quem
+// votou o quê) + S120 (isValidProfile: teto de data.photos passa de <=6 pra
 // <=4, alinhando com MAX_PROFILE_PHOTOS do client em firestoreService.ts —
 // só o número mudou, hasOnly de create/update de users/{userId} continuam
 // intactos, `photos` já estava nas duas listas antes desta sprint) + S116
@@ -299,7 +305,30 @@ service cloud.firestore {
         // precisa ser bool. Filtro de VISIBILIDADE no client
         // (getDiscoverProfiles/useLikers/useMyLikes) — não é fronteira de
         // leitura, o doc segue lido por qualquer isSignedIn() como hoje.
-        && (!('paused' in data) || data.paused is bool);
+        && (!('paused' in data) || data.paused is bool)
+        // S126 — Enquete no perfil: mesmo molde condicional de about/
+        // aboutHidden acima (ausente = sempre válido). Literais 100/2/4
+        // espelham MAX_POLL_QUESTION_LENGTH/MIN_POLL_OPTIONS/MAX_POLL_OPTIONS
+        // (src/constants/poll.ts) — Rules não importa src/, sincronize
+        // manualmente, mesmo padrão do comentário em
+        // src/constants/prompts.ts:64 sobre WEEKLY_PROMPT_EPOCH. Não valida
+        // item a item de `options` (cada elemento é string dentro do teto)
+        // de propósito — mesmo grau de validação já aceito pra `interests`
+        // acima (só is list + size()), sem inventar rigor que o resto do
+        // arquivo não tem.
+        && (
+          !('poll' in data)
+          || (
+            data.poll is map
+            && data.poll.keys().hasOnly(['question', 'options'])
+            && data.poll.question is string
+            && data.poll.question.size() > 0
+            && data.poll.question.size() <= 100
+            && data.poll.options is list
+            && data.poll.options.size() >= 2
+            && data.poll.options.size() <= 4
+          )
+        );
     }
 
     // Um match só pode ser criado se as DUAS pessoas já deram like/superlike uma
@@ -436,7 +465,7 @@ service cloud.firestore {
              ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about',
-              'aboutHidden'])
+              'aboutHidden', 'poll'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.
@@ -492,6 +521,33 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+    }
+
+    // ───────────────────────── users/{ownerUid}/pollVotes/{voterUid} (S126 — Enquete no perfil) ─────────────────────────
+    //
+    // Um voto por par dono/visitante, imutável (create-only). `allow read`
+    // deliberadamente restrito a request.auth.uid == voterUid — o DONO
+    // (ownerUid) NÃO está na condição: ele fisicamente não consegue ler quem
+    // votou o quê, só o agregado (users/{uid}.pollCounts, escrito só pela
+    // Cloud Function onPollVoteCreated via Admin SDK, fora de qualquer
+    // hasOnly de create/update de users/{userId} acima). O próprio votante lê
+    // o próprio voto pra saber se já respondeu.
+    match /users/{ownerUid}/pollVotes/{voterUid} {
+      allow read: if isSignedIn() && request.auth.uid == voterUid;
+
+      allow create: if isSignedIn()
+        && request.auth.uid == voterUid
+        && voterUid != ownerUid
+        && request.resource.data.keys().hasOnly(['optionIndex', 'createdAt'])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.optionIndex is int
+        && request.resource.data.optionIndex >= 0
+        && exists(/databases/$(database)/documents/users/$(ownerUid))
+        && get(/databases/$(database)/documents/users/$(ownerUid)).data.poll.options.size()
+            > request.resource.data.optionIndex;
+
+      allow update: if false; // voto é imutável — nunca se reescreve, só se cria
+      allow delete: if false; // sem "desfazer voto" nesta sprint
     }
 
     // ───────────────────────── users/{uid}/superLikes/usage (Super Like Fase 2) ─────────────────────────

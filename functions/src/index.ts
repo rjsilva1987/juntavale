@@ -1287,3 +1287,72 @@ export const onTesterSignupCreated = onDocumentCreated(
     }
   },
 );
+
+// S126 — Enquete no perfil. onPollVoteCreated incrementa o agregado
+// (users/{ownerUid}.pollCounts) a cada voto novo em
+// users/{ownerUid}/pollVotes/{voterUid}. Anônimo de propósito, mesmo padrão
+// do onSuperLikeReceived acima: voterUid nunca entra no push nem no `data` —
+// o dono só vê a contagem agregada, nunca quem votou o quê (reforçado
+// também nas rules, ver firestore.rules). FieldValue.increment é atômico no
+// servidor, então o incremento é seguro contra concorrência mesmo com
+// múltiplos votantes simultâneos — não precisa de transação nem de ler o
+// valor atual antes.
+export const onPollVoteCreated = onDocumentCreated(
+  { document: 'users/{ownerUid}/pollVotes/{voterUid}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { ownerUid } = event.params;
+    const { optionIndex } = snap.data() as { optionIndex: number };
+
+    await db.doc(`users/${ownerUid}`).update({
+      [`pollCounts.${optionIndex}`]: FieldValue.increment(1),
+    });
+
+    const token = await getPushToken(ownerUid);
+    if (!token) return;
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: '🗳️ Alguém respondeu sua enquete!',
+        body: 'Abra o app para ver o resultado.',
+        data: { type: 'pollVote' },
+      },
+    ]);
+  },
+);
+
+// S126 — reseta a enquete quando o dono edita ou remove `poll`: apaga todos
+// os votos antigos (que não fazem mais sentido pra uma pergunta/opções
+// novas) e zera o agregado. Primeiro trigger onDocumentUpdated em
+// users/{uid} — GUARDA ANTI-LOOP essencial: este mesmo update só toca
+// `pollCounts` (FieldValue.delete()) e apaga pollVotes/*, nunca `poll`, então
+// a segunda invocação que ele próprio dispara sempre vê
+// before.poll == after.poll e sai no primeiro if, sem repetir a limpeza.
+// Comparação estrutural simples (JSON.stringify) — poll é um mapa pequeno
+// {question, options}, não precisa de deep-equal mais sofisticado. Se
+// `before.poll` já era ausente (enquete criada do zero), a limpeza roda do
+// mesmo jeito — é no-op seguro (nenhum voto pra apagar, pollCounts já
+// ausente).
+export const onPollChanged = onDocumentUpdated(
+  { document: 'users/{uid}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const beforePoll = JSON.stringify(before.poll ?? null);
+    const afterPoll = JSON.stringify(after.poll ?? null);
+    if (beforePoll === afterPoll) return;
+
+    const { uid } = event.params;
+    const votesSnap = await db.collection(`users/${uid}/pollVotes`).get();
+    const batch = db.batch();
+    votesSnap.forEach((doc) => batch.delete(doc.ref));
+    batch.update(db.doc(`users/${uid}`), { pollCounts: FieldValue.delete() });
+    await batch.commit();
+  },
+);

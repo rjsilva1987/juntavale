@@ -28,6 +28,7 @@ import { AboutVisibilityModal } from '@/components/AboutVisibilityModal';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { FounderBadge } from '@/components/FounderBadge';
+import { PollEditModal } from '@/components/PollEditModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
 import { UfPicker } from '@/components/UfPicker';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
@@ -203,6 +204,12 @@ export default function ProfileScreen() {
   const [editingWeeklySlot, setEditingWeeklySlot] = useState(false);
   const [answerDraft, setAnswerDraft] = useState('');
   const [promptSaving, setPromptSaving] = useState(false);
+
+  // S126 — Enquete no perfil: modal próprio (PollEditModal), independente do
+  // fluxo de catálogo/resposta de prompts acima (é uma única enquete, não
+  // uma lista com catálogo).
+  const [pollModalVisible, setPollModalVisible] = useState(false);
+  const [pollSaving, setPollSaving] = useState(false);
 
   // Prompt da semana (S59) — campo próprio `weeklyPromptAnswer`, fora de
   // prompts[]. weeklyPromptEntry só existe quando o id salvo bate com o da
@@ -549,6 +556,44 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  // S126 — Enquete no perfil. handleSavePoll grava o mapa {question,
+  // options} completo (substituição, sem merge — PollEditModal já entrega
+  // question/options prontos e validados). O agregado (pollCounts) nunca é
+  // tocado por aqui: quem escreve é a Cloud Function onPollVoteCreated
+  // (Admin SDK); a rule de update de users/{userId} nem libera o client pra
+  // gravar essa chave.
+  const handleSavePoll = async (question: string, options: string[]) => {
+    if (!user) return;
+    setPollSaving(true);
+    try {
+      await updateUserProfile(user.uid, { poll: { question, options } });
+      await refreshProfile();
+      setPollModalVisible(false);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a enquete.');
+    } finally {
+      setPollSaving(false);
+    }
+  };
+
+  // Não apaga `pollCounts` aqui — isso é responsabilidade da Cloud Function
+  // onPollChanged, que reage à mudança do campo `poll` (deleteField() conta
+  // como mudança, dispara o reset e a limpeza de pollVotes/* do lado do
+  // servidor).
+  const handleRemovePoll = async () => {
+    if (!user) return;
+    setPollSaving(true);
+    try {
+      await updateUserProfile(user.uid, { poll: deleteField() });
+      await refreshProfile();
+      setPollModalVisible(false);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível remover a enquete.');
+    } finally {
+      setPollSaving(false);
+    }
   };
 
   if (!profile) {
@@ -1033,6 +1078,48 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* S126 — Enquete no perfil: dono só vê o agregado (contagem por
+            opção, via profile.pollCounts — escrito só pela Cloud Function
+            onPollVoteCreated), NUNCA quem votou o quê (reforçado nas rules,
+            não só escondido aqui). */}
+        {!editing && !isAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Enquete</Text>
+            {profile?.poll ? (
+              <>
+                <Text style={styles.pollQuestionText}>{profile.poll.question}</Text>
+                {profile.poll.options.map((option, index) => (
+                  <View key={index} style={styles.pollCountRow}>
+                    <Text style={styles.pollCountOptionText} numberOfLines={1}>
+                      {option}
+                    </Text>
+                    <Text style={styles.pollCountValue}>{profile.pollCounts?.[index] ?? 0}</Text>
+                  </View>
+                ))}
+                <Text style={styles.pollTotalText}>
+                  {Object.values(profile.pollCounts ?? {}).reduce((sum, n) => sum + n, 0)} voto(s)
+                  no total
+                </Text>
+                <AnimatedPressable
+                  style={styles.addPromptBtn}
+                  onPress={() => setPollModalVisible(true)}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={theme.colors.primary} />
+                  <Text style={styles.addPromptText}>Editar</Text>
+                </AnimatedPressable>
+              </>
+            ) : (
+              <AnimatedPressable
+                style={styles.addPromptBtn}
+                onPress={() => setPollModalVisible(true)}
+              >
+                <Ionicons name="add" size={18} color={theme.colors.primary} />
+                <Text style={styles.addPromptText}>Criar enquete</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         {/* Verificação de perfil — ponto de entrada permanente: 'Verification'
             existe no grupo "app" independente de `verified`, então navega
             sempre, mesmo já verificado (a própria tela mostra o estado
@@ -1395,6 +1482,16 @@ export default function ProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <PollEditModal
+        visible={pollModalVisible}
+        initialQuestion={profile?.poll?.question}
+        initialOptions={profile?.poll?.options}
+        onSave={handleSavePoll}
+        onRemove={profile?.poll ? handleRemovePoll : undefined}
+        onClose={() => setPollModalVisible(false)}
+        saving={pollSaving}
+      />
     </Animated.View>
   );
 }
@@ -2033,6 +2130,34 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addPromptText: { fontSize: theme.fontSize.sm, color: theme.colors.primary, fontWeight: '700' },
+
+  // S126 — Enquete no perfil: agregado só pro dono (contagem por opção).
+  pollQuestionText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  pollCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  pollCountOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text, flex: 1 },
+  pollCountValue: { fontSize: theme.fontSize.md, color: theme.colors.primary, fontWeight: '700' },
+  pollTotalText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+    marginBottom: 8,
+  },
 
   modalOverlay: {
     flex: 1,

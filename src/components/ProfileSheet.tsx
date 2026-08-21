@@ -39,6 +39,12 @@ export interface ProfileSheetProps {
   // havia aqui no header fixo. undefined em MatchProfileScreen (que não usa
   // ProfileSheet).
   replyQuotaRemaining?: number;
+  // S126 — repassados direto pro ProfileSections, mesmo padrão de onReply/
+  // replyQuotaRemaining acima. undefined em MatchProfileScreen (que não usa
+  // ProfileSheet) — a enquete nunca aparece lá.
+  poll?: { question: string; options: string[] };
+  myPollVote?: number | null;
+  onVotePoll?: (optionIndex: number) => void;
 }
 
 export function ProfileSheet({
@@ -50,6 +56,9 @@ export function ProfileSheet({
   sheetHeight,
   onReply,
   replyQuotaRemaining,
+  poll,
+  myPollVote,
+  onVotePoll,
 }: ProfileSheetProps) {
   const translateY = useSharedValue(sheetHeight);
 
@@ -129,6 +138,9 @@ export function ProfileSheet({
           myInterests={myInterests}
           onReply={onReply}
           replyQuotaRemaining={replyQuotaRemaining}
+          poll={poll}
+          myPollVote={myPollVote}
+          onVotePoll={onVotePoll}
         />
       </ScrollView>
     </Animated.View>

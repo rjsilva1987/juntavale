@@ -46,7 +46,9 @@ import { useReplyQuota } from '@/hooks/useReplyQuota';
 import { useSuperLikeQuota } from '@/hooks/useSuperLikeQuota';
 import { RootStackParamList } from '@/navigation';
 import {
+  castPollVote,
   getDiscoverProfiles,
+  getMyPollVote,
   getSessionSwipedUids,
   recordSwipe,
   undoSwipe,
@@ -97,6 +99,15 @@ export default function SwipeScreen() {
   // toque. Fecha sozinho quando o card muda, quando a tela perde foco e no
   // botão físico de voltar do Android (efeitos mais abaixo).
   const [sheetOpen, setSheetOpen] = useState(false);
+  // S126 — voto do usuário logado na enquete do card atual (índice da opção
+  // escolhida, ou null se ainda não votou). Lido do Firestore só quando o
+  // painel abre (useEffect abaixo); reseta a cada card novo, junto de
+  // sheetOpen, pra não vazar o voto de um card pro próximo.
+  const [myPollVote, setMyPollVote] = useState<number | null>(null);
+  // S126 — correção pós-auditoria: `myPollVote === null` é ambíguo (pode
+  // significar "confirmei que não votou" OU "ainda não sei"). Falha
+  // fechada: só habilita o voto quando a leitura terminou com sucesso.
+  const [pollVoteResolved, setPollVoteResolved] = useState(false);
 
   // Interesses do usuário logado, memoizados pra não recalcular a cada
   // render — só muda quando o profile (e portanto profile.interests) muda.
@@ -138,10 +149,40 @@ export default function SwipeScreen() {
   // painel, que só faz sentido pro card que estava no topo quando foi aberto.
   useEffect(() => {
     setSheetOpen(false);
+    // S126 — mesmo gatilho: evita vazar o voto de um card pro próximo.
+    setMyPollVote(null);
+    setPollVoteResolved(false);
   }, [currentIndex]);
   const handlePhotoIndexChange = (index: number) => {
     visibleContextRef.current = { type: 'photo', photoIndex: index };
   };
+
+  // S126 — lê o voto já dado (se houver) só quando o painel abre e o card
+  // atual tem enquete: evita uma leitura por card trocado no deck inteiro,
+  // só paga o custo quando a pessoa de fato abre o painel expandido.
+  const sheetProfile = profiles[currentIndex];
+  useEffect(() => {
+    if (!sheetOpen || !sheetProfile?.poll || !user) return;
+    let cancelled = false;
+    getMyPollVote(sheetProfile.uid, user.uid)
+      .then((vote) => {
+        if (!cancelled) {
+          setMyPollVote(vote);
+          setPollVoteResolved(true);
+        }
+      })
+      .catch((error) => {
+        // S126 — correção pós-auditoria: falha fechada. Se não deu pra
+        // confirmar se a pessoa já votou, NÃO marca como resolvido — o
+        // voto fica bloqueado (onVotePoll vira undefined abaixo) em vez
+        // de arriscar exibir a UI de voto como se soubéssemos o estado.
+        console.error('[SwipeScreen] getMyPollVote falhou:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetOpen, sheetProfile?.uid, user?.uid]);
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -474,6 +515,33 @@ export default function SwipeScreen() {
     setReplyPromptId(null);
   };
 
+  // S126 — votar na enquete NÃO exige curtida: pipeline 100% novo, não
+  // envolve swipeCard/recordSwipe. Otimista: marca o voto antes do write
+  // terminar, pra não esperar round-trip pra destacar a opção escolhida.
+  const handleVotePoll = async (optionIndex: number) => {
+    if (!user || !currentProfile) return;
+    setMyPollVote(optionIndex);
+    try {
+      await castPollVote(currentProfile.uid, user.uid, optionIndex);
+    } catch (e) {
+      // permission-denied = já tinha votado (corrida: outro device/tela ao
+      // mesmo tempo) — estado otimista já está correto, não precisa reverter
+      // nem alertar. Mesmo espírito da armadilha do permission-denied em
+      // match apagado (S102-B): erro de permissão em escrita create-only é
+      // sinal de estado já resolvido, não falha. Checagem por `.code`, mesmo
+      // padrão já estabelecido em MatchProfileScreen.tsx (não há precedente
+      // de `instanceof FirestoreError` no client) — não inventa um novo.
+      const isPermissionDenied =
+        typeof e === 'object' &&
+        e !== null &&
+        'code' in e &&
+        (e as { code?: unknown }).code === 'permission-denied';
+      if (isPermissionDenied) return;
+      setMyPollVote(null);
+      Alert.alert('Erro', 'Não foi possível registrar seu voto.');
+    }
+  };
+
   const handleUndo = async () => {
     if (!user || !lastSwipedProfile) return;
     const { profile: target, index, isMatch } = lastSwipedProfile;
@@ -686,6 +754,9 @@ export default function SwipeScreen() {
                 sheetHeight={SHEET_HEIGHT}
                 onReply={handleReplyPress}
                 replyQuotaRemaining={replyRemaining}
+                poll={currentProfile?.poll}
+                myPollVote={myPollVote}
+                onVotePoll={pollVoteResolved ? handleVotePoll : undefined}
               />
             </View>
           </>

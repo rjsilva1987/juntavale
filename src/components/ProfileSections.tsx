@@ -110,6 +110,14 @@ interface ProfileSectionsProps {
   // (mesmo padrão do `dimmed` do ActionButton), pra que o toque ainda
   // dispare o Alert de quota esgotada no SwipeScreen.
   replyQuotaRemaining?: number;
+  // S126 — Enquete no perfil: mesmo padrão de onReply/replyQuotaRemaining
+  // acima — ausente em MatchProfileScreen (a enquete só existe no Descobrir
+  // pré-match), presente só quando ProfileSheet passa. Sem contagem
+  // numérica aqui: o visitante nunca vê o agregado de votos, só o dono (na
+  // ProfileScreen) — por isso não existe prop de contagem neste componente.
+  poll?: { question: string; options: string[] };
+  myPollVote?: number | null;
+  onVotePoll?: (optionIndex: number) => void;
 }
 
 export function ProfileSections({
@@ -118,6 +126,9 @@ export function ProfileSections({
   note,
   onReply,
   replyQuotaRemaining,
+  poll,
+  myPollVote,
+  onVotePoll,
 }: ProfileSectionsProps) {
   const sharedInterestSet = useMemo(
     () => getSharedInterestSet(myInterests, profile?.interests),
@@ -242,6 +253,38 @@ export function ProfileSections({
           ))}
         </>
       )}
+
+      {/* S126 — Enquete no perfil: só existe no Descobrir pré-match
+          (ProfileSheet passa `poll`+`onVotePoll`; MatchProfileScreen não
+          passa nenhum dos dois, mesma guarda de "só existe no ponto de
+          entrada certo" que `onReply` já usa acima). Sem contagem visível
+          pro visitante — decisão 4 da spec é sobre o DONO não ver quem
+          votou, não sobre o visitante ver o resultado; pra não inventar
+          produto, aqui só mostra qual opção o visitante escolheu (ou os
+          botões, se ainda não votou), nunca números. A contagem agregada só
+          aparece pro dono, na ProfileScreen. */}
+      {!!poll && !!onVotePoll && (
+        <>
+          <Text style={styles.sectionTitle}>Enquete</Text>
+          <Text style={styles.pollQuestion}>{poll.question}</Text>
+          {poll.options.map((option, index) => {
+            const isChosen = myPollVote === index;
+            const alreadyVoted = myPollVote != null;
+            return (
+              <AnimatedPressable
+                key={index}
+                style={[styles.pollOption, isChosen && styles.pollOptionChosen]}
+                onPress={() => !alreadyVoted && onVotePoll(index)}
+                disabled={alreadyVoted}
+              >
+                <Text style={[styles.pollOptionText, isChosen && styles.pollOptionTextChosen]}>
+                  {option}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </>
+      )}
     </>
   );
 }
@@ -326,5 +369,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     flexShrink: 1,
+  },
+  // S126 — Enquete no perfil: opção não escolhida usa o mesmo vocabulário
+  // "surface" do resto do painel (fundo background, borda border); a
+  // escolhida destaca com primaryLight/primary — nunca amarelo com texto
+  // branco (regra do projeto).
+  pollQuestion: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  pollOption: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    backgroundColor: theme.colors.background,
+  },
+  pollOptionChosen: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight,
+  },
+  pollOptionText: {
+    fontSize: theme.fontSize.md,
+    color: theme.colors.text,
+  },
+  pollOptionTextChosen: {
+    color: theme.colors.primary,
+    fontWeight: '700',
   },
 });
