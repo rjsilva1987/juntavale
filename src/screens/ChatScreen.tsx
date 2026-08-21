@@ -22,6 +22,8 @@ import {
   ActivityIndicator,
   Pressable,
   Linking,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -52,11 +54,15 @@ import {
   hideMessage,
   deleteMessageForEveryone,
   editMessage,
+  getInitialMessageWindow,
+  getMatchLastReadAt,
+  loadOlderMessages,
   markMatchRead,
   sendMessage,
   setMessageReaction,
   uploadChatImage,
   Message,
+  MessageCursor,
   REACTION_EMOJIS,
   ReactionEmoji,
 } from '@/services/firestoreService';
@@ -101,6 +107,12 @@ const DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000;
 // S92 — janela de edição, em ms. Coincide com a janela do apagar hoje, mas
 // são ramos SEPARADOS da rule — mudar um não pode mudar o outro em silêncio.
 const EDIT_WINDOW_MS = 60 * 60 * 1000;
+
+// S101 — distância máxima (px) entre o fim do conteúdo e a borda inferior
+// visível pra lista ainda contar como "no fim". Mensagem nova só puxa o
+// scroll dentro dessa faixa; acima dela o usuário está lendo histórico e a
+// tela não pode ser arrastada embaixo dele. ~1 bolha curta de altura.
+const NEAR_BOTTOM_THRESHOLD = 80;
 
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
@@ -435,7 +447,17 @@ function MessageBubble({
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
+  // S101 — messages é só a JANELA em tempo real (onSnapshot com
+  // createdAt >= corte). O histórico anterior vive em olderMessages, buscado
+  // página a página sob toque e SEM listener; os dois são concatenados em
+  // orderedMessages pra render.
   const [messages, setMessages] = useState<Message[]>([]);
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  // Mensagem mais antiga já carregada (snapshot cru) — startAfter da próxima
+  // página. null = ainda não sei / nada carregado.
+  const [olderCursor, setOlderCursor] = useState<MessageCursor | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   // S80-B — messageId -> (uid -> emoji), espelho do doc mais recente de
   // matches/{matchId}/reactions/{messageId} (ver listenReactions).
   const [reactions, setReactions] = useState<Record<string, Record<string, ReactionEmoji>>>({});
@@ -481,6 +503,39 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // digitando não deixar o badge acender. isFocusedRef em vez de useIsFocused
   // pra não re-renderizar a tela inteira a cada troca de foco.
   const isFocusedRef = useRef(false);
+  // S101 — true enquanto a lista está a até NEAR_BOTTOM_THRESHOLD px do fim
+  // (ver handleMessagesScroll). Gate do scrollToEnd automático para mensagem
+  // que CHEGA do outro lado; começa true pra primeira pintura descer até o
+  // fim. NÃO é a garantia de "envio próprio sempre desce" — essa é aferida no
+  // callback do listener (ver isOwnNewMessage), porque um onScroll durante o
+  // upload de foto reescreveria esta ref antes de a mensagem existir. Ref, não
+  // estado: muda a cada frame de scroll e não pode re-renderizar a lista.
+  const isNearBottomRef = useRef(true);
+  // S101 — ids da última janela entregue pelo listener. Serve pra detectar
+  // mensagem PRÓPRIA recém-chegada e forçar o scroll no fim (ver o callback do
+  // listenMessages). Ref, não estado: só é lido dentro do próprio callback e não
+  // pode causar render.
+  const windowIdsRef = useRef<Set<string>>(new Set());
+  // S101 (RODADA 2) — contador de geração da abertura do chat: incrementado
+  // uma vez por (re)montagem lógica da conversa (mesmo reabrir o MESMO
+  // matchId conta), dentro do efeito de dados abaixo. Serve de base pra DUAS
+  // guardas contra resultado desatualizado quando um deep link/notificação
+  // troca de conversa reusando esta mesma instância de ChatScreen (ver
+  // useNotifications.ts e useChatDeepLink.ts): a Promise da âncora
+  // (anchorPromiseRef, ver comentário abaixo) e handleLoadOlderMessages.
+  // Substitui o antigo activeMatchIdRef (comparar só matchId não bastava: no
+  // cenário A→B→A a comparação de matchId não distingue a 1ª da 2ª vez que a
+  // tela abriu em A).
+  const chatGenerationRef = useRef(0);
+  // S101 (RODADA 2) — Promise da leitura da âncora lastReadAt desta conversa,
+  // JUNTO da geração em que foi criada. O useFocusEffect só pode encadear
+  // markMatchRead nela se a geração ainda bater com chatGenerationRef no
+  // momento em que ele roda — senão não faz nada neste ciclo (falha fechada,
+  // sem fallback de "marcar direto"; ver useFocusEffect).
+  const anchorPromiseRef = useRef<{
+    generation: number;
+    promise: Promise<Timestamp | null>;
+  } | null>(null);
   // Ação escolhida no attach sheet, disparada com segurança só depois que o
   // Modal termina de fechar de verdade (ver runAfterAttachSheetClose).
   const pendingAttachActionRef = useRef<(() => void) | null>(null);
@@ -503,27 +558,162 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     if (!isUnverified) setText(draftMessage);
   }, [draftMessage, isUnverified, profile]);
 
+  // S101 — abertura do chat em duas etapas: (1) getInitialMessageWindow
+  // descobre o corte da janela (30 mais recentes, ou até a não lida mais
+  // antiga quando há mais de 30 não lidas) usando o lastReadAt lido ANTES de
+  // qualquer escrita nossa; (2) o onSnapshot em tempo real assina só dessa
+  // janela pra frente, a partir do CURSOR (snapshot) da etapa (1). O histórico
+  // anterior fica de fora até o usuário pedir.
+  //
+  // Se a etapa (1) falhar (offline, match desfeito), segue com cursor null e o
+  // listener assina as MESSAGE_PAGE_SIZE mais recentes (limitToLast) em vez de
+  // deixar a tela vazia — silencioso, só console.warn, sem indicador na UI.
+  //
+  // S101 (RODADA 2) — ORDEM DE DECLARAÇÃO IMPORTA: este efeito precisa vir
+  // ANTES do useFocusEffect logo abaixo. React roda efeitos passivos
+  // (useEffect) na ordem em que foram DECLARADOS no componente; se este
+  // efeito for movido pra DEPOIS do useFocusEffect no futuro, a geração lida
+  // pelo useFocusEffect (chatGenerationRef.current) vai estar sempre UM CICLO
+  // ATRASADA em relação à geração gravada aqui em anchorPromiseRef — a guarda
+  // de geração do useFocusEffect nunca vai bater e o foco NUNCA MAIS vai
+  // marcar a conversa como lida. Não mova um sem revisar a lógica de geração
+  // dos dois juntos.
+  useEffect(() => {
+    // Nova geração a cada (re)abertura desta conversa — inclusive reabrir o
+    // MESMO matchId conta como nova geração. Token pra invalidar leituras
+    // assíncronas de uma abertura anterior (ver anchorPromiseRef abaixo e
+    // handleLoadOlderMessages).
+    chatGenerationRef.current += 1;
+    const generation = chatGenerationRef.current;
+    windowIdsRef.current = new Set();
+    if (!uid) return;
+    let cancelled = false;
+    let unsub: (() => void) | undefined;
+
+    setLoading(true);
+    setMessages([]);
+    setOlderMessages([]);
+    setOlderCursor(null);
+    setHasOlderMessages(false);
+    isNearBottomRef.current = true;
+
+    // S101 (correção, RODADA 2) — a leitura da âncora começa AQUI e fica
+    // guardada na ref JUNTO da geração desta abertura: o markMatchRead do
+    // useFocusEffect só encadeia nesta Promise se a geração ainda bater
+    // quando ele rodar.
+    const anchorPromise = getMatchLastReadAt(matchId, uid);
+    anchorPromiseRef.current = { generation, promise: anchorPromise };
+
+    const start = async () => {
+      let cursor: MessageCursor | null = null;
+      try {
+        const lastReadAt = await anchorPromise;
+        const initialWindow = await getInitialMessageWindow(matchId, lastReadAt);
+        if (cancelled) return;
+        cursor = initialWindow.cursor;
+        setOlderCursor(initialWindow.cursor);
+        setHasOlderMessages(initialWindow.hasMore);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[ChatScreen] falha ao montar a janela inicial de mensagens:', error);
+      }
+      // cursor null (chat nunca aberto, ou falha/offline acima) NÃO vira query
+      // sem limite: listenMessages cai no ramo limitToLast(MESSAGE_PAGE_SIZE).
+      unsub = listenMessages(
+        matchId,
+        (msgs) => {
+          // S101 (correção) — garantia de "ao enviar mensagem própria, sempre
+          // rola pro fim" aferida AQUI, na chegada da mensagem, e não por um
+          // flag ligado antes do envio: upload de foto/permissão de localização
+          // duram segundos, e um onScroll do usuário nesse intervalo apagaria o
+          // flag antes da mensagem existir. Mensagem mais nova da janela, do
+          // próprio uid, que não estava na janela anterior => desce sempre.
+          const newest = msgs[msgs.length - 1];
+          const isOwnNewMessage =
+            !!newest && newest.senderId === uid && !windowIdsRef.current.has(newest.id);
+          windowIdsRef.current = new Set(msgs.map((m) => m.id));
+          setMessages(msgs);
+          setLoading(false);
+          if (isOwnNewMessage || isNearBottomRef.current) {
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+          }
+          if (isFocusedRef.current && uid) {
+            markMatchRead(matchId, uid).catch(() => {});
+          }
+        },
+        cursor,
+      );
+    };
+    start();
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [matchId, uid]);
+
   useFocusEffect(
     useCallback(() => {
       isFocusedRef.current = true;
-      if (uid) markMatchRead(matchId, uid).catch(() => {});
+      // S101 (RODADA 2) — só encadeia markMatchRead se a Promise guardada em
+      // anchorPromiseRef for da MESMA geração lida agora em
+      // chatGenerationRef. Se a geração não bater (deep link/notificação
+      // trocou de conversa nesse meio-tempo) ou a ref ainda for null (efeito
+      // de dados acima ainda não rodou neste ciclo), NÃO chama markMatchRead
+      // de jeito nenhum — não existe fallback de "marcar direto". Falha
+      // fechada: é preferível atrasar a marcação de lido até o próximo foco
+      // do que arriscar destruir o cálculo de não lidas de uma janela que já
+      // foi montada com uma âncora errada.
+      const anchor = anchorPromiseRef.current;
+      const generation = chatGenerationRef.current;
+      if (anchor && anchor.generation === generation) {
+        anchor.promise
+          .catch(() => null)
+          .then(() => {
+            if (uid) markMatchRead(matchId, uid).catch(() => {});
+          });
+      }
       return () => {
         isFocusedRef.current = false;
       };
     }, [matchId, uid]),
   );
 
-  useEffect(() => {
-    const unsub = listenMessages(matchId, (msgs) => {
-      setMessages(msgs);
-      setLoading(false);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      if (isFocusedRef.current && uid) {
-        markMatchRead(matchId, uid).catch(() => {});
-      }
-    });
-    return unsub;
-  }, [matchId, uid]);
+  // S101 — "carregar mais": página anterior por getDocs + startAfter, sem
+  // tempo real. Prefixa em olderMessages descartando id já conhecido (o
+  // startAfter já garante que não há sobreposição, o filtro é cinto e
+  // suspensório contra toque duplo).
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (loadingOlder || !olderCursor) return;
+    // S101 (correção, RODADA 2) — mesma geração de abertura (chatGenerationRef),
+    // não mais o matchId isolado: no cenário A→B→A o matchId bate ('A' ===
+    // 'A') mas a geração não, então uma página antiga da PRIMEIRA vez em A
+    // que resolve tarde é descartada em vez de corromper o olderCursor da
+    // SEGUNDA vez em A.
+    const requestedGeneration = chatGenerationRef.current;
+    setLoadingOlder(true);
+    try {
+      const page = await loadOlderMessages(matchId, olderCursor);
+      if (chatGenerationRef.current !== requestedGeneration) return;
+      setOlderMessages((prev) => {
+        const known = new Set(prev.map((m) => m.id));
+        return [...page.messages.filter((m) => !known.has(m.id)), ...prev];
+      });
+      if (page.cursor) setOlderCursor(page.cursor);
+      setHasOlderMessages(page.hasMore);
+    } catch (error) {
+      console.warn('[ChatScreen] falha ao carregar mensagens anteriores:', error);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, olderCursor, matchId]);
+
+  // S101 — gate do scroll automático (ver isNearBottomRef).
+  const handleMessagesScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
+  }, []);
 
   useEffect(() => {
     const unsub = listenReactions(matchId, setReactions);
@@ -543,12 +733,24 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     }
   }, [editTarget]);
 
+  // S101 — histórico paginado (mais antigo primeiro) + janela em tempo real,
+  // nessa ordem. O Set de ids da janela impede duplicata se uma página antiga
+  // encostar no corte do listener.
+  const orderedMessages = useMemo(() => {
+    if (olderMessages.length === 0) return messages;
+    const windowIds = new Set(messages.map((m) => m.id));
+    return [...olderMessages.filter((m) => !windowIds.has(m.id)), ...messages];
+  }, [olderMessages, messages]);
+
   // S85-A — ponto único do filtro: a FlatList consome visibleMessages, não
   // messages direto (ver data={visibleMessages} abaixo). hiddenIds é só do
   // dono da tela, então isso nunca afeta o que o outro participante vê.
   const visibleMessages = useMemo(
-    () => (hiddenIds.length === 0 ? messages : messages.filter((m) => !hiddenIds.includes(m.id))),
-    [messages, hiddenIds],
+    () =>
+      hiddenIds.length === 0
+        ? orderedMessages
+        : orderedMessages.filter((m) => !hiddenIds.includes(m.id)),
+    [orderedMessages, hiddenIds],
   );
 
   useEffect(() => {
@@ -589,6 +791,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       : undefined;
     setText('');
     setReplyTarget(null);
+    // S101 — enviar sempre desce até o fim, mesmo com a lista rolada pra cima
+    // lendo histórico: o gate de scroll só vale pra mensagem que CHEGA. Aqui é
+    // só o atalho otimista (envio de texto é imediato); a GARANTIA é o
+    // isOwnNewMessage no callback do listener.
+    isNearBottomRef.current = true;
     try {
       await sendMessage(matchId, user.uid, trimmed, undefined, undefined, replyTo);
     } catch (_) {}
@@ -602,6 +809,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const handleSendImage = async (uri: string) => {
     if (!user || isBlocked || isUnverified) return;
     setUploadProgress(0);
+    // S101 (correção) — nada de ligar isNearBottomRef aqui: o upload dura
+    // segundos e um onScroll do usuário no meio apagaria o flag antes da foto
+    // chegar. Quem garante o scroll é o isOwnNewMessage no callback do listener.
     try {
       const imageUrl = await uploadChatImage(matchId, uri, setUploadProgress);
       await sendMessage(matchId, user.uid, '', imageUrl);
@@ -685,6 +895,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         const position = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
+        // S101 (correção) — idem handleSendImage: sem flag frágil aqui, a
+        // garantia de scroll é o isOwnNewMessage no callback do listener.
         await sendMessage(matchId, user.uid, '', undefined, {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -857,6 +1069,36 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messagesList}
               renderItem={renderMessage}
+              onScroll={handleMessagesScroll}
+              scrollEventThrottle={16}
+              // S101 — sem isto, prefixar uma página antiga empurra o
+              // conteúdo visível pra baixo e a leitura "pula". minIndexForVisible
+              // 0 faz o RN compensar o offset pelo tamanho do que entrou acima,
+              // mantendo na tela exatamente a mensagem que o usuário estava lendo.
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              // S101 — página anterior só sob toque (decisão de produto:
+              // nada de auto-load ao chegar perto do topo).
+              ListHeaderComponent={
+                hasOlderMessages ? (
+                  <View style={styles.loadOlderWrap}>
+                    {loadingOlder ? (
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    ) : (
+                      <AnimatedPressable
+                        style={styles.loadOlderBtn}
+                        onPress={handleLoadOlderMessages}
+                      >
+                        <Ionicons
+                          name="arrow-up-circle-outline"
+                          size={16}
+                          color={theme.colors.primary}
+                        />
+                        <Text style={styles.loadOlderText}>Carregar mensagens anteriores</Text>
+                      </AnimatedPressable>
+                    )}
+                  </View>
+                ) : null
+              }
               ListEmptyComponent={
                 <EmptyState
                   icon="chatbubble-ellipses-outline"
@@ -1248,6 +1490,22 @@ const styles = StyleSheet.create({
   headerStatus: { fontSize: theme.fontSize.xs, color: theme.colors.like },
 
   messagesList: { padding: theme.spacing.md, gap: 10, flexGrow: 1 },
+
+  // S101 — cabeçalho "carregar mais" da lista de mensagens. Texto azul sobre
+  // surface (nunca branco sobre amarelo, regra de ouro do tema).
+  loadOlderWrap: { alignItems: 'center', paddingBottom: theme.spacing.sm },
+  loadOlderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 0.5,
+    borderColor: theme.colors.border,
+  },
+  loadOlderText: { fontSize: theme.fontSize.xs, color: theme.colors.primary, fontWeight: '600' },
 
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   msgRowMe: { justifyContent: 'flex-end' },

@@ -12,12 +12,18 @@ import {
   query,
   where,
   orderBy,
+  limit,
+  limitToLast,
+  startAfter,
+  startAt,
   onSnapshot,
   serverTimestamp,
   Timestamp,
   writeBatch,
   arrayUnion,
+  type DocumentData,
   type FieldValue,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import {
   ref,
@@ -807,12 +813,184 @@ export const uploadChatImage = async (
   return getDownloadURL(storageRef);
 };
 
-export const listenMessages = (matchId: string, callback: (messages: Message[]) => void) => {
-  const q = query(collection(db, 'matches', matchId, 'messages'), orderBy('createdAt', 'asc'));
+// ─── Paginação de mensagens (S101) ──────────────────────────
+
+// Tamanho de página do chat (decisão de produto do S101): a janela inicial
+// carrega 30 mensagens — e MAIS que isso quando há mais de 30 não lidas (30 é
+// piso, não teto; ver getInitialMessageWindow). "Carregar mais" traz 30 por
+// toque.
+export const MESSAGE_PAGE_SIZE = 30;
+
+// Cursor de paginação: o DocumentSnapshot cru da mensagem mais ANTIGA já
+// carregada (startAfter precisa do snapshot, não do id/valor). Exportado como
+// alias pra ChatScreen guardar isso em estado sem importar nada de
+// 'firebase/firestore'.
+export type MessageCursor = QueryDocumentSnapshot<DocumentData>;
+
+// Janela inicial do chat: `cursor` é a mensagem mais antiga dessa janela — é
+// ELE (o snapshot) que abre o onSnapshot em tempo real (startAt, ver
+// buildMessagesQuery) e também o ponto de partida do "carregar mais";
+// `hasMore` diz se existe algo antes dele. `since` é o createdAt desse mesmo
+// doc, usado só internamente por getInitialMessageWindow pra comparar os dois
+// candidatos a corte (página recente x não lida mais antiga) — NÃO é filtro do
+// listener.
+export interface MessageWindow {
+  since: Timestamp | null;
+  cursor: MessageCursor | null;
+  hasMore: boolean;
+}
+
+// Página avulsa de histórico antigo (getDocs, SEM tempo real).
+export interface MessagePage {
+  messages: Message[];
+  cursor: MessageCursor | null;
+  hasMore: boolean;
+}
+
+const messagesCollection = (matchId: string) => collection(db, 'matches', matchId, 'messages');
+
+const toMessage = (d: QueryDocumentSnapshot<DocumentData>): Message =>
+  ({ id: d.id, ...d.data() }) as Message;
+
+// createdAt vem null enquanto o serverTimestamp() da mensagem recém-enviada
+// não resolveu no servidor (mesmo caso tratado em isMatchUnread/utils/matches).
+// Um doc assim nunca serve de corte/cursor — daí o null explícito.
+const messageCreatedAt = (d: QueryDocumentSnapshot<DocumentData>): Timestamp | null => {
+  const value = d.data().createdAt;
+  return value instanceof Timestamp ? value : null;
+};
+
+// Lê lastReadAt.{uid} do doc do match SEM escrever nada (markMatchRead é o
+// único ponto de escrita e não muda nesta sprint).
+//
+// serverTimestamps: 'previous' é obrigatório aqui: o useFocusEffect do
+// ChatScreen dispara markMatchRead() na montagem, ANTES deste getDoc resolver,
+// e a mutação local pendente sobrepõe lastReadAt.{uid} com um serverTimestamp
+// não resolvido — com o default ('none') este read devolveria null e a janela
+// inicial perderia as não lidas. 'previous' devolve justamente o último valor
+// confirmado do campo, que é a âncora que queremos.
+export const getMatchLastReadAt = async (
+  matchId: string,
+  uid: string,
+): Promise<Timestamp | null> => {
+  const snap = await getDoc(doc(db, 'matches', matchId));
+  const data = snap.data({ serverTimestamps: 'previous' }) as Match | undefined;
+  const value = data?.lastReadAt?.[uid];
+  return value instanceof Timestamp ? value : null;
+};
+
+// Descobre o corte da janela inicial sem baixar o histórico inteiro:
+//   1) as MESSAGE_PAGE_SIZE mensagens mais recentes (desc + limit), +1 doc só
+//      pra saber se existe algo mais antigo;
+//   2) se há lastReadAt, a mensagem NÃO LIDA mais antiga (createdAt >
+//      lastReadAt, asc, limit 1 — desigualdade em campo único, indexado
+//      automaticamente; nada de filtro por senderId, que exigiria índice
+//      composto).
+// Se a não lida mais antiga for anterior à página recente, o corte desce até
+// ela: a primeira carga cobre TODAS as não lidas mesmo que sejam 45+.
+//
+// lastReadAt ausente (chat nunca aberto, sem âncora) não estica a janela —
+// sem valor pra comparar não existe a query de não lidas, e esticar até o
+// começo seria exatamente o "fetch do histórico inteiro" que o S101 remove.
+export const getInitialMessageWindow = async (
+  matchId: string,
+  lastReadAt?: Timestamp | null,
+): Promise<MessageWindow> => {
+  const col = messagesCollection(matchId);
+  const recentSnap = await getDocs(
+    query(col, orderBy('createdAt', 'desc'), limit(MESSAGE_PAGE_SIZE + 1)),
+  );
+  const recentDocs = recentSnap.docs.slice(0, MESSAGE_PAGE_SIZE);
+  const oldestRecent = recentDocs[recentDocs.length - 1];
+  const oldestRecentAt = oldestRecent ? messageCreatedAt(oldestRecent) : null;
+  // Chat vazio (ou só com mensagem local ainda sem createdAt): sem corte, o
+  // listener assina a coleção inteira — que é vazia ou quase.
+  if (!oldestRecent || !oldestRecentAt) return { since: null, cursor: null, hasMore: false };
+
+  let cursor = oldestRecent;
+  let since = oldestRecentAt;
+  let hasMore = recentSnap.size > MESSAGE_PAGE_SIZE;
+
+  if (lastReadAt) {
+    const unreadSnap = await getDocs(
+      query(col, where('createdAt', '>', lastReadAt), orderBy('createdAt', 'asc'), limit(1)),
+    );
+    const oldestUnread = unreadSnap.docs[0];
+    const oldestUnreadAt = oldestUnread ? messageCreatedAt(oldestUnread) : null;
+    if (oldestUnread && oldestUnreadAt && oldestUnreadAt.toMillis() < since.toMillis()) {
+      cursor = oldestUnread;
+      since = oldestUnreadAt;
+      // A checagem de "existe algo mais antigo" da página recente não vale
+      // mais pro corte esticado: 1 doc de leitura resolve.
+      const olderSnap = await getDocs(
+        query(col, where('createdAt', '<', since), orderBy('createdAt', 'desc'), limit(1)),
+      );
+      hasMore = !olderSnap.empty;
+    }
+  }
+
+  return { since, cursor, hasMore };
+};
+
+// Query da janela em tempo real. DOIS ramos mutuamente exclusivos — nunca
+// startAt + limitToLast na mesma query, e orderBy('createdAt','asc') nos dois
+// (limitToLast SEM orderBy lança em runtime; o tsc não pega isso):
+//
+//   1) COM cursor: startAt(snapshot), cursor de paginação — NUNCA
+//      where('createdAt','>=',...). O where usa FieldFilter.matches, que exige
+//      o mesmo typeOrder do valor; uma mensagem recém-enviada tem
+//      serverTimestamp() PENDENTE (typeOrder 4) e não casa com um Timestamp
+//      concreto (typeOrder 3), então o eco otimista do próprio envio sumiria
+//      da lista até o ack do servidor (e nunca apareceria offline). Cursor usa
+//      Bound/valueCompare, que compara typeOrder numericamente: o doc pendente
+//      ordena DEPOIS do cursor e entra normalmente no fim da lista ascendente.
+//   2) SEM cursor (chat nunca aberto, ou falha/offline ao montar a janela
+//      inicial): limitToLast(MESSAGE_PAGE_SIZE) — as 30 mais recentes. Nunca
+//      sem limite algum, que é justamente o que o S101 existe pra remover.
+const buildMessagesQuery = (
+  col: ReturnType<typeof messagesCollection>,
+  cursor?: MessageCursor | null,
+) =>
+  cursor
+    ? query(col, orderBy('createdAt', 'asc'), startAt(cursor))
+    : query(col, orderBy('createdAt', 'asc'), limitToLast(MESSAGE_PAGE_SIZE));
+
+// Tempo real APENAS na janela final. O corte é o CURSOR (o QueryDocumentSnapshot
+// da mensagem mais antiga da janela, produzido por getInitialMessageWindow /
+// loadOlderMessages), não um Timestamp isolado — ver buildMessagesQuery.
+export const listenMessages = (
+  matchId: string,
+  callback: (messages: Message[]) => void,
+  cursor?: MessageCursor | null,
+) => {
+  const q = buildMessagesQuery(messagesCollection(matchId), cursor);
   return onSnapshot(q, (snap) => {
-    const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Message);
-    callback(messages);
+    callback(snap.docs.map(toMessage));
   });
+};
+
+// Página anterior sob demanda: getDocs + startAfter(cursor), SEM listener (o
+// histórico antigo não precisa de tempo real). Devolve em ordem crescente,
+// pronta pra ser prefixada na lista. O +1 no limit é só pra saber se ainda há
+// página seguinte sem gastar um toque do usuário pra descobrir.
+export const loadOlderMessages = async (
+  matchId: string,
+  cursor: MessageCursor,
+): Promise<MessagePage> => {
+  const snap = await getDocs(
+    query(
+      messagesCollection(matchId),
+      orderBy('createdAt', 'desc'),
+      startAfter(cursor),
+      limit(MESSAGE_PAGE_SIZE + 1),
+    ),
+  );
+  const docs = snap.docs.slice(0, MESSAGE_PAGE_SIZE);
+  return {
+    messages: docs.map(toMessage).reverse(),
+    cursor: docs[docs.length - 1] ?? null,
+    hasMore: snap.size > MESSAGE_PAGE_SIZE,
+  };
 };
 
 // ─── Reações (S80-A) ────────────────────────────────────────
