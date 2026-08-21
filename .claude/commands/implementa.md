@@ -7,7 +7,7 @@ Regras:
   contradisse? PARE e pergunte — nao escolha por conta.
 - Nao rode eslint --fix em arquivo inteiro; formatacao se corrige editando
   a linha.
-- Baseline de lint: 0 erros / 25 warnings. Nao pode piorar.
+- Baseline de lint: 0 erros / 21 warnings. Nao pode piorar.
 - Toda edicao precisa de PROVA DE ESCRITA: grep/Select-String no arquivo
   depois de editar, com a linha nova em bruto. Relatorio sem prova e
   rejeitado — isso nunca e cortado por economia.

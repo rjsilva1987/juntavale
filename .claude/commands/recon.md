@@ -7,7 +7,7 @@ Regras:
 - Nao commite, nao pushe, nao faca deploy.
 - Nenhuma decisao de produto e sua. Achou escolha nao coberta? PARE e pergunte.
 - Nao rode eslint --fix.
-- Baseline de lint: 0 erros / 25 warnings. Reporte se divergir.
+- Baseline de lint: 0 erros / 21 warnings. Reporte se divergir.
 
 Comece confirmando o estado: branch, git status, git log origin/main..HEAD.
 Depois responda so o que foi perguntado acima, seguindo o FORMATO DE
