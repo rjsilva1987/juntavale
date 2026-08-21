@@ -114,6 +114,14 @@ const EDIT_WINDOW_MS = 60 * 60 * 1000;
 // tela não pode ser arrastada embaixo dele. ~1 bolha curta de altura.
 const NEAR_BOTTOM_THRESHOLD = 80;
 
+// S129-A — teto de páginas que scrollToMessage busca pra trás procurando a
+// mensagem original de uma citação, reusando loadOlderMessages (MESSAGE_PAGE_SIZE
+// por página) do S101. 10 páginas = até 300 mensagens antigas por toque: teto
+// alto o bastante pra cobrir o caso comum (citação de conversa antiga), mas
+// finito pra não martelar o Firestore indefinidamente se a mensagem já não
+// existir mais na coleção por algum motivo fora do previsto no S85-B/S92.
+const MAX_JUMP_TO_REPLY_PAGES = 10;
+
 type ChatScreenProps = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
 // S79-E1 — extraído de renderMessage (era uma função chamada dentro do
@@ -144,6 +152,8 @@ interface MessageBubbleProps {
   onOpenLocation: (location: { latitude: number; longitude: number }) => void;
   onLongPressReply: (message: Message) => void;
   onDragReply: (message: Message) => void;
+  // S129-A — reversão do S79: tocar na citação leva até a mensagem original.
+  onJumpToReply: (messageId: string) => void;
 }
 
 function MessageBubble({
@@ -157,10 +167,15 @@ function MessageBubble({
   onOpenLocation,
   onLongPressReply,
   onDragReply,
+  onJumpToReply,
 }: MessageBubbleProps) {
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
+  // S129-A — variável local (não item.replyTo direto) só pra deixar o
+  // TypeScript estreitar o tipo dentro do closure do onPress do Pressable
+  // logo abaixo, sem precisar de non-null assertion (item.replyTo!).
+  const replyTo = item.replyTo;
   // S130 — colapso de texto longo, por mensagem (useState local desta
   // instância, não um flag global da tela): expandir uma bolha não afeta as
   // outras, e uma bolha já expandida não recolapsa sozinha quando chega
@@ -296,23 +311,25 @@ function MessageBubble({
           >
             {/* S79 — citação (v1, só existe em mensagem de texto). Mesmo
                 vocabulário visual do bilhete em LikeCard/ProfileSections:
-                borda à esquerda em primaryLight + itálico. Tocar aqui NÃO
-                pula pra mensagem original (decisão de produto). */}
-            {item.replyTo && (
-              <View style={styles.replyQuoteBox}>
-                <Text
-                  style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
-                  numberOfLines={1}
-                >
-                  {item.replyTo.senderId === currentUid ? 'Você' : otherName}
-                </Text>
-                <Text
-                  style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
-                  numberOfLines={2}
-                >
-                  {item.replyTo.text}
-                </Text>
-              </View>
+                borda à esquerda em primaryLight + itálico. S129-A reverteu a
+                decisão do S79: tocar aqui agora pula pra mensagem original. */}
+            {replyTo && (
+              <Pressable onPress={() => onJumpToReply(replyTo.messageId)}>
+                <View style={styles.replyQuoteBox}>
+                  <Text
+                    style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+                    numberOfLines={1}
+                  >
+                    {replyTo.senderId === currentUid ? 'Você' : otherName}
+                  </Text>
+                  <Text
+                    style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+                    numberOfLines={2}
+                  >
+                    {replyTo.text}
+                  </Text>
+                </View>
+              </Pressable>
             )}
             {/* S85-B — lápide: mensagem apagada pros dois. Guarda antes do
                 ternário de imagem/localização/texto — uma mensagem apagada
@@ -486,6 +503,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // S85-A — "apagar pra mim": ids escondidos SÓ pro uid do dono da tela,
   // espelho do doc matches/{matchId}/hidden/{meuUid} (ver listenHiddenMessages).
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  // S129-A — messageId aguardando scroll assim que aparecer em
+  // visibleMessages (ver scrollToMessage e o useEffect que consome este
+  // estado). null = nenhum salto pendente.
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   // Defesa em profundidade: MatchesScreen já barra a navegação pra cá se
   // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
   // (deep link, MatchProfile, etc.) — a garantia real continua sendo a rule
@@ -760,6 +781,97 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     [orderedMessages, hiddenIds],
   );
 
+  // S129-A — reversão do S79: tocar na citação leva até a mensagem original.
+  // Reusa os estados/serviço já existentes do S101 (messages/olderMessages/
+  // olderCursor/hasOlderMessages/loadingOlder, loadOlderMessages,
+  // visibleMessages, flatListRef) — nada de sistema de paginação paralelo, e
+  // NÃO chama handleLoadOlderMessages (é um loop próprio, separado).
+  const scrollToMessage = useCallback(
+    async (messageId: string) => {
+      if (visibleMessages.some((m) => m.id === messageId)) {
+        setPendingScrollTarget(messageId);
+        return;
+      }
+      // Nada mais pra buscar: load manual já em andamento, ou não há cursor,
+      // ou a última página já disse que não há mais histórico. Só avisa
+      // quando NÃO há load manual em andamento — não interromper esse caso.
+      if (loadingOlder || !olderCursor || !hasOlderMessages) {
+        if (!loadingOlder) {
+          Alert.alert('Aviso', 'Não foi possível localizar a mensagem original.');
+        }
+        return;
+      }
+
+      // Mesmo flag do botão "carregar mensagens anteriores": desabilita/
+      // oculta o botão manual durante esta busca, evitando corrida entre
+      // handleLoadOlderMessages e este loop escrevendo nos mesmos estados ao
+      // mesmo tempo.
+      // S129-A (correção pós-auditoria) — mesma guarda de geração que
+      // handleLoadOlderMessages já usa: se a conversa trocar (deep
+      // link/notificação reabrindo a mesma instância de ChatScreen com
+      // outro matchId) no meio deste loop, aborta antes de escrever estado
+      // da conversa nova com dados da conversa antiga.
+      const requestedGeneration = chatGenerationRef.current;
+      setLoadingOlder(true);
+      let cursor: MessageCursor | null = olderCursor;
+      let hasMore: boolean = hasOlderMessages;
+      let found = false;
+      let pagesFetched = 0;
+
+      try {
+        while (cursor && hasMore && pagesFetched < MAX_JUMP_TO_REPLY_PAGES) {
+          const page = await loadOlderMessages(matchId, cursor);
+          if (chatGenerationRef.current !== requestedGeneration) return;
+          pagesFetched += 1;
+          setOlderMessages((prev) => {
+            const known = new Set(prev.map((m) => m.id));
+            return [...page.messages.filter((m) => !known.has(m.id)), ...prev];
+          });
+          cursor = page.cursor;
+          hasMore = page.hasMore;
+          // S85-A — exclui ids escondidos "pra mim": se a mensagem original
+          // foi ocultada pelo próprio usuário, ela nunca vai aparecer em
+          // visibleMessages mesmo depois de carregada — sem esta exclusão o
+          // loop marcaria "achou" e o alvo pendente travaria esperando pra
+          // sempre.
+          if (page.messages.some((m) => m.id === messageId && !hiddenIds.includes(m.id))) {
+            found = true;
+            break;
+          }
+        }
+      } catch (error) {
+        console.warn('[ChatScreen] falha ao buscar mensagem original da citação:', error);
+      } finally {
+        if (chatGenerationRef.current === requestedGeneration) {
+          setOlderCursor(cursor);
+          setHasOlderMessages(hasMore);
+        }
+        setLoadingOlder(false);
+      }
+
+      if (chatGenerationRef.current !== requestedGeneration) return;
+
+      if (found) {
+        setPendingScrollTarget(messageId);
+      } else {
+        Alert.alert('Aviso', 'Não foi possível localizar a mensagem original.');
+      }
+    },
+    [visibleMessages, loadingOlder, olderCursor, hasOlderMessages, hiddenIds, matchId],
+  );
+
+  // S129-A — dispara o scroll de fato assim que a mensagem-alvo aparecer em
+  // visibleMessages. Se ainda não achar (página anterior ainda carregando /
+  // re-render não propagou), não faz nada — o próprio efeito roda de novo
+  // quando visibleMessages mudar.
+  useEffect(() => {
+    if (!pendingScrollTarget) return;
+    const index = visibleMessages.findIndex((m) => m.id === pendingScrollTarget);
+    if (index === -1) return;
+    flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.3 });
+    setPendingScrollTarget(null);
+  }, [pendingScrollTarget, visibleMessages]);
+
   useEffect(() => {
     const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt) => {
       setBlockedBy(blocked);
@@ -977,6 +1089,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       onOpenLocation={handleOpenLocation}
       onLongPressReply={setReplyOptionsTarget}
       onDragReply={setReplyTarget}
+      onJumpToReply={scrollToMessage}
     />
   );
 
@@ -1083,6 +1196,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               // 0 faz o RN compensar o offset pelo tamanho do que entrou acima,
               // mantendo na tela exatamente a mensagem que o usuário estava lendo.
               maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              // S129-A — workaround padrão de RN pra scrollToIndex numa lista
+              // de altura variável (sem getItemLayout aqui): se o índice ainda
+              // não tiver layout medido, tenta de novo num timeout curto.
+              onScrollToIndexFailed={(info) => {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                }, 100);
+              }}
               // S101 — página anterior só sob toque (decisão de produto:
               // nada de auto-load ao chegar perto do topo).
               ListHeaderComponent={

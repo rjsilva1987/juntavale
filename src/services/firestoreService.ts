@@ -186,7 +186,7 @@ export interface Match {
 // S79 — cópia truncada (não uma referência viva) da mensagem original: v1
 // só existe pra mensagem de TEXTO, guardada já cortada em 100 code points
 // pelo client antes de chamar sendMessage (ver ChatScreen.tsx). Tocar na
-// citação não pula pra mensagem original (decisão de produto do S79).
+// citação pula pra mensagem original (S129-A reverteu a decisão do S79).
 export interface MessageReplyTo {
   messageId: string;
   text: string;
