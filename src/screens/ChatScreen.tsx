@@ -664,14 +664,21 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       // fechada: é preferível atrasar a marcação de lido até o próximo foco
       // do que arriscar destruir o cálculo de não lidas de uma janela que já
       // foi montada com uma âncora errada.
+      //
+      // Ponto crítico: NÃO engolir a rejeição com .catch(() => null) antes do
+      // .then — isso transformaria falha de leitura em "sucesso" e o
+      // markMatchRead rodaria sem conhecer a âncora, destruindo as não lidas
+      // de forma irreversível. Só marca em caso de SUCESSO da Promise; se ela
+      // rejeitar, o .catch final apenas descarta o erro sem chamar
+      // markMatchRead.
       const anchor = anchorPromiseRef.current;
       const generation = chatGenerationRef.current;
       if (anchor && anchor.generation === generation) {
         anchor.promise
-          .catch(() => null)
           .then(() => {
             if (uid) markMatchRead(matchId, uid).catch(() => {});
-          });
+          })
+          .catch(() => {});
       }
       return () => {
         isFocusedRef.current = false;
