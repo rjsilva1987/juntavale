@@ -21,11 +21,10 @@ caso o agente **para e pergunta** em vez de escolher.
 
 ## Fila aberta
 
-### S102 — Chat, três partes
+### S102 — Chat, duas partes restantes (A áudio / C denunciar mensagem)
 **Status:** ABERTA · sem decisões · sem recon
 
 - **A)** gravar e enviar mensagem de áudio
-- **B)** desfazer o match de dentro da própria conversa
 - **C)** denunciar uma **mensagem** específica (hoje a denúncia é do perfil
   inteiro, via S96)
 
@@ -98,6 +97,7 @@ porque exigiria recibo por dispositivo.
 
 | Sprint | O que era |
 |---|---|
+| S102-B | Desfazer match de dentro da conversa — commit `5b6c49f`. Function `unmatch` (onCall, southamerica-east1) **já deployada em 21/08**. **Fechada em código, ainda SEM teste.** |
 | S101 | Paginação do chat — commits `91c734b` + `0710830` (fix: não marcar como lido quando a leitura da âncora falha). Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S122 | Push não chega mais com o app em primeiro plano — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S130 | Colar texto longo no chat (maxLength 2000 + "ler mais") — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
@@ -112,6 +112,23 @@ porque exigiria recibo por dispositivo.
 
 **S99 — DESCARTADA.** Era filtro de distância social (não mostrar quem é da
 mesma agência/cidade). Decidido que não vamos fazer. Não repropor.
+
+---
+
+## Testes pendentes
+
+Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
+
+**Testável no Expo Go agora:**
+
+- S102-B — desfazer match de dentro da conversa; conferir o que acontece na
+  tela do **outro** usuário que está com a conversa aberta na hora (risco de
+  cair em `permission-denied` em vez de sair da tela); conferir se as
+  imagens do chat sumiram do Storage.
+
+**Espera o build 15:**
+
+- S101, S122, S129-A, S130, S131 (bateria a definir).
 
 ---
 
@@ -141,6 +158,10 @@ mesma agência/cidade). Decidido que não vamos fazer. Não repropor.
 - O chat acumulou muita coisa que depende do histórico: reações (S80), tique
   de leitura (S86), `replyTo`, editar (S92), apagar (S85) e o "ler mais"
   (S130). Qualquer mudança na janela mexe com todas.
+- Apagar o doc `matches/{matchId}` devolve `permission-denied` pro listener
+  do **outro** usuário, não "documento inexistente" — toda tela que ouve um
+  match tem que tratar `permission-denied` como "match desfeito" e sair,
+  nunca como erro genérico.
 
 ## Baseline técnica
 
