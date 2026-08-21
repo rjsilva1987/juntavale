@@ -149,6 +149,15 @@ function MessageBubble({
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
+  // S130 — colapso de texto longo, por mensagem (useState local desta
+  // instância, não um flag global da tela): expandir uma bolha não afeta as
+  // outras, e uma bolha já expandida não recolapsa sozinha quando chega
+  // mensagem nova (nada aqui depende do array de mensagens). isTruncated só
+  // fica true se o layout real do texto passar de 6 linhas — onTextLayout
+  // mede o texto por inteiro, sem respeitar numberOfLines, então "ler mais"
+  // nunca aparece em mensagem curta.
+  const [textExpanded, setTextExpanded] = useState(false);
+  const [isTextTruncated, setIsTextTruncated] = useState(false);
   // S86 — só a mensagem PRÓPRIA mostra tique; createdAt nulo (mensagem
   // recém-enviada, servidor ainda não confirmou) NUNCA conta como lida —
   // fica no tique de enviado até o próprio createdAt resolver.
@@ -338,12 +347,27 @@ function MessageBubble({
                   // LOCALIZAÇÃO acima (mesmo handler, mesmo Pressable que já
                   // tinha onPress próprio). Text do RN já suporta onLongPress
                   // direto, sem precisar de Pressable extra por cima.
-                  <Text
-                    style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-                    onLongPress={() => onLongPressReply(item)}
-                  >
-                    {item.text}
-                  </Text>
+                  <>
+                    <Text
+                      style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+                      onLongPress={() => onLongPressReply(item)}
+                      numberOfLines={textExpanded ? undefined : 6}
+                      onTextLayout={(e) => {
+                        if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                          setIsTextTruncated(true);
+                        }
+                      }}
+                    >
+                      {item.text}
+                    </Text>
+                    {isTextTruncated && !textExpanded && (
+                      <Pressable onPress={() => setTextExpanded(true)}>
+                        <Text style={[styles.bubbleReadMore, isMe && styles.bubbleReadMoreMe]}>
+                          ler mais
+                        </Text>
+                      </Pressable>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -932,7 +956,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   value={text}
                   onChangeText={handleChangeText}
                   multiline
-                  maxLength={500}
+                  maxLength={2000}
                 />
                 <AnimatedPressable
                   style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
@@ -1273,6 +1297,14 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S130 — "ler mais" da bolha colapsada.
+  bubbleReadMore: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    marginTop: 2,
+  },
+  bubbleReadMoreMe: { color: theme.colors.white, textDecorationLine: 'underline' },
   // S85-B — lápide de mensagem apagada "pros dois": mesmo vocabulário
   // itálico + cor apagada do replyQuoteText/replyQuoteTextMe acima.
   bubbleTextDeleted: {

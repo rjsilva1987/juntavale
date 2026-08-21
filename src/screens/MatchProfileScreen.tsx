@@ -24,10 +24,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import {
+  getMatchById,
   getSwipe,
   getUserProfile,
   recordSwipe,
   SwipeContext,
+  undoSwipe,
   UserProfile,
 } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
@@ -199,12 +201,88 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
       if (existing && existing.direction !== 'nope') {
         setAlreadyLiked(true);
         setIsSuperLike(existing.direction === 'superlike');
+        // S131 — antes esse ramo só corrigia o estado em silêncio, sem
+        // avisar que a ação pedida (aqui, "não curtir") não foi essa que
+        // aconteceu — foi isso que escondeu o bug do X sem efeito por
+        // meses. Alert em vez de silêncio, sem virar crash.
+        Alert.alert('Ação não registrada', 'Você já tinha dado uma resposta a este perfil antes.');
       } else {
         Alert.alert('Erro', 'Não foi possível registrar sua ação. Tente novamente.');
       }
     } finally {
       setActionPending(false);
     }
+  };
+
+  // S131 — X sobre uma curtida já enviada (alreadyLiked=true) desfaz a
+  // curtida em vez de tentar gravar um 'nope' (que a rules sempre nega, já
+  // que o swipe é imutável — era esse o no-op silencioso de antes).
+  const handleUndoLike = () => {
+    if (!user || actionPending) return;
+    Alert.alert(
+      isSuperLike ? 'Desfazer super curtida?' : 'Desfazer curtida?',
+      isSuperLike
+        ? 'A super curtida enviada será apagada. A cota gasta não será devolvida.'
+        : 'A curtida enviada será apagada.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Desfazer',
+          style: 'destructive',
+          onPress: async () => {
+            setActionPending(true);
+            try {
+              // Relido na hora, nunca a partir de param ou estado antigo: a
+              // outra pessoa pode ter retribuído dias depois do swipe
+              // original, e um match nesse meio-tempo não pode ser apagado
+              // por aqui (vira match órfão — swipe some, match fica).
+              const matchId = [user.uid, uid].sort().join('_');
+              // A rule de matches/{matchId} exige uid em resource.data.users;
+              // documento inexistente => resource nulo => a regra quebra e o
+              // get() estoura permission-denied sem devolver snapshot —
+              // exists() nunca é alcançado. Só permission-denied é "não há
+              // match acessível" (segue com o undo); qualquer outro código
+              // (unavailable, deadline-exceeded, internal, cancelled, sem
+              // code) tem que falhar FECHADO: não desfaz sem saber se há
+              // match, e nem toca no Firestore.
+              let existingMatch: Awaited<ReturnType<typeof getMatchById>> = null;
+              try {
+                existingMatch = await getMatchById(matchId);
+              } catch (matchError) {
+                const isPermissionDenied =
+                  typeof matchError === 'object' &&
+                  matchError !== null &&
+                  'code' in matchError &&
+                  (matchError as { code?: unknown }).code === 'permission-denied';
+                if (!isPermissionDenied) {
+                  console.error(
+                    '[MatchProfile] Erro ao verificar match antes do undo:',
+                    matchError,
+                  );
+                  Alert.alert('Erro', 'Não foi possível verificar agora. Tente novamente.');
+                  return;
+                }
+              }
+              if (existingMatch) {
+                Alert.alert(
+                  'Vocês já deram match',
+                  'Pra desfazer agora, use a opção de desfazer o match dentro da conversa.',
+                );
+                return;
+              }
+              await undoSwipe(user.uid, uid, false);
+              setAlreadyLiked(false);
+              setIsSuperLike(false);
+            } catch (error) {
+              console.error('[MatchProfile] undoSwipe falhou:', error);
+              Alert.alert('Erro', 'Não foi possível desfazer a curtida. Tente novamente.');
+            } finally {
+              setActionPending(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSendMessage = () => {
@@ -331,7 +409,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
               <View style={styles.swipeActions}>
                 <AnimatedPressable
                   style={[styles.swipeBtn, styles.nopeBtn]}
-                  onPress={() => handleSwipeAction('nope')}
+                  onPress={() => (alreadyLiked ? handleUndoLike() : handleSwipeAction('nope'))}
                   disabled={actionPending}
                 >
                   <Ionicons name="close" size={28} color={theme.colors.nope} />

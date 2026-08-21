@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import type * as NotificationsType from 'expo-notifications';
 import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { db } from '@/services/firebase';
 
@@ -69,12 +69,19 @@ if (isExpoGo) {
     if (!Notifications) return;
 
     Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
+      // S122 — com o app em foreground, o usuário já está olhando pro app;
+      // banner/lista/som de push aqui só duplicam algo que a própria UI (ex:
+      // ChatScreen em tempo real) já está mostrando. Em background/inativo,
+      // comportamento intacto (mostra tudo).
+      handleNotification: async () => {
+        const isForeground = AppState.currentState === 'active';
+        return {
+          shouldPlaySound: !isForeground,
+          shouldSetBadge: false,
+          shouldShowBanner: !isForeground,
+          shouldShowList: !isForeground,
+        };
+      },
     });
 
     if (Platform.OS === 'android') {
