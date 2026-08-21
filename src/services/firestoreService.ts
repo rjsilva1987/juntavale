@@ -25,6 +25,7 @@ import {
   type FieldValue,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
   ref,
   uploadBytes,
@@ -40,7 +41,7 @@ import { REPLY_LIMIT } from '@/constants/reply';
 import { SUPER_LIKE_LIMIT } from '@/constants/superLike';
 import { UF } from '@/constants/ufs';
 import { VALES, Vale } from '@/constants/vale';
-import { db, storage } from '@/services/firebase';
+import { db, functions, storage } from '@/services/firebase';
 import { getDisplayAge } from '@/utils/birthDate';
 
 // ─── Types ───────────────────────────────────────────────
@@ -719,6 +720,13 @@ export const getMatches = (uid: string, callback: (matches: Match[]) => void) =>
 export const getMatchById = async (matchId: string): Promise<Match | null> => {
   const snap = await getDoc(doc(db, 'matches', matchId));
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as Match) : null;
+};
+
+// S102-B — desfaz um match definitivamente (Cloud Function apaga o doc, as
+// subcoleções e as imagens de chat no Storage; ver functions/src/index.ts).
+export const unmatch = async (matchId: string): Promise<void> => {
+  const call = httpsCallable(functions, 'unmatch');
+  await call({ matchId });
 };
 
 // ─── Messages ─────────────────────────────────────────────

@@ -1213,6 +1213,47 @@ export const deleteAccount = onCall(
   },
 );
 
+// S102-B — desfaz um match a pedido de um dos dois usuários: apaga
+// DEFINITIVAMENTE o doc matches/{matchId} (recursiveDelete leva junto as
+// subcoleções messages/hidden/reactions) e as imagens de chat desse match no
+// Storage. Sem push pro outro usuário, sem undo. Ao contrário de
+// deleteAccount, aqui as duas chamadas NÃO ficam em try/catch: se falharem,
+// o erro deve propagar pro client (o SDK converte a exceção em erro
+// `internal` automaticamente), porque o client precisa saber que a operação
+// não terminou e pode tentar de novo — a conta inteira não vai sumir de
+// qualquer forma como em deleteAccount, então não é best-effort aqui.
+export const unmatch = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Você precisa estar autenticado.');
+  }
+
+  const matchId = request.data?.matchId;
+  if (typeof matchId !== 'string' || matchId.length === 0) {
+    throw new HttpsError('invalid-argument', 'matchId inválido.');
+  }
+
+  const matchRef = db.doc(`matches/${matchId}`);
+  const matchSnap = await matchRef.get();
+  if (!matchSnap.exists) {
+    throw new HttpsError('not-found', 'Match não encontrado.');
+  }
+
+  // uid vem SEMPRE do token verificado pelo Admin SDK (request.auth.uid),
+  // nunca de request.data — mesmo raciocínio do comentário em deleteAccount:
+  // um uid vindo do client poderia apagar o match de outra pessoa.
+  const users = (matchSnap.data()?.users as string[] | undefined) ?? [];
+  if (!users.includes(request.auth.uid)) {
+    throw new HttpsError('permission-denied', 'Você não faz parte desse match.');
+  }
+
+  console.log('[unmatch] apagando match:', matchId);
+  await db.recursiveDelete(matchRef);
+  await bucket.deleteFiles({ prefix: `images/chats/${matchId}/` });
+  console.log('[unmatch] concluído:', matchId);
+
+  return { success: true };
+});
+
 // S117 — notifica por e-mail (via Gmail) toda vez que a landing (site/index.html)
 // grava um novo cadastro em testerSignups. Mesmo padrão estrutural do
 // onReportMessageCreated acima: event.data/snap.data() com cast de tipo

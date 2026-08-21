@@ -60,6 +60,7 @@ import {
   markMatchRead,
   sendMessage,
   setMessageReaction,
+  unmatch,
   uploadChatImage,
   Message,
   MessageCursor,
@@ -1057,6 +1058,34 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     );
   };
 
+  const handleUnmatch = () => {
+    setOptionsSheetVisible(false);
+    if (!user) return;
+    Alert.alert(
+      'Desfazer match?',
+      `Você e ${otherName} não vão mais poder conversar. Essa ação é definitiva e não pode ser desfeita.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Desfazer match',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await unmatch(matchId);
+              navigation.navigate('Main', { screen: 'Conversas' });
+            } catch (error) {
+              console.error('[ChatScreen] falha ao desfazer match:', error);
+              Alert.alert(
+                'Erro',
+                'Não foi possível desfazer o match agora. Tente novamente mais tarde.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleReport = async (reason: ReportReason, details: string) => {
     if (!user) return;
     await reportUser(user.uid, otherUid, reason, details);
@@ -1569,6 +1598,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             <AnimatedPressable style={styles.sheetOption} onPress={handleBlock}>
               <Ionicons name="ban-outline" size={22} color={theme.colors.nope} />
               <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>Bloquear</Text>
+            </AnimatedPressable>
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable style={styles.sheetOption} onPress={handleUnmatch}>
+              <Ionicons name="heart-dislike-outline" size={22} color={theme.colors.nope} />
+              <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>
+                Desfazer match
+              </Text>
             </AnimatedPressable>
             <View style={styles.sheetGap} />
             <AnimatedPressable
