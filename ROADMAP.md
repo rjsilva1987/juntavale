@@ -21,28 +21,6 @@ caso o agente **para e pergunta** em vez de escolher.
 
 ## Fila aberta
 
-### S101 — Paginação do chat
-**Status:** em correção (auditoria bloqueou com 5 falhas, 1ª rodada de correção)
-
-Dívida técnica: `listenMessages` carregava o histórico inteiro da conversa a
-cada abertura, sem `limit()` e sem paginação. Objetivo: carregar as últimas N
-mensagens e buscar o resto ao rolar pra cima. Sem mudança visível de produto.
-
-**Armadilhas conhecidas (caras, já pagas uma vez):**
-- O corte da janela do listener tem que ser por **cursor** (`startAt` com
-  `QueryDocumentSnapshot`), **nunca** por `where('createdAt','>=',Timestamp)`.
-  Motivo: um `where` exige mesmo typeOrder, e mensagem recém-enviada tem
-  `serverTimestamp` **pendente** (typeOrder 4) ≠ `Timestamp` concreto
-  (typeOrder 3) — o eco otimista do próprio envio some da tela. Cursor usa
-  outro caminho de comparação e inclui o pendente.
-- `limitToLast` **exige** `orderBy` explícito no mesmo query, senão lança em
-  runtime. O `tsc` não pega isso.
-- A tela é reusada em deep link/notificação **sem desmontar** — toda função
-  assíncrona precisa de guarda de cancelamento por `matchId`.
-- O chat acumulou muita coisa que depende do histórico: reações (S80), tique
-  de leitura (S86), `replyTo`, editar (S92), apagar (S85) e o "ler mais"
-  (S130). Qualquer mudança na janela mexe com todas.
-
 ### S102 — Chat, três partes
 **Status:** ABERTA · sem decisões · sem recon
 
@@ -105,15 +83,14 @@ classificação etária pra cima.
 não por sorte. Pressupõe que a Super Curtida seja escassa hoje — a recon
 começa por confirmar isso.
 
-### S129 — Chat, duas partes
+### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon
 
-- **A)** clicar na mensagem citada (`replyTo`) leva até a mensagem original
-- **B)** tiques estilo WhatsApp: enviado / entregue / lido
+Tiques estilo WhatsApp: enviado / entregue / lido.
 
-⚠️ A parte B **reabre** a decisão do S86, que entregou só dois estados (um
-tique = enviado, dois verdes = lido) e deixou o "entregue" de fora de
-propósito, porque exigiria recibo por dispositivo.
+⚠️ **Reabre** a decisão do S86, que entregou só dois estados (um tique =
+enviado, dois verdes = lido) e deixou o "entregue" de fora de propósito,
+porque exigiria recibo por dispositivo.
 
 ---
 
@@ -121,9 +98,11 @@ propósito, porque exigiria recibo por dispositivo.
 
 | Sprint | O que era |
 |---|---|
-| S122 | Push não chega mais com o app em primeiro plano |
-| S130 | Colar texto longo no chat (maxLength 2000 + "ler mais") |
-| S131 | X em "Suas curtidas" desfaz a curtida |
+| S101 | Paginação do chat — commits `91c734b` + `0710830` (fix: não marcar como lido quando a leitura da âncora falha). Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
+| S122 | Push não chega mais com o app em primeiro plano — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
+| S130 | Colar texto longo no chat (maxLength 2000 + "ler mais") — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
+| S131 | X em "Suas curtidas" desfaz a curtida — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
+| S129-A | Tocar na mensagem citada (`replyTo`) leva até a mensagem original — commit `7439afc`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S120 | Foto obrigatória no cadastro |
 | S103 | Painel de números do admin |
 | S100 | Estado do Descobrir vazio |
@@ -146,6 +125,22 @@ mesma agência/cidade). Decidido que não vamos fazer. Não repropor.
 - Erro não é engolido em silêncio; falha que o usuário causou, o usuário vê.
 - A ficha das duas lojas promete "sem 'assine para ver quem curtiu você'" —
   nenhum modelo de monetização pode contradizer isso.
+
+## Armadilhas do chat (valem pra qualquer sprint que mexa em ChatScreen/listenMessages)
+
+- O corte da janela do listener tem que ser por **cursor** (`startAt` com
+  `QueryDocumentSnapshot`), **nunca** por `where('createdAt','>=',Timestamp)`.
+  Motivo: um `where` exige mesmo typeOrder, e mensagem recém-enviada tem
+  `serverTimestamp` **pendente** (typeOrder 4) ≠ `Timestamp` concreto
+  (typeOrder 3) — o eco otimista do próprio envio some da tela. Cursor usa
+  outro caminho de comparação e inclui o pendente.
+- `limitToLast` **exige** `orderBy` explícito no mesmo query, senão lança em
+  runtime. O `tsc` não pega isso.
+- A tela é reusada em deep link/notificação **sem desmontar** — toda função
+  assíncrona precisa de guarda de cancelamento por `matchId`.
+- O chat acumulou muita coisa que depende do histórico: reações (S80), tique
+  de leitura (S86), `replyTo`, editar (S92), apagar (S85) e o "ler mais"
+  (S130). Qualquer mudança na janela mexe com todas.
 
 ## Baseline técnica
 
