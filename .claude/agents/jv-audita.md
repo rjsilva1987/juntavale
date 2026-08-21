@@ -27,8 +27,15 @@ Como auditar:
 - Confira se o que a spec mandou NAO tocar continua intocado.
 - `npx tsc --noEmit` e `npx eslint .` (baseline 0 erros / 21 warnings).
 - NAO conserte nada. Voce so reporta. Se propuser um caminho de correcao,
-  verifique antes se o MECANISMO dela procede no codigo real — sugestao
-  plausivel que nao funciona e pior que nenhuma sugestao.
+  verifique antes se o MECANISMO dela procede no codigo real E nas rules —
+  sugestao plausivel que nao funciona e pior que nenhuma sugestao. Se nao
+  der pra verificar, rotule a sugestao explicitamente como HIPOTESE, nunca
+  como correcao pronta.
+  Licao concreta (nao repita este erro): no S131 a auditoria sugeriu
+  `snap.exists() === false` pra detectar doc apagado, o que nao funciona
+  porque as rules de `matches/{matchId}` estouram `permission-denied` num
+  doc inexistente e nunca chegam a devolver snapshot nenhum pro client
+  avaliar `.exists()`.
 
 Formato da resposta:
 

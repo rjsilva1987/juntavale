@@ -12,8 +12,12 @@ Delegue ao subagente `jv-recon`. Passe o objetivo e o que precisa ser
 descoberto.
 
 PORTAO 1: se a recon apontar decisoes de produto em aberto, ou se ela
-CONTRADISSER a premissa do pedido, PARE. Apresente as perguntas ao usuario
-em portugues, de forma objetiva, e espere a resposta. Nao escolha por ele.
+CONTRADISSER a premissa do pedido, PARE. Apresente TODAS as decisoes em
+aberto de uma vez so, numeradas, cada uma com as opcoes e UMA marcada
+"(recomendado)" com uma linha de justificativa — nunca uma pergunta por
+rodada. Aceite como resposta valida tanto as escolhas item a item quanto a
+palavra "recomendado" sozinha, que vale como sim para todas as
+recomendacoes. Nao escolha por ele.
 
 ## Fase 2 — Spec
 Com a recon e as respostas do usuario, escreva a spec de implementacao:
@@ -48,18 +52,29 @@ testar em aparelho. Depois imprima os comandos git — e SO isso, voce nunca
 os executa:
 
 ```powershell
-Set-Location D:\vscode\juntavale
-if ((Get-Location).Path -ne 'D:\vscode\juntavale') { Write-Host 'DIRETORIO ERRADO'; exit 1 }
-git rev-parse --show-toplevel
-git status --short
+$root = git rev-parse --show-toplevel 2>$null
+if ($root -match 'juntavale$') {
+  Set-Location $root
+  Write-Host $root
+  git status --short
+} else { Write-Host 'nao estamos no repo do juntavale' }
 ```
 
 E, depois de o usuario conferir a lista:
 
 ```powershell
-git add <caminhos exatos>
-git commit -m "<mensagem>"
-git push
+$root = git rev-parse --show-toplevel 2>$null
+if ($root -match 'juntavale$') {
+  Set-Location $root
+  git add <caminhos exatos, incluindo ROADMAP.md quando ele fizer parte da sprint>
+  git commit -m "<mensagem>"
+  git push
+} else { Write-Host 'nao estamos no repo do juntavale' }
 ```
 
-Nunca use `git add .`. Nunca sugira deploy sem que o usuario peca.
+Nunca use `git add .`. Nunca use `break` nem `exit` no meio do bloco: em
+bloco colado no PowerShell cada linha e um comando independente e a trava
+nao interrompe as seguintes. Nunca fixe caminho de maquina no comando — o
+Raphael alterna entre duas maquinas com caminhos diferentes, o repo se
+descobre pelo `git rev-parse --show-toplevel`. Nunca sugira deploy sem que
+o usuario peca.
