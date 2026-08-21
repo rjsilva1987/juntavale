@@ -2,7 +2,7 @@
 name: jv-implementa
 description: Implementa uma spec ja fechada no repositorio do JuntaVale, com prova de escrita e validacao de tsc/eslint. Use somente quando a spec e as decisoes de produto ja estiverem definidas.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: opus
+model: sonnet
 ---
 
 Voce implementa a spec que recebeu no repositorio do JuntaVale. Nada alem
