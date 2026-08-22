@@ -24,7 +24,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import {
+  castPollVote,
   getMatchById,
+  getMyPollVote,
   getSwipe,
   getUserProfile,
   recordSwipe,
@@ -66,6 +68,11 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   // que a lista de curtidas foi carregada, não a fonte de verdade.
   const [alreadyLiked, setAlreadyLiked] = useState(!!alreadyLikedParam);
   const [isSuperLike, setIsSuperLike] = useState(false);
+  // S132 — mesmo padrão do painel expandido do Descobrir (SwipeScreen.tsx,
+  // handleVotePoll/getMyPollVote): voto otimista local + confirmação do
+  // voto já dado via getMyPollVote.
+  const [myPollVote, setMyPollVote] = useState<number | null>(null);
+  const [pollVoteResolved, setPollVoteResolved] = useState(false);
   const carouselRef = useRef<PhotoCarouselHandle>(null);
 
   // Sem Pan concorrendo aqui (diferente do card da Descobrir) — o tap só
@@ -135,6 +142,30 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
       cancelled = true;
     };
   }, [user, uid]);
+
+  // S132 — confirma o voto já dado na enquete (se houver), mesmo padrão do
+  // getSwipe acima (cancelamento por flag) e do painel expandido do
+  // Descobrir (SwipeScreen.tsx, getMyPollVote). Falha fechada: se o
+  // getMyPollVote falhar, NÃO marca pollVoteResolved — a UI de voto fica
+  // bloqueada (onVotePoll vira undefined mais abaixo) em vez de arriscar
+  // mostrar estado errado.
+  useEffect(() => {
+    if (!profile?.poll || !user) return;
+    let cancelled = false;
+    getMyPollVote(uid, user.uid)
+      .then((vote) => {
+        if (cancelled) return;
+        setMyPollVote(vote);
+        setPollVoteResolved(true);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[MatchProfile] getMyPollVote falhou:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.poll, user, uid]);
 
   const handleBlock = () => {
     if (!user) return;
@@ -285,6 +316,31 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     );
   };
 
+  // S132 — votar na enquete a partir de perfis já curtidos/match/"Curtiram
+  // você" (mesmo comportamento do handleVotePoll do painel expandido do
+  // Descobrir, SwipeScreen.tsx): otimista, marca o voto antes do write
+  // terminar.
+  const handleVotePoll = async (optionIndex: number) => {
+    if (!user) return;
+    setMyPollVote(optionIndex);
+    try {
+      await castPollVote(uid, user.uid, optionIndex);
+    } catch (e) {
+      // permission-denied = já tinha votado (corrida: outro device/tela ao
+      // mesmo tempo) — estado otimista já está correto, não precisa
+      // reverter nem alertar. Mesma checagem por `.code` já usada acima em
+      // handleSwipeAction.
+      const isPermissionDenied =
+        typeof e === 'object' &&
+        e !== null &&
+        'code' in e &&
+        (e as { code?: unknown }).code === 'permission-denied';
+      if (isPermissionDenied) return;
+      setMyPollVote(null);
+      Alert.alert('Erro', 'Não foi possível registrar seu voto.');
+    }
+  };
+
   const handleSendMessage = () => {
     if (!user) return;
     const chatMatchId = [user.uid, uid].sort().join('_');
@@ -402,7 +458,14 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
                   extraídos pra ProfileSections (mesma ordem, mesmos
                   estilos). uf/lookingFor acima continuam inline aqui —
                   não fazem parte do que foi extraído nesta sprint. */}
-              <ProfileSections profile={profile} myInterests={myInterests} note={note} />
+              <ProfileSections
+                profile={profile}
+                myInterests={myInterests}
+                note={note}
+                poll={profile?.poll}
+                myPollVote={myPollVote}
+                onVotePoll={pollVoteResolved ? handleVotePoll : undefined}
+              />
             </View>
 
             {isPreview && (

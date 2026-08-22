@@ -111,10 +111,11 @@ interface ProfileSectionsProps {
   // dispare o Alert de quota esgotada no SwipeScreen.
   replyQuotaRemaining?: number;
   // S126 — Enquete no perfil: mesmo padrão de onReply/replyQuotaRemaining
-  // acima — ausente em MatchProfileScreen (a enquete só existe no Descobrir
-  // pré-match), presente só quando ProfileSheet passa. Sem contagem
-  // numérica aqui: o visitante nunca vê o agregado de votos, só o dono (na
-  // ProfileScreen) — por isso não existe prop de contagem neste componente.
+  // acima. S132 — agora ProfileSheet (Descobrir) e MatchProfileScreen
+  // (curtidos/match/"Curtiram você") passam `poll`+`myPollVote`+`onVotePoll`.
+  // Sem contagem numérica aqui: o visitante nunca vê o agregado de votos, só
+  // o dono (na ProfileScreen) — por isso não existe prop de contagem neste
+  // componente.
   poll?: { question: string; options: string[] };
   myPollVote?: number | null;
   onVotePoll?: (optionIndex: number) => void;
@@ -211,6 +212,38 @@ export function ProfileSections({
         </>
       )}
 
+      {/* S126 — Enquete no perfil: mesma guarda de "só existe no ponto de
+          entrada certo" que `onReply` já usa acima. S132 — agora
+          ProfileSheet (Descobrir) e MatchProfileScreen (curtidos/match/
+          "Curtiram você") passam `poll`+`onVotePoll`. Sem contagem visível
+          pro visitante — decisão 4 da spec é sobre o DONO não ver quem
+          votou, não sobre o visitante ver o resultado; pra não inventar
+          produto, aqui só mostra qual opção o visitante escolheu (ou os
+          botões, se ainda não votou), nunca números. A contagem agregada só
+          aparece pro dono, na ProfileScreen. */}
+      {!!poll && !!onVotePoll && (
+        <>
+          <Text style={styles.sectionTitle}>Enquete</Text>
+          <Text style={styles.pollQuestion}>{poll.question}</Text>
+          {poll.options.map((option, index) => {
+            const isChosen = myPollVote === index;
+            const alreadyVoted = myPollVote != null;
+            return (
+              <AnimatedPressable
+                key={index}
+                style={[styles.pollOption, isChosen && styles.pollOptionChosen]}
+                onPress={() => !alreadyVoted && onVotePoll(index)}
+                disabled={alreadyVoted}
+              >
+                <Text style={[styles.pollOptionText, isChosen && styles.pollOptionTextChosen]}>
+                  {option}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </>
+      )}
+
       {((profile?.prompts?.length ?? 0) > 0 || weeklyPromptAnswer) && (
         <>
           <Text style={styles.sectionTitle}>Perguntas</Text>
@@ -251,38 +284,6 @@ export function ProfileSections({
               )}
             </View>
           ))}
-        </>
-      )}
-
-      {/* S126 — Enquete no perfil: só existe no Descobrir pré-match
-          (ProfileSheet passa `poll`+`onVotePoll`; MatchProfileScreen não
-          passa nenhum dos dois, mesma guarda de "só existe no ponto de
-          entrada certo" que `onReply` já usa acima). Sem contagem visível
-          pro visitante — decisão 4 da spec é sobre o DONO não ver quem
-          votou, não sobre o visitante ver o resultado; pra não inventar
-          produto, aqui só mostra qual opção o visitante escolheu (ou os
-          botões, se ainda não votou), nunca números. A contagem agregada só
-          aparece pro dono, na ProfileScreen. */}
-      {!!poll && !!onVotePoll && (
-        <>
-          <Text style={styles.sectionTitle}>Enquete</Text>
-          <Text style={styles.pollQuestion}>{poll.question}</Text>
-          {poll.options.map((option, index) => {
-            const isChosen = myPollVote === index;
-            const alreadyVoted = myPollVote != null;
-            return (
-              <AnimatedPressable
-                key={index}
-                style={[styles.pollOption, isChosen && styles.pollOptionChosen]}
-                onPress={() => !alreadyVoted && onVotePoll(index)}
-                disabled={alreadyVoted}
-              >
-                <Text style={[styles.pollOptionText, isChosen && styles.pollOptionTextChosen]}>
-                  {option}
-                </Text>
-              </AnimatedPressable>
-            );
-          })}
         </>
       )}
     </>

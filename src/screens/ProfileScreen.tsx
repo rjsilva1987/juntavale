@@ -997,6 +997,49 @@ export default function ProfileScreen() {
             </View>
           ))}
 
+        {/* S126 — Enquete no perfil: dono só vê o agregado (contagem por
+            opção, via profile.pollCounts — escrito só pela Cloud Function
+            onPollVoteCreated), NUNCA quem votou o quê (reforçado nas rules,
+            não só escondido aqui). S132 — sobe acima do "Prompt da semana"/
+            "Perguntas" (antes vinha depois). */}
+        {!editing && !isAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Enquete</Text>
+            {profile?.poll ? (
+              <>
+                <Text style={styles.pollQuestionText}>{profile.poll.question}</Text>
+                {profile.poll.options.map((option, index) => (
+                  <View key={index} style={styles.pollCountRow}>
+                    <Text style={styles.pollCountOptionText} numberOfLines={1}>
+                      {option}
+                    </Text>
+                    <Text style={styles.pollCountValue}>{profile.pollCounts?.[index] ?? 0}</Text>
+                  </View>
+                ))}
+                <Text style={styles.pollTotalText}>
+                  {Object.values(profile.pollCounts ?? {}).reduce((sum, n) => sum + n, 0)} voto(s)
+                  no total
+                </Text>
+                <AnimatedPressable
+                  style={styles.addPromptBtn}
+                  onPress={() => setPollModalVisible(true)}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={theme.colors.primary} />
+                  <Text style={styles.addPromptText}>Editar</Text>
+                </AnimatedPressable>
+              </>
+            ) : (
+              <AnimatedPressable
+                style={styles.addPromptBtn}
+                onPress={() => setPollModalVisible(true)}
+              >
+                <Ionicons name="add" size={18} color={theme.colors.primary} />
+                <Text style={styles.addPromptText}>Criar enquete</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
         {/* Prompt da semana (S59) — rotação automática por data, destacada no
             topo da área de prompts. Resposta grava no campo próprio
             `weeklyPromptAnswer` (fora de `prompts[]`/MAX_PROMPTS, decisão
@@ -1073,48 +1116,6 @@ export default function ProfileScreen() {
               <AnimatedPressable style={styles.addPromptBtn} onPress={openAddPrompt}>
                 <Ionicons name="add" size={18} color={theme.colors.primary} />
                 <Text style={styles.addPromptText}>Adicionar</Text>
-              </AnimatedPressable>
-            )}
-          </View>
-        )}
-
-        {/* S126 — Enquete no perfil: dono só vê o agregado (contagem por
-            opção, via profile.pollCounts — escrito só pela Cloud Function
-            onPollVoteCreated), NUNCA quem votou o quê (reforçado nas rules,
-            não só escondido aqui). */}
-        {!editing && !isAdmin && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Enquete</Text>
-            {profile?.poll ? (
-              <>
-                <Text style={styles.pollQuestionText}>{profile.poll.question}</Text>
-                {profile.poll.options.map((option, index) => (
-                  <View key={index} style={styles.pollCountRow}>
-                    <Text style={styles.pollCountOptionText} numberOfLines={1}>
-                      {option}
-                    </Text>
-                    <Text style={styles.pollCountValue}>{profile.pollCounts?.[index] ?? 0}</Text>
-                  </View>
-                ))}
-                <Text style={styles.pollTotalText}>
-                  {Object.values(profile.pollCounts ?? {}).reduce((sum, n) => sum + n, 0)} voto(s)
-                  no total
-                </Text>
-                <AnimatedPressable
-                  style={styles.addPromptBtn}
-                  onPress={() => setPollModalVisible(true)}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={theme.colors.primary} />
-                  <Text style={styles.addPromptText}>Editar</Text>
-                </AnimatedPressable>
-              </>
-            ) : (
-              <AnimatedPressable
-                style={styles.addPromptBtn}
-                onPress={() => setPollModalVisible(true)}
-              >
-                <Ionicons name="add" size={18} color={theme.colors.primary} />
-                <Text style={styles.addPromptText}>Criar enquete</Text>
               </AnimatedPressable>
             )}
           </View>
