@@ -30,11 +30,21 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
   await deleteDoc(doc(db, 'blocks', `${blockerUid}_${blockedUid}`));
 };
 
+// S102-C — messageContext: presente só quando a denúncia parte de uma
+// mensagem específica do chat (ChatScreen.handleReportMessage), reusa a
+// mesma coleção/fila de denúncia de perfil (S96). messageImageUrl só entra
+// no addDoc se a mensagem denunciada tinha foto.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
   reason: ReportReason,
   details?: string,
+  messageContext?: {
+    matchId: string;
+    messageId: string;
+    messageText: string;
+    messageImageUrl?: string;
+  },
 ) => {
   await addDoc(collection(db, 'reports'), {
     reporterId,
@@ -43,6 +53,16 @@ export const reportUser = async (
     details: details ?? '',
     createdAt: serverTimestamp(),
     status: 'open',
+    ...(messageContext
+      ? {
+          matchId: messageContext.matchId,
+          messageId: messageContext.messageId,
+          messageText: messageContext.messageText,
+          ...(messageContext.messageImageUrl
+            ? { messageImageUrl: messageContext.messageImageUrl }
+            : {}),
+        }
+      : {}),
   });
 };
 

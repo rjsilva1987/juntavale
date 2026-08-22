@@ -23,9 +23,17 @@ interface ReportModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (reason: ReportReason, details: string) => Promise<void>;
+  // S102-C — título customizável: reusado também pra denúncia de uma
+  // mensagem específica do chat (ChatScreen), não só de perfil.
+  title?: string;
 }
 
-export function ReportModal({ visible, onClose, onSubmit }: ReportModalProps) {
+export function ReportModal({
+  visible,
+  onClose,
+  onSubmit,
+  title = 'Denunciar usuário',
+}: ReportModalProps) {
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -61,7 +69,7 @@ export function ReportModal({ visible, onClose, onSubmit }: ReportModalProps) {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.scrollContent}
             >
-              <Text style={styles.title}>Denunciar usuário</Text>
+              <Text style={styles.title}>{title}</Text>
               <Text style={styles.subtitle}>Selecione o motivo da denúncia</Text>
 
               {REASONS.map((r) => {

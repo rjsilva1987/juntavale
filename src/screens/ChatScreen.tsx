@@ -484,6 +484,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [optionsSheetVisible, setOptionsSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
+  // S102-C — reportMessageTarget: mensagem escolhida pra denunciar via
+  // sheet de toque longo. Independente de reportVisible/handleReport, que
+  // seguem exclusivos do fluxo de denunciar o perfil (menu do cabeçalho).
+  const [reportMessageTarget, setReportMessageTarget] = useState<Message | null>(null);
   // S79 — replyOptionsTarget: mensagem que recebeu o toque longo (abre o
   // sheet "Responder"/"Cancelar"). replyTarget: mensagem escolhida de fato
   // pra responder (mostra a barra de citação acima do input). Os dois nunca
@@ -1093,6 +1097,20 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
   };
 
+  // S102-C — denúncia de uma mensagem específica, reusando reportUser com
+  // messageContext. Independente de handleReport (fluxo de perfil) acima.
+  const handleReportMessage = async (reason: ReportReason, details: string) => {
+    if (!user || !reportMessageTarget) return;
+    await reportUser(user.uid, reportMessageTarget.senderId, reason, details, {
+      matchId,
+      messageId: reportMessageTarget.id,
+      messageText: (reportMessageTarget.text ?? '').slice(0, 400),
+      ...(reportMessageTarget.imageUrl ? { messageImageUrl: reportMessageTarget.imageUrl } : {}),
+    });
+    setReportMessageTarget(null);
+    Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
+  };
+
   const handleOpenLocation = (location: { latitude: number; longitude: number }) => {
     const url = Platform.select({
       ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
@@ -1146,6 +1164,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     !replyOptionsTarget.location &&
     (!replyOptionsTarget.createdAt ||
       Date.now() - replyOptionsTarget.createdAt.toMillis() < EDIT_WINDOW_MS);
+
+  // S102-C — guarda de UX: só mensagem do OUTRO lado, ainda não apagada.
+  // Mesmo raciocínio client-side-primeiro de canDeleteForEveryone/canEdit
+  // acima, evitando permission-denied engolido (bug do S49).
+  const canReportMessage =
+    !!replyOptionsTarget &&
+    !!uid &&
+    replyOptionsTarget.senderId !== uid &&
+    !replyOptionsTarget.deletedAt;
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
@@ -1545,6 +1572,21 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 </Text>
               </AnimatedPressable>
             )}
+            {/* S102-C — "Denunciar mensagem": só a mensagem do outro lado,
+                ainda não apagada (canReportMessage). Fluxo independente da
+                denúncia de perfil do menu do cabeçalho. */}
+            {canReportMessage && (
+              <AnimatedPressable
+                style={styles.sheetOption}
+                onPress={() => {
+                  setReportMessageTarget(replyOptionsTarget);
+                  setReplyOptionsTarget(null);
+                }}
+              >
+                <Ionicons name="flag-outline" size={22} color={theme.colors.text} />
+                <Text style={styles.sheetOptionText}>Denunciar mensagem</Text>
+              </AnimatedPressable>
+            )}
             <View style={styles.sheetGap} />
             <AnimatedPressable
               style={styles.sheetCancel}
@@ -1621,6 +1663,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         visible={reportVisible}
         onClose={() => setReportVisible(false)}
         onSubmit={handleReport}
+      />
+
+      {/* S102-C — segundo ReportModal, independente do de perfil acima:
+          denúncia de uma mensagem específica via sheet de toque longo. */}
+      <ReportModal
+        visible={!!reportMessageTarget}
+        onClose={() => setReportMessageTarget(null)}
+        onSubmit={handleReportMessage}
+        title="Denunciar mensagem"
       />
     </Animated.View>
   );

@@ -1,4 +1,7 @@
-// rules-stamp: S126 (21/08/2026 — Enquete no perfil: users/{userId} ganha
+// rules-stamp: S102-C (21/08/2026 — reports/{reportId} ganha campos
+// opcionais matchId, messageId, messageText [snapshot truncado, <=400] e
+// messageImageUrl no create, liberando denúncia de mensagem específica do
+// chat, reusa a mesma coleção/fila da S96) + S126 (21/08/2026 — Enquete no perfil: users/{userId} ganha
 // campo `poll`, mapa {question, options} opcional, validado em
 // isValidProfile e liberado só no hasOnly do UPDATE — cadastro nunca nasce
 // com enquete; `pollCounts` de propósito NÃO entra em hasOnly nenhum, só
@@ -1049,8 +1052,23 @@ service cloud.firestore {
         // 'resolved'.
         && (!('status' in request.resource.data)
             || request.resource.data.status == 'open')
+        // S102-C — denúncia de uma mensagem específica do chat, reusando
+        // esta mesma coleção/fila (S96): os 4 campos abaixo são opcionais,
+        // client sempre manda matchId/messageId/messageText juntos (ou
+        // nenhum dos três), messageImageUrl só quando a mensagem tinha
+        // foto — não há regra extra de dependência cruzada entre eles,
+        // decisão de produto. messageText é uma CÓPIA truncada do texto
+        // original, mesmo teto de replyTo.text (400, linha ~879 acima).
+        && (!('matchId' in request.resource.data) || request.resource.data.matchId is string)
+        && (!('messageId' in request.resource.data) || request.resource.data.messageId is string)
+        && (!('messageText' in request.resource.data)
+            || (request.resource.data.messageText is string
+                && request.resource.data.messageText.size() <= 400))
+        && (!('messageImageUrl' in request.resource.data)
+            || request.resource.data.messageImageUrl is string)
         && request.resource.data.keys().hasOnly(
-             ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status']);
+             ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
+              'matchId', 'messageId', 'messageText', 'messageImageUrl']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que

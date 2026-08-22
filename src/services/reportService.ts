@@ -36,6 +36,15 @@ export interface Report {
   // em SupportTicket (supportService.ts).
   lastMessageAt?: Timestamp;
   lastSenderId?: string;
+  // S102-C — presentes só quando a denúncia partiu de uma mensagem
+  // específica do chat (ChatScreen.handleReportMessage), reusando esta
+  // mesma coleção/fila (S96). messageText é uma CÓPIA truncada (<=400,
+  // mesmo teto de replyTo.text) do texto original, não uma referência
+  // viva — a mensagem original pode ter sido apagada depois.
+  matchId?: string;
+  messageId?: string;
+  messageText?: string;
+  messageImageUrl?: string;
 }
 
 export interface ReportMessage {

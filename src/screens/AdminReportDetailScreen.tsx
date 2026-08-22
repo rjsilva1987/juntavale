@@ -293,6 +293,28 @@ export default function AdminReportDetailScreen({
                     {partyLabel(report.reportedId, reportedProfile)}
                   </Text>
 
+                  {/* S102-C — presente só quando a denúncia partiu de uma
+                      mensagem específica do chat (ChatScreen). messageText é
+                      uma cópia truncada, não referência viva. */}
+                  {!!report.messageId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Mensagem denunciada</Text>
+                      {!!report.messageText && (
+                        <Text style={styles.fieldValue} selectable>
+                          {report.messageText}
+                        </Text>
+                      )}
+                      {!!report.messageImageUrl && (
+                        <Image
+                          source={{ uri: report.messageImageUrl }}
+                          style={styles.reportedMessageImage}
+                          contentFit="cover"
+                          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                        />
+                      )}
+                    </>
+                  )}
+
                   <AnimatedPressable
                     style={[styles.actionBtn, isPending ? styles.resolveBtn : styles.reopenBtn]}
                     onPress={handleToggleStatus}
@@ -415,6 +437,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   fieldValue: { fontSize: theme.fontSize.sm, color: theme.colors.text, lineHeight: 20 },
+  // S102-C — thumbnail da mensagem denunciada (report.messageImageUrl).
+  reportedMessageImage: {
+    width: 160,
+    height: 160,
+    borderRadius: theme.borderRadius.md,
+    marginTop: 4,
+  },
 
   badge: { borderRadius: theme.borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 },
   badgeOpen: { backgroundColor: theme.colors.secondary },
