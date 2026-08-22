@@ -315,6 +315,29 @@ export default function AdminReportDetailScreen({
                     </>
                   )}
 
+                  {/* S121 — presente só quando a denúncia partiu de um
+                      momento (story de 24h). momentoText é uma cópia
+                      truncada, não referência viva — o momento pode ter
+                      expirado ou sido apagado depois. */}
+                  {!!report.momentoId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Momento denunciado</Text>
+                      {!!report.momentoText && (
+                        <Text style={styles.fieldValue} selectable>
+                          {report.momentoText}
+                        </Text>
+                      )}
+                      {!!report.momentoPhotoUrl && (
+                        <Image
+                          source={{ uri: report.momentoPhotoUrl }}
+                          style={styles.reportedMessageImage}
+                          contentFit="cover"
+                          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                        />
+                      )}
+                    </>
+                  )}
+
                   <AnimatedPressable
                     style={[styles.actionBtn, isPending ? styles.resolveBtn : styles.reopenBtn]}
                     onPress={handleToggleStatus}

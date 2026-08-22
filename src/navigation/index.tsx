@@ -37,6 +37,7 @@ import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
+import MomentosScreen from '@/screens/MomentosScreen';
 import MyReportsScreen from '@/screens/MyReportsScreen';
 import MyTicketsScreen from '@/screens/MyTicketsScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
@@ -59,6 +60,7 @@ export type RootStackParamList = {
     | {
         screen:
           | 'Descobrir'
+          | 'Explorar'
           | 'Curtidas'
           | 'Conversas'
           | 'Perfil'
@@ -110,6 +112,8 @@ const Tab = createBottomTabNavigator();
 // entrada nova aqui + um <Tab.Screen> correspondente abaixo.
 const TAB_META: Record<string, { label: string; icon: string }> = {
   Descobrir: { label: 'Descobrir', icon: 'flame' },
+  // S121 — aba "Explorar": momentos (story de 24h) da base inteira.
+  Explorar: { label: 'Explorar', icon: 'compass' },
   Curtidas: { label: 'Curtidas', icon: 'heart' },
   Conversas: { label: 'Conversas', icon: 'chatbubble' },
   Perfil: { label: 'Perfil', icon: 'person' },
@@ -236,6 +240,13 @@ function MainTabs() {
             {() => (
               <ErrorBoundary>
                 <SwipeScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Explorar">
+            {() => (
+              <ErrorBoundary>
+                <MomentosScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>

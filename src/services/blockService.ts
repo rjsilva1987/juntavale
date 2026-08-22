@@ -34,6 +34,11 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
 // mensagem específica do chat (ChatScreen.handleReportMessage), reusa a
 // mesma coleção/fila de denúncia de perfil (S96). messageImageUrl só entra
 // no addDoc se a mensagem denunciada tinha foto.
+// S121 — momentoContext: presente só quando a denúncia parte de um momento
+// (story de 24h) específico (MomentoViewerModal), mesmo molde de
+// messageContext acima. Quem chama decide qual dos dois contexts passar —
+// nunca os dois juntos na mesma chamada, a função não valida mutex entre
+// eles.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
@@ -44,6 +49,11 @@ export const reportUser = async (
     messageId: string;
     messageText: string;
     messageImageUrl?: string;
+  },
+  momentoContext?: {
+    momentoId: string;
+    momentoText?: string;
+    momentoPhotoUrl?: string;
   },
 ) => {
   await addDoc(collection(db, 'reports'), {
@@ -60,6 +70,15 @@ export const reportUser = async (
           messageText: messageContext.messageText,
           ...(messageContext.messageImageUrl
             ? { messageImageUrl: messageContext.messageImageUrl }
+            : {}),
+        }
+      : {}),
+    ...(momentoContext
+      ? {
+          momentoId: momentoContext.momentoId,
+          ...(momentoContext.momentoText ? { momentoText: momentoContext.momentoText } : {}),
+          ...(momentoContext.momentoPhotoUrl
+            ? { momentoPhotoUrl: momentoContext.momentoPhotoUrl }
             : {}),
         }
       : {}),

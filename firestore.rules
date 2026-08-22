@@ -1,4 +1,13 @@
-// rules-stamp: S102-C (21/08/2026 — reports/{reportId} ganha campos
+// rules-stamp: S121 (22/08/2026 — nova collection raiz momentos/{uid} [doc ID
+// == uid do autor, story de 24h, audiência é a base inteira]: allow read exige
+// expiresAt > request.time [doc expirado fica ilegível antes mesmo da function
+// de limpeza rodar]; create/update exige dono, type in ['text','photo'],
+// createdAt == request.time, expiresAt numa janela de 23h-25h a partir de
+// request.time, texto OU foto mutuamente exclusivos; allow delete só do dono.
+// reports/{reportId} ganha 3 campos opcionais novos — momentoId, momentoText
+// [<=400] e momentoPhotoUrl — no create, mesmo molde de matchId/messageId/
+// messageText/messageImageUrl da S102-C, liberando denúncia de um momento
+// específico reusando a mesma coleção/fila) + S102-C (21/08/2026 — reports/{reportId} ganha campos
 // opcionais matchId, messageId, messageText [snapshot truncado, <=400] e
 // messageImageUrl no create, liberando denúncia de mensagem específica do
 // chat, reusa a mesma coleção/fila da S96) + S126 (21/08/2026 — Enquete no perfil: users/{userId} ganha
@@ -1066,9 +1075,20 @@ service cloud.firestore {
                 && request.resource.data.messageText.size() <= 400))
         && (!('messageImageUrl' in request.resource.data)
             || request.resource.data.messageImageUrl is string)
+        // S121 — denúncia de um momento (story de 24h), mesmo mecanismo dos
+        // 4 campos de mensagem acima: momentoId é o uid do autor (== doc ID
+        // de momentos/{uid}), momentoText/momentoPhotoUrl são cópia
+        // truncada, não referência viva.
+        && (!('momentoId' in request.resource.data) || request.resource.data.momentoId is string)
+        && (!('momentoText' in request.resource.data)
+            || (request.resource.data.momentoText is string
+                && request.resource.data.momentoText.size() <= 400))
+        && (!('momentoPhotoUrl' in request.resource.data)
+            || request.resource.data.momentoPhotoUrl is string)
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
-              'matchId', 'messageId', 'messageText', 'messageImageUrl']);
+              'matchId', 'messageId', 'messageText', 'messageImageUrl',
+              'momentoId', 'momentoText', 'momentoPhotoUrl']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que
@@ -1316,6 +1336,51 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
 
       allow read, update, delete: if false;
+    }
+
+    // ───────────────────────── momentos (S121) ─────────────────────────
+    //
+    // Story que expira em 24h — audiência é a BASE INTEIRA (decisão de
+    // produto do ROADMAP), não só matches: allow read não checa amizade nem
+    // match, só isSignedIn(). Doc ID == uid do autor (1 momento ativo por
+    // usuário, publicar de novo SOBRESCREVE via setDoc sem merge).
+    match /momentos/{uid} {
+      // Doc expirado (expiresAt <= agora) fica ilegível mesmo antes de a
+      // function de limpeza (expireMomentos) rodar e apagar de fato — evita
+      // doc "zumbi" acessível por quem tiver o uid. O client trata
+      // permission-denied aqui como "sem momento ativo" (momentoService.ts).
+      allow read: if isSignedIn() && resource.data.expiresAt > request.time;
+
+      allow create, update: if isOwner(uid)
+        && request.resource.data.authorId == uid
+        && request.resource.data.type in ['text', 'photo']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        // Janela de 23h-25h em torno de request.time: tolera deriva de
+        // relógio do client (expiresAt é calculado localmente, createdAt
+        // via serverTimestamp), mesmo raciocínio de duration.value() já
+        // usado pra idade aproximada em birthDate (S76-A).
+        && request.resource.data.expiresAt >= request.time + duration.value(23, 'h')
+        && request.resource.data.expiresAt <= request.time + duration.value(25, 'h')
+        && (
+             (request.resource.data.type == 'text'
+               && request.resource.data.text is string
+               && request.resource.data.text.size() > 0
+               // 1120 = 4x o teto de 280 code points do client (mesma regra
+               // do S77: contagem do client é code point, rules é guarda de
+               // abuso em UTF-16 length, 4x de folga).
+               && request.resource.data.text.size() <= 1120
+               && request.resource.data.text.matches('.*\\S.*')
+               && !('photoUrl' in request.resource.data))
+             || (request.resource.data.type == 'photo'
+               && request.resource.data.photoUrl is string
+               && request.resource.data.photoUrl.size() > 0
+               && !('text' in request.resource.data))
+           )
+        && request.resource.data.keys().hasOnly(
+             ['authorId', 'type', 'text', 'photoUrl', 'createdAt', 'expiresAt']);
+
+      allow delete: if isOwner(uid);
     }
 
     // ───────────────────────── deny by default ─────────────────────────

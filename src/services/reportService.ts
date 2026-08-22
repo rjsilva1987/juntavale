@@ -45,6 +45,13 @@ export interface Report {
   messageId?: string;
   messageText?: string;
   messageImageUrl?: string;
+  // S121 — presentes só quando a denúncia partiu de um momento (story de
+  // 24h). momentoId é o uid do autor (== doc ID de momentos/{uid}).
+  // momentoText/momentoPhotoUrl são CÓPIA truncada, não referência viva — o
+  // momento pode ter expirado ou sido apagado depois.
+  momentoId?: string;
+  momentoText?: string;
+  momentoPhotoUrl?: string;
 }
 
 export interface ReportMessage {

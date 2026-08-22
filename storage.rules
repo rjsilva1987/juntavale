@@ -49,6 +49,20 @@ service firebase.storage {
       allow delete: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // ───────────────────────── momento photos (S121) ─────────────────────────
+    //
+    // Foto de momento (story de 24h). Path images/momentos/{uid}/{timestamp}.jpg,
+    // mesmo padrão de path de avatars/{uid} e images/chats/{matchId}. read
+    // amplo de propósito: audiência é a base inteira (decisão de produto do
+    // S121), não só matches — mesmo raciocínio de avatars/{uid} logo acima.
+    match /images/momentos/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isValidImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // ───────────────────────── chat images ─────────────────────────
     //
     // Corrige o bug "Não foi possível enviar a imagem": uploadChatImage()
