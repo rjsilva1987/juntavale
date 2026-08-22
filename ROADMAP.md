@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 21/08/2026
+**Última atualização:** 22/08/2026
 
 ---
 
@@ -81,6 +81,40 @@ Tiques estilo WhatsApp: enviado / entregue / lido.
 enviado, dois verdes = lido) e deixou o "entregue" de fora de propósito,
 porque exigiria recibo por dispositivo.
 
+### S132 — Enquete visível fora do Descobrir
+**Status:** ABERTA · sem decisões · sem recon
+
+A S126 deixou a enquete acessível SÓ no card do Descobrir (ProfileSheet).
+Quem já curtiu, quem já é match e quem está em "Curtiram você" nunca vê
+enquete nenhuma — o perfil abre no MatchProfileScreen, tela que a S126 não
+tocou. Objetivo: exibir e permitir votar também nessa tela.
+
+**Ordem no ProfileScreen:** a seção da enquete deve aparecer ACIMA do slot
+"Prompt da semana" (S50). A S126 inseriu a enquete no ProfileScreen sem
+definir posição relativa a esse slot — a recon confirma a ordem atual antes
+de mexer. Mudança só de ordem de renderização, sem tocar dados nem rules.
+
+Terreno já pronto (nada disso precisa ser construído): o componente de
+exibição e voto existe em ProfileSections/ProfileSheet, as rules já aceitam
+o voto (subcoleção `pollVotes` create-only) e as duas functions
+(`onPollVoteCreated`, `onPollChanged`) já estão deployadas em 21/08.
+
+Pontos a decidir quando a sprint rodar:
+- Se o DONO da enquete, ao abrir o próprio perfil por essa tela, vê o
+  agregado ou não vê nada.
+- Se a reordenação vale só no ProfileScreen (tela de edição do próprio
+  perfil) ou também no perfil que os OUTROS veem (ProfileSheet e
+  MatchProfileScreen) — são arquivos diferentes.
+- Efeito colateral a pesar: o "Prompt da semana" tem push semanal segunda
+  12h; se a enquete ficar acima dele, o convite que o push manda responder
+  deixa de ser o primeiro chamado à ação do perfil, contrariando o desenho
+  da S50.
+
+**Descoberto em teste de campo em 21/08:** perfil já curtido some do
+Descobrir, então com duas contas que já se curtiram não há de onde votar; o
+teste da S126 exige uma terceira conta comum que nunca tenha swipado o dono
+da enquete. A conta admin não serve — a S95 tirou o Descobrir dela.
+
 ---
 
 ## Fechadas recentemente
@@ -88,7 +122,7 @@ porque exigiria recibo por dispositivo.
 | Sprint | O que era |
 |---|---|
 | S102-B | Desfazer match de dentro da conversa — commit `5b6c49f`. Function `unmatch` (onCall, southamerica-east1) **já deployada em 21/08**. **Fechada em código, ainda SEM teste.** |
-| S102-C | Denunciar mensagem específica do chat, reusando a fila de denúncias do admin (S96) — commit `825b56b`. `firestore.rules` **já deployadas**. Sem function nova. **Fechada em código, ainda SEM teste.** |
+| S102-C | Denunciar mensagem específica do chat, reusando a fila de denúncias do admin (S96) — commit `825b56b`, 6 arquivos. `firestore.rules` **já deployadas em 21/08** (saída do deploy trouxe "uploading rules" e "released rules"). NENHUMA Cloud Function envolvida. **Fechada em código, SEM teste.** |
 | S126 | Enquete no perfil — commit `d35b935`. `firestore.rules` e as duas functions novas (`onPollVoteCreated`, `onPollChanged`) **já deployadas em 21/08**. **Fechada em código, ainda SEM teste** (exceto push, que espera o build 15). |
 | S101 | Paginação do chat — commits `91c734b` + `0710830` (fix: não marcar como lido quando a leitura da âncora falha). Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S122 | Push não chega mais com o app em primeiro plano — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
@@ -119,8 +153,19 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   imagens do chat sumiram do Storage.
 - S102-C — denunciar uma mensagem específica do chat (long-press → Denunciar
   mensagem); conferir que a opção só aparece na mensagem do outro usuário e
-  some em mensagem apagada; conferir no painel admin (AdminReportDetail) que
-  o snapshot de texto/imagem aparece corretamente.
+  some em mensagem apagada.
+- S102-C — denunciar uma mensagem de TEXTO: o registro chega na fila do
+  admin com o trecho da mensagem, o motivo e o `details`.
+- S102-C — denunciar uma mensagem com FOTO: a imagem aparece no detalhe do
+  admin.
+- S102-C — denunciar mensagem com mais de 400 caracteres: o client tem que
+  truncar ANTES de enviar; se não truncar, as rules rejeitam e a denúncia
+  falha em silêncio. É o ponto mais provável de quebra.
+- S102-C — denúncia de PERFIL continua funcionando (S96 intacta): os 4
+  campos novos são opcionais, o caminho antigo não pode ter regredido.
+- S102-C — o admin consegue resolver a denúncia normalmente.
+- S102-C — copy: o trecho da mensagem tem que aparecer como INFORMADO PELO
+  DENUNCIANTE, nunca como transcrição verificada.
 - S126 — criar enquete no ProfileScreen (2 a 4 opções), editar e remover;
   conferir que remover/editar zera `pollCounts` e apaga `pollVotes/*` de
   verdade (`onPollChanged`).
@@ -139,6 +184,20 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 - S101, S122, S129-A, S130, S131 (bateria a definir).
 - S126 — dono recebe o push anônimo quando alguém vota na enquete; Expo Go
   não entrega push no SDK 54, precisa do build.
+
+---
+
+## Dívidas técnicas (não bloqueiam, sem sprint própria por enquanto)
+
+- **S102-C** — `messageImageUrl` aceita qualquer string; a tela do admin
+  renderiza como imagem, então o aparelho dele busca URL arbitrária
+  fornecida por usuário. Fecha com
+  `matches('https://firebasestorage\\.googleapis\\.com/.*')`.
+- **S102-C** — `matchId` e `messageId` não têm limite de tamanho (`details`
+  tem 2000, `messageText` tem 400, esses dois não têm nada).
+- **S102-C** — `matchId`/`messageId` são texto livre sem vínculo com o
+  denunciante: dá pra mandar `matchId` de conversa alheia ou inventado.
+  Risco de moderação, não de segurança.
 
 ---
 
