@@ -21,15 +21,11 @@ caso o agente **para e pergunta** em vez de escolher.
 
 ## Fila aberta
 
-### S102 — Chat, duas partes restantes (A áudio / C denunciar mensagem)
+### S102-A — Chat, mensagem de áudio
 **Status:** ABERTA · sem decisões · sem recon
 
-- **A)** gravar e enviar mensagem de áudio
-- **C)** denunciar uma **mensagem** específica (hoje a denúncia é do perfil
-  inteiro, via S96)
-
-A parte A é a mais cara de todas: gravação, upload, storage e moderação de
-conteúdo que não dá pra buscar por texto.
+Gravar e enviar mensagem de áudio — a mais cara de todas: gravação,
+upload, storage e moderação de conteúdo que não dá pra buscar por texto.
 
 ### S121 — Momento de 24h
 **Status:** ABERTA · decisões tomadas · sem recon
@@ -59,23 +55,6 @@ dar motivo de voltar ao app mesmo sem match.
 
 Alguém marca um encontro (ex.: happy hour) e quem topa entra numa lista de
 participantes. Mesmo custo de moderação da S124.
-
-### S126 — Enquete no perfil
-**Status:** ABERTA · EM IMPLEMENTAÇÃO (aguardando auditoria) · decisões
-tomadas · recon feita
-
-Pergunta no perfil respondida direto do card do Descobrir, sem precisar
-curtir. Barata: se pendura em estruturas que já existem.
-
-**Implementado, ainda NÃO auditado nem deployado** — `poll`/`pollCounts` em
-`users/{uid}`, nova collection `users/{ownerUid}/pollVotes/{voterUid}`
-(create-only, dono nunca lê quem votou o quê), duas Cloud Functions novas
-(`onPollVoteCreated`, `onPollChanged`) e client (ProfileScreen edita,
-SwipeScreen/ProfileSheet/ProfileSections votam). `npx tsc --noEmit` (raiz e
-`functions/`) e `npx eslint .` rodados, sem regressão de baseline — ver
-relatório da sprint. **NÃO mover pra "Fechadas recentemente" até a auditoria
-aprovar** (regra do processo: sprint bloqueada nunca aparece como fechada
-aqui).
 
 ### S127 — Marcos e selos
 **Status:** ABERTA · sem decisões · sem recon
@@ -109,6 +88,8 @@ porque exigiria recibo por dispositivo.
 | Sprint | O que era |
 |---|---|
 | S102-B | Desfazer match de dentro da conversa — commit `5b6c49f`. Function `unmatch` (onCall, southamerica-east1) **já deployada em 21/08**. **Fechada em código, ainda SEM teste.** |
+| S102-C | Denunciar mensagem específica do chat, reusando a fila de denúncias do admin (S96) — commit `825b56b`. `firestore.rules` **já deployadas**. Sem function nova. **Fechada em código, ainda SEM teste.** |
+| S126 | Enquete no perfil — commit `d35b935`. `firestore.rules` e as duas functions novas (`onPollVoteCreated`, `onPollChanged`) **já deployadas em 21/08**. **Fechada em código, ainda SEM teste** (exceto push, que espera o build 15). |
 | S101 | Paginação do chat — commits `91c734b` + `0710830` (fix: não marcar como lido quando a leitura da âncora falha). Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S122 | Push não chega mais com o app em primeiro plano — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S130 | Colar texto longo no chat (maxLength 2000 + "ler mais") — commit `12a7220`. Client puro. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
@@ -136,29 +117,28 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   tela do **outro** usuário que está com a conversa aberta na hora (risco de
   cair em `permission-denied` em vez de sair da tela); conferir se as
   imagens do chat sumiram do Storage.
+- S102-C — denunciar uma mensagem específica do chat (long-press → Denunciar
+  mensagem); conferir que a opção só aparece na mensagem do outro usuário e
+  some em mensagem apagada; conferir no painel admin (AdminReportDetail) que
+  o snapshot de texto/imagem aparece corretamente.
+- S126 — criar enquete no ProfileScreen (2 a 4 opções), editar e remover;
+  conferir que remover/editar zera `pollCounts` e apaga `pollVotes/*` de
+  verdade (`onPollChanged`).
+- S126 — votar a partir do Descobrir (ProfileSheet) com uma conta B, sem ter
+  dado like antes; conferir que a contagem agregada sobe, sem nenhum jeito
+  de descobrir quem votou (nem no Console, sem usar Admin SDK).
+- S126 — votar duas vezes rápido (dois toques, ou dois devices/telas com a
+  mesma conta) — conferir que o segundo toque não derruba a UI com Alert de
+  erro (deve cair no ramo `permission-denied` = "já votou", ver
+  `handleVotePoll`).
+- S126 — perfil sem enquete: card "Enquete" no Descobrir simplesmente não
+  aparece; ProfileScreen mostra só o botão "Criar enquete".
 
 **Espera o build 15:**
 
 - S101, S122, S129-A, S130, S131 (bateria a definir).
-
-**Aguarda deploy de rules + functions (S126 — Enquete no perfil):** nada
-disto é testável antes do deploy (Raphael) de `firestore.rules` E das duas
-functions novas (`onPollVoteCreated`, `onPollChanged`) — client sozinho não
-faz nada sem o backend no ar.
-
-- Criar enquete no ProfileScreen (2 a 4 opções), editar e remover; conferir
-  que remover/editar zera `pollCounts` e apaga `pollVotes/*` de verdade
-  (`onPollChanged`).
-- Votar a partir do Descobrir (ProfileSheet) com uma conta B, sem ter dado
-  like antes; conferir que o dono recebe o push anônimo e vê a contagem
-  agregada subir, sem nenhum jeito de descobrir quem votou (nem no Console,
-  sem usar Admin SDK).
-- Votar duas vezes rápido (dois toques, ou dois devices/telas com a mesma
-  conta) — conferir que o segundo toque não derruba a UI com Alert de erro
-  (deve cair no ramo `permission-denied` = "já votou", ver
-  `handleVotePoll`).
-- Perfil sem enquete: card "Enquete" no Descobrir simplesmente não aparece;
-  ProfileScreen mostra só o botão "Criar enquete".
+- S126 — dono recebe o push anônimo quando alguém vota na enquete; Expo Go
+  não entrega push no SDK 54, precisa do build.
 
 ---
 
