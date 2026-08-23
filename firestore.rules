@@ -1,4 +1,7 @@
-// rules-stamp: S127 (23/08/2026 — Marcos e selos: nova collection
+// rules-stamp: S129-B (23/08/2026 — terceiro tique estilo WhatsApp
+// ("entregue"): novo campo deliveredAt em matches/{matchId}, mesmo padrão
+// de lastReadAt (S27/S86) — mapa por uid, cada participante só escreve a
+// própria chave, valor tem que ser timestamp) + S127 (23/08/2026 — Marcos e selos: nova collection
 // users/{uid}/achievements/{achievementId} [id firstMatch|profileComplete|
 // tenDaysInApp, doc {unlockedAt}], create-only e write EXCLUSIVO de Cloud
 // Function via Admin SDK — allow read restrito ao dono, allow write: if
@@ -962,7 +965,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid in resource.data.users
         && request.resource.data.users == resource.data.users
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['typing', 'lastReadAt'])
+             .hasOnly(['typing', 'lastReadAt', 'deliveredAt'])
         && resource.data.get('typing', {}).diff(request.resource.data.get('typing', {}))
              .affectedKeys().hasOnly([request.auth.uid])
         // S79-C1 — mesmo padrão do guard de lastReadAt logo abaixo, com um
@@ -981,7 +984,15 @@ service cloud.firestore {
              .affectedKeys().hasOnly([request.auth.uid])
         && (resource.data.get('lastReadAt', {}).diff(request.resource.data.get('lastReadAt', {}))
               .affectedKeys().size() == 0
-            || request.resource.data.lastReadAt[request.auth.uid] is timestamp);
+            || request.resource.data.lastReadAt[request.auth.uid] is timestamp)
+        // S129-B — mesmo padrão de lastReadAt acima, pro campo deliveredAt
+        // (terceiro tique "entregue"): cada uid só altera a própria chave,
+        // valor tem que ser timestamp.
+        && resource.data.get('deliveredAt', {}).diff(request.resource.data.get('deliveredAt', {}))
+             .affectedKeys().hasOnly([request.auth.uid])
+        && (resource.data.get('deliveredAt', {}).diff(request.resource.data.get('deliveredAt', {}))
+              .affectedKeys().size() == 0
+            || request.resource.data.deliveredAt[request.auth.uid] is timestamp);
 
       // Decisão: qualquer participante pode apagar o match a qualquer momento
       // (usado hoje só por undoSwipe(), mas também funciona como "desfazer

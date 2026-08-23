@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
-import { Match } from '@/services/firestoreService';
-import { isMatchUnread } from '@/utils/matches';
+import { Match, markMatchDelivered } from '@/services/firestoreService';
+import { isMatchUnread, shouldMarkDelivered } from '@/utils/matches';
 
 // Listener PRÓPRIO em vez de derivar de useActiveMatches: aquele hook
 // enriquece cada match com um getUserProfile() (getDoc, não realtime) do
@@ -38,6 +38,21 @@ export function useUnreadCount(): number {
         return isMatchUnread(m, uid);
       });
       setCount(unread.length);
+
+      // S129-B — mesmo critério de visibilidade acima (match bloqueado, por
+      // qualquer lado, não conta): marca deliveredAt em fire-and-forget, sem
+      // bloquear o cálculo de count acima. Mesmo padrão de tratamento de
+      // erro de markMatchRead em ChatScreen.tsx (.catch(() => {})).
+      snap.docs.forEach((d) => {
+        const m = d.data() as Match;
+        if (m.blockedBy && m.blockedBy.length > 0) return;
+        const otherId = m.users.find((u) => u !== uid);
+        if (otherId && blockedUsers.includes(otherId)) return;
+
+        if (shouldMarkDelivered(m, uid)) {
+          markMatchDelivered(d.id, uid).catch(() => {});
+        }
+      });
     });
     return unsub;
   }, [user, profile?.blockedUsers]);

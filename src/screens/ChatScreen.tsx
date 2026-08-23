@@ -149,6 +149,10 @@ interface MessageBubbleProps {
   // padrão de `reactions` acima: passado direto pelo chamador, sem `?? {}`
   // no ponto de passagem.
   otherReadAt?: Timestamp;
+  // S129-B — deliveredAt do OUTRO participante, mesmo padrão de otherReadAt
+  // acima, pra decidir o tique de entrega (terceiro estado, entre enviado e
+  // lido) da mensagem PRÓPRIA.
+  otherDeliveredAt?: Timestamp;
   onViewImage: (imageUrl: string) => void;
   onOpenLocation: (location: { latitude: number; longitude: number }) => void;
   onLongPressReply: (message: Message) => void;
@@ -164,6 +168,7 @@ function MessageBubble({
   otherPhoto,
   reactions,
   otherReadAt,
+  otherDeliveredAt,
   onViewImage,
   onOpenLocation,
   onLongPressReply,
@@ -194,6 +199,13 @@ function MessageBubble({
     !!otherReadAt &&
     !!item.createdAt &&
     otherReadAt.toMillis() >= item.createdAt.toMillis();
+  // S129-B — mesmo raciocínio de isRead acima, mas pra deliveredAt: terceiro
+  // estado do tique, entre "enviado" e "lido".
+  const isDelivered =
+    isMe &&
+    !!otherDeliveredAt &&
+    !!item.createdAt &&
+    otherDeliveredAt.toMillis() >= item.createdAt.toMillis();
   // S80-B — no máximo 2 participantes, logo no máximo 2 entradas. Ordenado
   // por uid: a ordem de chaves do objeto vem do snapshot do Firestore e não
   // é garantida entre re-renders, então sem isso os emoji trocariam de
@@ -429,9 +441,14 @@ function MessageBubble({
                   editada
                 </Text>
               )}
+              {/* S129-B — três estados, precedência lido > entregue >
+                  enviado: lido usa checkmark-done + success (inalterado);
+                  entregue usa checkmark-done na MESMA cor neutra de
+                  enviado (não é um estado "positivo" como lido); enviado
+                  usa checkmark simples, mesma cor neutra. */}
               {isMe && !item.deletedAt && (
                 <Ionicons
-                  name={isRead ? 'checkmark-done' : 'checkmark'}
+                  name={isRead || isDelivered ? 'checkmark-done' : 'checkmark'}
                   size={14}
                   color={
                     isRead
@@ -505,6 +522,9 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // onSnapshot de listenMatchBlockStatus (ver comentário na função). Só o
   // valor do OUTRO uid é repassado pro MessageBubble.
   const [otherLastReadAt, setOtherLastReadAt] = useState<Record<string, Timestamp>>({});
+  // S129-B — mesmo padrão de otherLastReadAt acima, pra deliveredAt (terceiro
+  // parâmetro do mesmo onSnapshot de listenMatchBlockStatus).
+  const [otherDeliveredAt, setOtherDeliveredAt] = useState<Record<string, Timestamp>>({});
   // S85-A — "apagar pra mim": ids escondidos SÓ pro uid do dono da tela,
   // espelho do doc matches/{matchId}/hidden/{meuUid} (ver listenHiddenMessages).
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
@@ -878,9 +898,10 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   }, [pendingScrollTarget, visibleMessages]);
 
   useEffect(() => {
-    const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt) => {
+    const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt, deliveredAt) => {
       setBlockedBy(blocked);
       setOtherLastReadAt(lastReadAt);
+      setOtherDeliveredAt(deliveredAt);
     });
     return unsub;
   }, [matchId]);
@@ -1132,6 +1153,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       otherPhoto={otherPhoto}
       reactions={reactions[item.id]}
       otherReadAt={otherLastReadAt[otherUid]}
+      otherDeliveredAt={otherDeliveredAt[otherUid]}
       onViewImage={setViewerImage}
       onOpenLocation={handleOpenLocation}
       onLongPressReply={setReplyOptionsTarget}

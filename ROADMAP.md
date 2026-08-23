@@ -119,13 +119,56 @@ trás trocado de `View` para `Animated.View`, com novo estilo animado
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ### S129-B — Tiques estilo WhatsApp (entregue)
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** EM CORREÇÃO (implementada, aguardando auditoria) · decisões tomadas
 
 Tiques estilo WhatsApp: enviado / entregue / lido.
 
 ⚠️ **Reabre** a decisão do S86, que entregou só dois estados (um tique =
 enviado, dois verdes = lido) e deixou o "entregue" de fora de propósito,
 porque exigiria recibo por dispositivo.
+
+**Decisões:** "entregue" definido como **sincronização do app do outro lado
+em foreground via listener global** (`useUnreadCount`, que já roda o tempo
+todo enquanto o usuário está logado) — NÃO é confirmação real de entrega por
+dispositivo/push. Recibo real via `getReceiptsAsync` do Expo continua fora
+de escopo (mesma decisão do S86/comentário em `functions/src/index.ts`
+linhas 73-76, inalterado).
+
+**Recon feita:** modelo espelha byte a byte o já existente `lastReadAt`
+(S27/S86) — mesmo padrão de campo (`Record<string, Timestamp>` no doc do
+match, escrito só pelo próprio uid), mesmo padrão de rules (guard de
+`hasOnly` + tipo timestamp) e mesmo padrão de fire-and-forget
+(`.catch(() => {})`, já usado em `markMatchRead` dentro de `ChatScreen.tsx`
+linhas 667 e 705). Único listener novo de fato: nenhum — `useUnreadCount`
+já mantém um `onSnapshot` global em `matches` rodando o tempo todo (usado
+pro badge de não lidas), reaproveitado pra também gravar `deliveredAt` em
+fire-and-forget, sem listener adicional.
+
+**Implementação (23/08/2026):**
+- `src/services/firestoreService.ts` — `Match.deliveredAt?: Record<string,
+  Timestamp>`; nova função `markMatchDelivered(matchId, uid)` espelhando
+  `markMatchRead`; `listenMatchBlockStatus` estendido pra devolver
+  `deliveredAt` como terceiro parâmetro do callback (único chamador
+  encontrado: `ChatScreen.tsx`).
+- `src/utils/matches.ts` — novo helper `shouldMarkDelivered(match, uid)`,
+  mesma forma de `isMatchUnread`.
+- `src/hooks/useUnreadCount.ts` — dentro do mesmo `onSnapshot` que já
+  calcula o badge de não lidas, novo `forEach` (mesmo critério de
+  visibilidade do `filter` de unread — match bloqueado por qualquer lado
+  não marca entrega) chamando `markMatchDelivered` em fire-and-forget
+  quando `shouldMarkDelivered` for true.
+- `src/screens/ChatScreen.tsx` — estado `otherDeliveredAt`; prop
+  `otherDeliveredAt` no `MessageBubble`; `isDelivered` ao lado de `isRead`;
+  ícone com 3 estados (precedência lido > entregue > enviado — entregue usa
+  `checkmark-done` na mesma cor neutra de "enviado", só lido usa
+  `theme.colors.success`).
+- `firestore.rules` — `matches/{matchId}` update: `hasOnly` ganha
+  `'deliveredAt'`; guard duplicado do padrão já usado em `lastReadAt`
+  (cada uid só altera a própria chave, valor tem que ser timestamp).
+  **NÃO deployado.**
+
+`tsc --noEmit` limpo, lint sem erro novo (0 erros / 21 warnings, baseline
+mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ---
 
@@ -206,11 +249,19 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 
 **Espera o build 15:**
 
-- S101, S122, S129-A, S130, S131, S133, S134 (bateria a definir).
+- S101, S122, S129-A, S129-B, S130, S131, S133, S134 (bateria a definir).
 - S133 — arrastar o card atual no Descobrir e conferir que o card de trás
   fica invisível parado (translateX/Y = 0) e vai ganhando nitidez só
   conforme o dedo se aproxima do limiar de swipe (`SWIPE_THRESHOLD`),
   tanto arrastando na horizontal quanto na vertical.
+- S129-B — com duas contas em dois aparelhos (ou emuladores), conferir os 3
+  estados do tique na conversa de quem MANDOU a mensagem: 1 tique cinza
+  (enviado) assim que o outro lado ainda não abriu o app/tela de
+  Conversas; 2 tiques cinza (entregue) assim que o app do outro lado
+  sincronizar em foreground (não precisa abrir o chat, só estar logado —
+  `useUnreadCount` roda em qualquer tela); 2 tiques verdes (lido) só
+  depois que o outro lado abrir a conversa de fato. Conferir que match
+  bloqueado (por qualquer lado) NUNCA marca entregue.
 - S134 — conferir em aparelho de verdade, com nome real comprido (não só
   simulador), que a idade aparece por completo ao lado do nome truncado nos
   5 pontos: card do Descobrir (frente e trás), MatchProfileScreen,

@@ -32,3 +32,17 @@ export function isMatchUnread(match: Match, uid: string): boolean {
   if (!readAt) return true;
   return lastMessage.createdAt.toMillis() > readAt.toMillis();
 }
+
+// S129-B — mesma forma de isMatchUnread, mas decide quando marcar entrega
+// (deliveredAt). createdAt ainda nulo (serverTimestamp não resolveu) não
+// marca entrega — sem createdAt não dá pra comparar com deliveredAt.
+export function shouldMarkDelivered(match: Match, uid: string): boolean {
+  if (!hasValidLastMessage(match)) return false;
+  const { lastMessage } = match;
+  if (lastMessage.senderId === uid) return false;
+  if (!lastMessage.createdAt) return false;
+
+  const deliveredAt = match.deliveredAt?.[uid];
+  if (!deliveredAt) return true;
+  return lastMessage.createdAt.toMillis() > deliveredAt.toMillis();
+}

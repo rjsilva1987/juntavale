@@ -197,6 +197,12 @@ export interface Match {
   // chave — ver firestore.rules) ao abrir/focar o chat. Base do badge de não
   // lidas em useUnreadCount.
   lastReadAt?: Record<string, Timestamp>;
+  // S129-B — mapa por usuário, escrito pelo CLIENTE (cada um só escreve a
+  // própria chave — ver firestore.rules), espelhando lastReadAt. Marca
+  // "entregue": app do outro lado sincronizou o snapshot deste match em
+  // foreground, não confirmação real de push por dispositivo (fora de
+  // escopo — ver ROADMAP.md).
+  deliveredAt?: Record<string, Timestamp>;
   typing?: Record<string, Timestamp>;
   blockedBy?: string[];
 }
@@ -1230,6 +1236,14 @@ export const markMatchRead = async (matchId: string, uid: string) => {
   await updateDoc(doc(db, 'matches', matchId), { [`lastReadAt.${uid}`]: serverTimestamp() });
 };
 
+// S129-B — grava deliveredAt.{uid} no doc do match, espelhando markMatchRead
+// acima (mesma regra de rules: cada participante só escreve a própria
+// chave). Chamado em fire-and-forget por useUnreadCount ao processar o
+// snapshot global de matches.
+export const markMatchDelivered = async (matchId: string, uid: string) => {
+  await updateDoc(doc(db, 'matches', matchId), { [`deliveredAt.${uid}`]: serverTimestamp() });
+};
+
 // ─── Typing indicator ──────────────────────────────────────
 
 // S79-C1 — janela de validade do carimbo de typing, aplicada como timer
@@ -1336,12 +1350,18 @@ export const listenPresence = (userId: string, callback: (lastSeenAt: Date | nul
 // S86 — reaproveita este onSnapshot em matches/{matchId} (já existente pro
 // blockedBy) pra também entregar lastReadAt: doc já está sendo lido aqui,
 // não há motivo pra um segundo listener só pra outro campo do mesmo doc.
+// S129-B — mesmo raciocínio pra deliveredAt: terceiro parâmetro do callback,
+// sem listener novo.
 export const listenMatchBlockStatus = (
   matchId: string,
-  callback: (blockedBy: string[], lastReadAt: Record<string, Timestamp>) => void,
+  callback: (
+    blockedBy: string[],
+    lastReadAt: Record<string, Timestamp>,
+    deliveredAt: Record<string, Timestamp>,
+  ) => void,
 ) => {
   return onSnapshot(doc(db, 'matches', matchId), (snap) => {
     const data = snap.data() as Match | undefined;
-    callback(data?.blockedBy ?? [], data?.lastReadAt ?? {});
+    callback(data?.blockedBy ?? [], data?.lastReadAt ?? {}, data?.deliveredAt ?? {});
   });
 };
