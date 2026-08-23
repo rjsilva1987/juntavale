@@ -90,7 +90,7 @@ já feita, sem reabrir nenhuma decisão de produto:
    nunca tratado como "esgotado").
 
 ### S133 — Bug do Descobrir: próximo perfil visível durante o arraste
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** EM CORREÇÃO (implementada, aguardando auditoria) · decisões tomadas
 
 Ao arrastar o card atual, o card de trás fica legível — nome, vale,
 intenção ("Só amizade") e UF aparecem por completo — e o perfil seguinte
@@ -102,10 +102,21 @@ visibilidade conforme o card da frente sai. NÃO usar `expo-blur`: custa
 caro durante o gesto e ainda deixa nome e cidade parcialmente legíveis
 (Raphael, 22/08/2026).
 
-**Recon a fazer quando a sprint abrir:** como o SwipeScreen monta a
-pilha de cards, se o offset/escala do card de trás é intencional (efeito
-de baralho) ou desalinhamento, e o que já existe de animação de
-opacidade.
+**Recon feita:** o offset/escala do card de trás (`styles.cardBehind`:
+`transform: [{ scale: 0.95 }], top: 8`) é o efeito de baralho intencional,
+fora de escopo — só a opacidade estava faltando. `translateX`/`translateY`
+já dirigem `cardStyle` do card da frente via `useAnimatedStyle`;
+`interpolate`/`Extrapolation` do `react-native-reanimated` e
+`SWIPE_THRESHOLD` já existiam no escopo do arquivo (usados por
+`cardStyle`/`likeStampStyle`/`nopeStampStyle`), reaproveitados sem import
+novo.
+
+**Implementação (23/08/2026):** `src/screens/SwipeScreen.tsx` — card de
+trás trocado de `View` para `Animated.View`, com novo estilo animado
+`nextCardStyle` (opacidade de 0 a 1 interpolando
+`Math.max(|translateX|, |translateY|)` de 0 até `SWIPE_THRESHOLD`).
+`tsc --noEmit` limpo, lint sem erro novo (0 erros / 21 warnings, baseline
+mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon
@@ -195,7 +206,11 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 
 **Espera o build 15:**
 
-- S101, S122, S129-A, S130, S131, S134 (bateria a definir).
+- S101, S122, S129-A, S130, S131, S133, S134 (bateria a definir).
+- S133 — arrastar o card atual no Descobrir e conferir que o card de trás
+  fica invisível parado (translateX/Y = 0) e vai ganhando nitidez só
+  conforme o dedo se aproxima do limiar de swipe (`SWIPE_THRESHOLD`),
+  tanto arrastando na horizontal quanto na vertical.
 - S134 — conferir em aparelho de verdade, com nome real comprido (não só
   simulador), que a idade aparece por completo ao lado do nome truncado nos
   5 pontos: card do Descobrir (frente e trás), MatchProfileScreen,

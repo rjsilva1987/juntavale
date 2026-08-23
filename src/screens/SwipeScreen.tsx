@@ -624,6 +624,15 @@ export default function SwipeScreen() {
     opacity: interpolate(translateX.value, [-90, 0], [1, 0], Extrapolation.CLAMP),
   }));
 
+  const nextCardStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      Math.max(Math.abs(translateX.value), Math.abs(translateY.value)),
+      [0, SWIPE_THRESHOLD],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -706,12 +715,12 @@ export default function SwipeScreen() {
           <>
             {/* Next card (behind) */}
             {profiles[currentIndex + 1] && (
-              <View style={[styles.card, styles.cardBehind]}>
+              <Animated.View style={[styles.card, styles.cardBehind, nextCardStyle]}>
                 <ProfileCard
                   key={profiles[currentIndex + 1].uid}
                   profile={profiles[currentIndex + 1]}
                 />
-              </View>
+              </Animated.View>
             )}
 
             {/* Current card (swipeable) */}
