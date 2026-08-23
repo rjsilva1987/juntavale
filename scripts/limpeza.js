@@ -2,8 +2,10 @@
 // bbmatch-9ede5, filtrados por UID(s) passados via linha de comando. Não
 // apaga `matches` correspondentes — mesmo desacoplamento que já existe hoje
 // entre `unmatch` e `swipes` (decisão deliberada, não é bug).
-// Dry-run por padrão: só apaga de fato com a flag --confirm.
-// Uso: node scripts/limpeza.js <uid1> [uid2] [...] [--confirm]
+// Dry-run por padrão: só apaga de fato com a flag --confirm, que por sua vez
+// exige --project=<id> batendo com o project_id da chave de serviço — trava
+// contra apagar no projeto errado por engano.
+// Uso: node scripts/limpeza.js <uid1> [uid2] [...] [--confirm --project=<id>]
 'use strict';
 
 const fs = require('fs');
@@ -17,10 +19,11 @@ const SWIPES_BATCH_LIMIT = 400;
 const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, '../serviceAccountKey.json');
 
 function printUsage() {
-  console.log('Uso: node scripts/limpeza.js <uid1> [uid2] [...] [--confirm]');
+  console.log('Uso: node scripts/limpeza.js <uid1> [uid2] [...] [--confirm --project=<id>]');
   console.log('');
   console.log('Sem --confirm: dry-run — só lista quantos docs de swipes seriam apagados.');
-  console.log('Com --confirm: apaga de fato os docs encontrados.');
+  console.log('Com --confirm: apaga de fato os docs encontrados. Exige --project=<id> igual');
+  console.log('ao project_id da chave de serviço, como trava contra apagar no projeto errado.');
 }
 
 function requireServiceAccount() {
@@ -56,14 +59,44 @@ async function deleteDocsInBatches(db, refs) {
 async function main() {
   const rawArgs = process.argv.slice(2);
   const confirm = rawArgs.includes('--confirm');
-  const uids = rawArgs.filter((arg) => arg !== '--confirm');
+  let projectFlag = null;
+  const uids = [];
+  for (const arg of rawArgs) {
+    if (arg === '--confirm') continue;
+    if (arg.startsWith('--project=')) {
+      projectFlag = arg.slice('--project='.length);
+      continue;
+    }
+    uids.push(arg);
+  }
 
   if (uids.length === 0) {
     printUsage();
     process.exit(1);
   }
 
+  const blankUid = uids.find((uid) => uid.trim() === '');
+  if (blankUid !== undefined) {
+    console.error('ERRO: UID vazio ou só espaço não é permitido.');
+    process.exit(1);
+  }
+
   const serviceAccount = requireServiceAccount();
+  console.log(`Projeto da chave de serviço: ${serviceAccount.project_id}`);
+
+  if (confirm) {
+    if (!projectFlag) {
+      console.error('ERRO: --confirm exige --project=<id> igual ao project_id da chave de serviço.');
+      console.error(`Chave carregada aponta para: ${serviceAccount.project_id}`);
+      process.exit(1);
+    }
+    if (projectFlag !== serviceAccount.project_id) {
+      console.error(
+        `ERRO: --project=${projectFlag} não bate com o project_id da chave (${serviceAccount.project_id}). Abortando sem tocar em nada.`,
+      );
+      process.exit(1);
+    }
+  }
 
   const admin = require('firebase-admin');
   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
