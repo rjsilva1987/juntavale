@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 22/08/2026
+**Última atualização:** 23/08/2026
 
 ---
 
@@ -88,6 +88,24 @@ já feita, sem reabrir nenhuma decisão de produto:
    `dailyGrant`) no carregamento inicial — corrigido tipando
    `dailyGrantAvailable` como `boolean | null` (`null` = ainda carregando,
    nunca tratado como "esgotado").
+
+### S133 — Bug do Descobrir: próximo perfil visível durante o arraste
+**Status:** ABERTA · decisões tomadas · sem recon
+
+Ao arrastar o card atual, o card de trás fica legível — nome, vale,
+intenção ("Só amizade") e UF aparecem por completo — e o perfil seguinte
+é revelado antes da decisão sobre o atual. Reproduzido em aparelho
+(22/08/2026).
+
+**Decisões:** esconder o card de trás por **opacidade** — ele só ganha
+visibilidade conforme o card da frente sai. NÃO usar `expo-blur`: custa
+caro durante o gesto e ainda deixa nome e cidade parcialmente legíveis
+(Raphael, 22/08/2026).
+
+**Recon a fazer quando a sprint abrir:** como o SwipeScreen monta a
+pilha de cards, se o offset/escala do card de trás é intencional (efeito
+de baralho) ou desalinhamento, e o que já existe de animação de
+opacidade.
 
 ### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon
