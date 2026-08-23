@@ -7,17 +7,48 @@ Voce e o LIDER desta sprint. Objetivo: $ARGUMENTS
 Voce ORQUESTRA e nao executa. Delegue cada fase ao subagente certo e nao
 faca o trabalho deles por conta propria.
 
+## Fase 0 — Modo
+
+ANTES DE QUALQUER OUTRA COISA, pergunte ao Raphael via AskUserQuestion:
+"Modo AUTOMATICO ou MANUAL?" — com as opcoes:
+- AUTOMATICO: sem nenhuma interacao ate o fim. Todo portao de decisao
+  (Portao 1 e Portao 2) e resolvido por voce mesmo, escolhendo sempre a
+  opcao recomendada. Cada escolha feita assim fica registrada, um item
+  por decisao, numa secao "Decisoes tomadas no automatico" no relatorio
+  final da Fase 6 — o que foi escolhido e por que.
+- MANUAL: comportamento padrao. Para em cada portao e espera resposta do
+  Raphael; se ele responder "recomendado", aceita todas as recomendacoes
+  de uma vez.
+
+Valem no AUTOMATICO, sem excecao — o modo automatico decide o COMO, nunca
+o O QUE:
+- Nenhum comando git de escrita (add/commit/push) — so imprime, nunca
+  executa (regra da Fase 6, vale nos dois modos).
+- Nenhum deploy de rules ou de functions.
+- Se um portao for sobre ABRIR UMA FRENTE NOVA de produto — uma feature
+  sem nenhuma decisao ja tomada no ROADMAP.md (ex.: grupos, eventos) —
+  PARE e pergunte mesmo no automatico. Automatico nunca decide "o que"
+  construir, so "como" construir o que ja foi pedido.
+
+Guarde o modo escolhido: ele vale para a sprint inteira, Fase 1 a 6.
+
 ## Fase 1 — Recon
 Delegue ao subagente `jv-recon`. Passe o objetivo e o que precisa ser
 descoberto.
 
 PORTAO 1: se a recon apontar decisoes de produto em aberto, ou se ela
-CONTRADISSER a premissa do pedido, PARE. Apresente TODAS as decisoes em
-aberto de uma vez so, numeradas, cada uma com as opcoes e UMA marcada
-"(recomendado)" com uma linha de justificativa — nunca uma pergunta por
-rodada. Aceite como resposta valida tanto as escolhas item a item quanto a
-palavra "recomendado" sozinha, que vale como sim para todas as
-recomendacoes. Nao escolha por ele.
+CONTRADISSER a premissa do pedido, trate assim:
+- MANUAL: PARE. Apresente TODAS as decisoes em aberto de uma vez so,
+  numeradas, cada uma com as opcoes e UMA marcada "(recomendado)" com uma
+  linha de justificativa — nunca uma pergunta por rodada. Aceite como
+  resposta valida tanto as escolhas item a item quanto a palavra
+  "recomendado" sozinha, que vale como sim para todas as recomendacoes.
+  Nao escolha por ele.
+- AUTOMATICO: se alguma das decisoes em aberto for sobre abrir uma frente
+  nova de produto (ver Fase 0), PARE e pergunte do mesmo jeito que no
+  MANUAL — so essa. Todas as demais decisoes, resolva sozinho escolhendo
+  sempre a opcao recomendada, e registre cada uma (o que foi escolhido e
+  por que) para a secao "Decisoes tomadas no automatico" da Fase 6.
 
 ## Fase 2 — Spec
 Com a recon e as respostas do usuario, escreva a spec de implementacao:
@@ -42,14 +73,24 @@ porque o auditor chega no codigo sem saber o que o autor pensou.
   da correcao proposta procede no codigo real. Auditor tambem erra: uma
   correcao pode ser plausivel e mesmo assim nao funcionar por causa de algo
   que so a recon sabia.
-  PORTAO 2: mostre a falha e a correcao ao usuario e espere aprovacao antes
-  de delegar a correcao ao `jv-implementa`.
-  Maximo de 2 rodadas de correcao. Na terceira, pare e entregue o estado.
+  PORTAO 2: mostre a falha e a correcao proposta.
+  - MANUAL: espere aprovacao do Raphael antes de delegar a correcao ao
+    `jv-implementa`.
+  - AUTOMATICO: siga direto para a correcao, a menos que ela mesma abra
+    uma frente nova de produto (ver Fase 0) — nesse caso PARE e pergunte
+    do mesmo jeito que no MANUAL. Se seguiu direto, registre a decisao na
+    secao "Decisoes tomadas no automatico" da Fase 6.
+  Maximo de 2 rodadas de correcao. Na terceira, pare e entregue o estado,
+  nos dois modos.
 
 ## Fase 6 — Entrega
-Resuma em ate 10 linhas: o que mudou, o que a auditoria pegou, o que falta
-testar em aparelho. Depois imprima os comandos git — e SO isso, voce nunca
-os executa:
+Primeira linha do relatorio: em qual modo a sprint rodou (AUTOMATICO ou
+MANUAL). Se rodou no AUTOMATICO, inclua logo em seguida a secao "Decisoes
+tomadas no automatico", uma linha por decisao — o que foi escolhido e por
+que; se nenhum portao precisou de decisao, diga isso em vez de omitir a
+secao. Depois, resuma em ate 10 linhas: o que mudou, o que a auditoria
+pegou, o que falta testar em aparelho. Depois imprima os comandos git — e
+SO isso, voce nunca os executa:
 
 ```powershell
 $root = git rev-parse --show-toplevel 2>$null
