@@ -170,6 +170,33 @@ fire-and-forget, sem listener adicional.
 `tsc --noEmit` limpo, lint sem erro novo (0 erros / 21 warnings, baseline
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
+### S135 — "Como quer ser chamado" separado do nome completo
+**Status:** ABERTA · decisões tomadas · sem recon
+
+Hoje o cadastro tem um só campo de nome, preenchido com nome completo, e ele
+é o que aparece em todo lugar do app — o que causa truncamento em card e
+cabeçalho (foi a origem visível da S134).
+
+**Decisão de produto já tomada (Raphael, 22/08/2026): DOIS CAMPOS.**
+- Nome real / completo: continua existindo, mas fica PRIVADO — visível só
+  pro admin, e é o que a verificação de identidade confere.
+- "Como quer ser chamado": campo público, é o que aparece no Descobrir, no
+  perfil, nas Curtidas e nas Conversas.
+
+**Recon quando a sprint abrir:**
+1. Onde vive o campo de nome hoje (`users/{uid}`), quantas telas o exibem, e
+   se `firestore.rules` já restringe leitura de algum campo por papel — a
+   S109 fez visibilidade por campo no mapa `about`, pode ser o molde.
+2. Como isso interage com a TRAVA DE IDENTIDADE da S76-B, que congela nome e
+   idade a partir da verificação: decidir na sprint qual dos dois campos
+   fica travado. Provável: nome real travado, apelido editável.
+3. O que fazer com as contas EXISTENTES, que só têm o campo antigo
+   preenchido — precisa de retrocompatibilidade na leitura (apelido cai pro
+   nome antigo quando ainda não existir), e a decisão de migrar ou não fica
+   pro portão.
+4. Onde a AdminVerificationsScreen mostra o nome — ela precisa passar a
+   mostrar o nome REAL, senão o admin perde a referência pra conferir.
+
 ---
 
 ## Fechadas recentemente
