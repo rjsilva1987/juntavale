@@ -107,6 +107,18 @@ pilha de cards, se o offset/escala do card de trás é intencional (efeito
 de baralho) ou desalinhamento, e o que já existe de animação de
 opacidade.
 
+### S134 — Bug: idade some quando o nome é longo
+**Status:** ABERTA · sem decisões · sem recon
+
+Nome e idade são renderizados no mesmo texto com truncamento de 1 linha;
+com nome comprido as reticências comem a idade. Visto no MatchProfileScreen
+com "Beatriz Cristina…" (22/08/2026), sem a idade na tela.
+Regra: a IDADE DEVE APARECER SEMPRE — quem trunca é o nome.
+Recon quando a sprint abrir: achar TODOS os lugares que juntam nome e
+idade num só texto (card do Descobrir, MatchProfileScreen, ProfileSheet,
+Curtidas, Conversas) — a correção tem que valer em todos, não só no da
+captura.
+
 ### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon
 
