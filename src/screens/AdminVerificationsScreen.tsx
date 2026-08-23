@@ -13,14 +13,19 @@ import { EmptyState } from '@/components/EmptyState';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { getLegalName, getUserProfile, LegalName, UserProfile } from '@/services/firestoreService';
 import { getPendingVerifications, PendingVerification } from '@/services/verificationService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 interface PendingEntry {
   uid: string;
   verification: PendingVerification;
   profile?: UserProfile;
+  // S135 — nome REAL, buscado à parte (subdocumento privado). É o que o
+  // admin usa pra conferir a identidade contra a selfie, diferente do
+  // nickname público (getDisplayName) — ver render abaixo.
+  legalName?: LegalName | null;
 }
 
 export default function AdminVerificationsScreen() {
@@ -32,11 +37,18 @@ export default function AdminVerificationsScreen() {
     setLoading(true);
     const pending = await getPendingVerifications();
     const enriched = await Promise.all(
-      pending.map(async (verification) => ({
-        uid: verification.uid,
-        verification,
-        profile: (await getUserProfile(verification.uid)) ?? undefined,
-      })),
+      pending.map(async (verification) => {
+        const [profile, legalName] = await Promise.all([
+          getUserProfile(verification.uid),
+          getLegalName(verification.uid),
+        ]);
+        return {
+          uid: verification.uid,
+          verification,
+          profile: profile ?? undefined,
+          legalName,
+        };
+      }),
     );
     setEntries(enriched);
     setLoading(false);
@@ -105,7 +117,7 @@ export default function AdminVerificationsScreen() {
                   <View style={styles.info}>
                     <View style={styles.nameAgeGroup}>
                       <Text style={styles.name} numberOfLines={1}>
-                        {item.profile?.name ?? 'Usuário'}
+                        {item.legalName?.name ?? getDisplayName(item.profile)}
                       </Text>
                       {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
                     </View>

@@ -4,6 +4,7 @@ import { Linking } from 'react-native';
 
 import { navigationRef } from '@/navigation/navigationRef';
 import { getMatchById, getUserProfile } from '@/services/firestoreService';
+import { getDisplayName } from '@/utils/profile';
 
 const CHAT_PATH_RE = /^juntavale:\/\/chat\/([^/?#]+)/;
 
@@ -70,7 +71,7 @@ async function resolveChatDeepLink(matchId: string, currentUid: string) {
   navigationRef.navigate('Chat', {
     matchId,
     otherUid,
-    otherName: otherProfile?.name ?? 'Usuário',
+    otherName: getDisplayName(otherProfile),
     otherPhoto: otherProfile?.photoURL,
   });
 }

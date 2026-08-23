@@ -15,8 +15,10 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import {
+  getLegalName,
   getRegistrationPrivate,
   getUserProfile,
+  LegalName,
   RegistrationPrivate,
   UserProfile,
 } from '@/services/firestoreService';
@@ -26,6 +28,7 @@ import {
   Verification,
 } from '@/services/verificationService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 type AdminVerificationDetailScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -41,19 +44,26 @@ export default function AdminVerificationDetailScreen({
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [registration, setRegistration] = useState<RegistrationPrivate | null>(null);
+  // S135 — nome REAL, subdocumento privado. É o que o admin confere contra a
+  // selfie (ver render abaixo) — nunca o nickname público.
+  const [legalName, setLegalName] = useState<LegalName | null>(null);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
 
   useEffect(() => {
-    Promise.all([getUserProfile(uid), getVerificationStatus(uid), getRegistrationPrivate(uid)]).then(
-      ([p, v, r]) => {
-        setProfile(p);
-        setVerification(v);
-        setRegistration(r);
-        setLoading(false);
-      },
-    );
+    Promise.all([
+      getUserProfile(uid),
+      getVerificationStatus(uid),
+      getRegistrationPrivate(uid),
+      getLegalName(uid),
+    ]).then(([p, v, r, l]) => {
+      setProfile(p);
+      setVerification(v);
+      setRegistration(r);
+      setLegalName(l);
+      setLoading(false);
+    });
   }, [uid]);
 
   // S58 — aprovar continua exatamente como antes (Alert de confirmação, sem
@@ -63,7 +73,7 @@ export default function AdminVerificationDetailScreen({
     if (!user) return;
     Alert.alert(
       'Aprovar verificação?',
-      `${profile?.name ?? 'Este usuário'} vai receber o selo de verificado.`,
+      `${legalName?.name ?? getDisplayName(profile)} vai receber o selo de verificado.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -160,7 +170,7 @@ export default function AdminVerificationDetailScreen({
 
             <View style={styles.infoCard}>
               <Text style={styles.name}>
-                {profile?.name ?? 'Usuário'}
+                {legalName?.name ?? getDisplayName(profile)}
                 {displayAge != null ? `, ${displayAge}` : ''}
               </Text>
               {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}

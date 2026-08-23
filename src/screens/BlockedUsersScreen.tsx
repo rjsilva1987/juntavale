@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { getBlockedUsers, unblockUser } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import { getDisplayName } from '@/utils/profile';
 
 type BlockedUsersScreenProps = NativeStackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -101,11 +102,11 @@ export default function BlockedUsersScreen({ navigation }: BlockedUsersScreenPro
                   </View>
                 )}
                 <Text style={styles.name} numberOfLines={1}>
-                  {item.profile?.name ?? 'Usuário'}
+                  {getDisplayName(item.profile)}
                 </Text>
                 <AnimatedPressable
                   style={styles.unblockBtn}
-                  onPress={() => handleUnblock(item.uid, item.profile?.name ?? 'Usuário')}
+                  onPress={() => handleUnblock(item.uid, getDisplayName(item.profile))}
                   disabled={unblockingUid === item.uid}
                 >
                   {unblockingUid === item.uid ? (

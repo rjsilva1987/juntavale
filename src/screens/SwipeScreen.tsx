@@ -59,6 +59,7 @@ import {
 } from '@/services/firestoreService';
 import { getVerificationStatus } from '@/services/verificationService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_W = SCREEN_W - 32;
@@ -820,7 +821,7 @@ export default function SwipeScreen() {
         visible={!!matchedProfile}
         currentUserPhoto={profile?.photoURL}
         matchedUserPhoto={matchedProfile?.photoURL}
-        matchedUserName={matchedProfile?.name ?? ''}
+        matchedUserName={getDisplayName(matchedProfile)}
         myProfile={profile}
         theirProfile={matchedProfile}
         myVerified={profile?.verified}
@@ -832,7 +833,7 @@ export default function SwipeScreen() {
             navigation.navigate('Chat', {
               matchId,
               otherUid: matchedProfile.uid,
-              otherName: matchedProfile.name,
+              otherName: getDisplayName(matchedProfile),
               otherPhoto: matchedProfile.photoURL,
             });
           }
@@ -844,7 +845,7 @@ export default function SwipeScreen() {
             navigation.navigate('Chat', {
               matchId,
               otherUid: matchedProfile.uid,
-              otherName: matchedProfile.name,
+              otherName: getDisplayName(matchedProfile),
               otherPhoto: matchedProfile.photoURL,
               draftMessage: message,
             });
@@ -938,7 +939,7 @@ function ProfileCard({
           <View style={pcStyles.nameTextGroup}>
             <View style={pcStyles.nameAgeGroup}>
               <Text style={pcStyles.name} numberOfLines={1}>
-                {profile.name}
+                {getDisplayName(profile)}
               </Text>
               {displayAge != null && <Text style={pcStyles.nameAge}>, {displayAge}</Text>}
             </View>

@@ -23,6 +23,7 @@ import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import { getSupportTicket, updateTicketStatus, SupportTicket } from '@/services/supportService';
+import { getDisplayName } from '@/utils/profile';
 
 type AdminSupportDetailScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -109,7 +110,11 @@ export default function AdminSupportDetailScreen({
                 </View>
               )}
               <View style={styles.authorInfo}>
-                <Text style={styles.authorName}>{profile?.name ?? 'Perfil não encontrado'}</Text>
+                <Text style={styles.authorName}>
+                  {/* S135 — fora de escopo mostrar o nome real aqui: getDisplayName
+                      (nickname), NUNCA legalName. */}
+                  {profile ? getDisplayName(profile) : 'Perfil não encontrado'}
+                </Text>
                 <Text style={styles.authorUid}>{ticket.uid}</Text>
               </View>
             </View>

@@ -64,7 +64,20 @@ export interface DiscoverFilters {
 
 export interface UserProfile {
   uid: string;
-  name: string;
+  // S135 — nome real sai do doc público (vira users/{uid}/private/legalName,
+  // ver LegalName abaixo) e é substituído por `nickname` ("como quer ser
+  // chamado"), sem trava de imutabilidade — editável sempre, mesmo depois de
+  // verificado. Mesmo padrão de uf?/vale? logo abaixo: OPCIONAL no tipo de
+  // propósito, mesmo sendo obrigatório no cadastro — contas que já existem
+  // (migração de dados é script manual, functions/scripts/migrateNicknames.js,
+  // rodado por Raphael depois do deploy) podem não ter o campo ainda dentro
+  // da janela até essa migração rodar.
+  nickname?: string;
+  // Campo antigo — só existe em contas que ainda não passaram pela migração
+  // da S135. Usado como fallback de leitura (ver getDisplayName em
+  // src/utils/profile.ts), nunca mais escrito no doc público a partir desta
+  // sprint.
+  name?: string;
   age: number;
   // S76-A — `age` segue no schema, escrito no cadastro (derivado, ver
   // AuthContext.register/calculateAge), mas a FONTE DA VERDADE passa a ser
@@ -270,6 +283,39 @@ export const submitRegistrationPrivate = async (uid: string, chaveF: string): Pr
 // exige createdAt inalterado nesta operação) rejeitaria o write.
 export const updateChaveF = async (uid: string, chaveF: string): Promise<void> => {
   await updateDoc(doc(db, 'users', uid, 'private', 'registration'), { chaveF });
+};
+
+// S135 — nome real/completo, migrado do campo público `name` (users/{uid})
+// pra este subdocumento privado. Read restrito ao próprio dono ou isAdmin()
+// nas rules — mesmo molde de RegistrationPrivate acima.
+export interface LegalName {
+  name: string;
+  createdAt?: Timestamp;
+}
+
+// Admin-only na prática, igual getRegistrationPrivate acima. Conta legada
+// (ainda não migrada por functions/scripts/migrateNicknames.js) não tem este
+// doc — retorna null nesse caso.
+export const getLegalName = async (uid: string): Promise<LegalName | null> => {
+  const snap = await getDoc(doc(db, 'users', uid, 'private', 'legalName'));
+  return snap.exists() ? (snap.data() as LegalName) : null;
+};
+
+// Chamado quando getLegalName ainda não achou um doc existente — conta nova
+// (via AuthContext.register) OU conta legada salvando o nome real pela
+// primeira vez via ProfileScreen. As rules tornam este doc create-only
+// depois da verificação aprovada (ver firestore.rules).
+export const createLegalName = async (uid: string, name: string): Promise<void> => {
+  await setDoc(doc(db, 'users', uid, 'private', 'legalName'), {
+    name,
+    createdAt: serverTimestamp(),
+  });
+};
+
+// Chamado quando já existe doc (getLegalName achou um). updateDoc, não
+// setDoc: mesmo motivo de updateChaveF acima — não toca createdAt.
+export const updateLegalName = async (uid: string, name: string): Promise<void> => {
+  await updateDoc(doc(db, 'users', uid, 'private', 'legalName'), { name });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {

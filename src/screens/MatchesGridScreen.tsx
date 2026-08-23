@@ -14,6 +14,7 @@ import { theme } from '@/constants/theme';
 import { useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 type MatchesGridScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchesGrid'>;
 
@@ -71,7 +72,7 @@ export default function MatchesGridScreen({ navigation }: MatchesGridScreenProps
                   navigation.navigate('MatchProfile', {
                     uid: other.uid,
                     matchId: item.id,
-                    name: other.name,
+                    name: getDisplayName(other),
                     photoURL: other.photoURL,
                   })
                 }
@@ -92,7 +93,7 @@ export default function MatchesGridScreen({ navigation }: MatchesGridScreenProps
                   )}
                   <View style={styles.matchInfo}>
                     <Text style={styles.matchName}>
-                      {other?.name ?? 'Usuário'}
+                      {getDisplayName(other)}
                       {displayAge != null ? `, ${displayAge}` : ''}
                     </Text>
                   </View>

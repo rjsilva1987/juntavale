@@ -24,6 +24,7 @@ import { RootStackParamList } from '@/navigation';
 import { blockUser, reportUser, ReportReason } from '@/services/blockService';
 import { SwipeContext, UserProfile } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 type Tab = 'received' | 'sent';
 
@@ -101,7 +102,7 @@ function LikeCard({
           <View style={styles.likerNameRow}>
             <View style={styles.likerNameAgeGroup}>
               <Text style={styles.likerName} numberOfLines={1}>
-                {profile.name}
+                {getDisplayName(profile)}
               </Text>
               {displayAge != null && <Text style={styles.likerNameAge}>, {displayAge}</Text>}
             </View>
@@ -203,7 +204,7 @@ export default function LikesScreen() {
     closeMenu();
     Alert.alert(
       'Bloquear usuário?',
-      `Você deixará de ver ${target.name}. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
+      `Você deixará de ver ${getDisplayName(target)}. Essa ação pode ser desfeita depois em "Usuários bloqueados".`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -250,7 +251,7 @@ export default function LikesScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate('MatchProfile', {
       uid: profile.uid,
-      name: profile.name,
+      name: getDisplayName(profile),
       photoURL: profile.photoURL,
       fromLikes: true,
       ...(alreadyLiked ? { alreadyLiked: true } : {}),

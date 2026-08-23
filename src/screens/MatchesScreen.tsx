@@ -17,12 +17,16 @@ import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
 import { LastMessage } from '@/services/firestoreService';
 import { hasValidLastMessage, isMatchUnread } from '@/utils/matches';
+import { getDisplayName } from '@/utils/profile';
 
 type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
 
 type Conversation = MatchWithProfile & { lastMessage: LastMessage };
 
-const firstName = (name?: string) => (name ?? 'Usuário').split(' ')[0];
+// firstName() foi removido na S135: nickname já nasce curto de propósito
+// (cap de 30 chars, ver MAX_NICKNAME_LENGTH em ProfileScreen.tsx), então
+// truncar em .split(' ')[0] reintroduziria o mesmo problema de truncamento
+// que a S135 existe pra resolver (ver S134/raiz do card).
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const { user, profile } = useAuth();
@@ -64,7 +68,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     navigation.navigate('Chat', {
       matchId: item.id,
       otherUid: item.otherProfile?.uid ?? '',
-      otherName: item.otherProfile?.name ?? 'Usuário',
+      otherName: getDisplayName(item.otherProfile),
       otherPhoto: item.otherProfile?.photoURL ?? '',
     });
   };
@@ -122,7 +126,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         )}
       </View>
       <Text style={styles.newMatchName} numberOfLines={1}>
-        {firstName(item.otherProfile?.name)}
+        {getDisplayName(item.otherProfile)}
       </Text>
     </AnimatedPressable>
   );
@@ -162,7 +166,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         <View style={styles.matchInfo}>
           <View style={styles.matchNameRow}>
             <Text style={styles.matchName} numberOfLines={1}>
-              {item.otherProfile?.name ?? 'Usuário'}
+              {getDisplayName(item.otherProfile)}
             </Text>
             {item.otherProfile?.verified === true && <VerifiedBadge size={14} />}
           </View>

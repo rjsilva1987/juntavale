@@ -5,7 +5,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteField } from 'firebase/firestore';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -69,15 +69,20 @@ import { RootStackParamList } from '@/navigation';
 import {
   updateUserProfile,
   addProfilePhoto,
+  createLegalName,
+  getLegalName,
   mergeAboutValues,
   removeProfilePhoto,
   removeWeeklyPromptAnswer,
   setPrincipalPhoto,
+  updateLegalName,
   uploadProfilePhoto,
+  LegalName,
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 import { countCodePoints } from '@/utils/text';
 
 // Ambas contam o mesmo array de matches visíveis hoje (todo match é uma
@@ -124,6 +129,11 @@ const MIN_TAG_LENGTH = 2;
 // viram só o "guarda de abuso" 4x maior — ver firestore.rules).
 const MAX_NAME_LENGTH = 60;
 const MAX_BIO_LENGTH = 500;
+// S135 — cap curto de propósito: nickname é o nome público exibido em
+// card/cabeçalho, e é justamente o campo que a S134 corrigiu pra não
+// truncar — um teto generoso feito reintroduziria o mesmo problema. Nome
+// completo (legalName) segue com o teto herdado de MAX_NAME_LENGTH acima.
+const MAX_NICKNAME_LENGTH = 30;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -135,7 +145,32 @@ export default function ProfileScreen() {
   const { showAlert: showSupportAlert } = useSupportAlert();
   const { showAlert: showReportAlert } = useReportAlert();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(profile?.name ?? '');
+  // S135 — "como quer ser chamado", nome público exibido em card/cabeçalho.
+  // Fallback pro `name` legado: conta que ainda não passou pela migração
+  // (functions/scripts/migrateNicknames.js) não tem nickname no doc ainda.
+  const [nickname, setNickname] = useState(profile?.nickname ?? profile?.name ?? '');
+  // S135 — nome real/completo, agora privado (users/{uid}/private/
+  // legalName). Não vem no profile (doc público) — busca própria via
+  // getLegalName, disparada pelo useEffect abaixo. null enquanto ainda não
+  // carregou OU quando a conta é legada e ainda não tem o subdocumento.
+  const [legalName, setLegalName] = useState<LegalName | null>(null);
+  const [legalNameInput, setLegalNameInput] = useState('');
+  useEffect(() => {
+    if (!user) return;
+    getLegalName(user.uid)
+      .then((result) => {
+        setLegalName(result);
+        setLegalNameInput(result?.name ?? '');
+      })
+      .catch((err) => {
+        // S135 (correção pós-auditoria) — falha aqui (offline/erro
+        // transitório) não pode deixar o campo "Nome completo" indistinguível
+        // de conta sem legalName: loga e mantém legalName null, mesmo estado
+        // de antes da tentativa — handleSave trata null como "ainda não
+        // existe" (createLegalName), que é o comportamento seguro.
+        console.error('[ProfileScreen] getLegalName falhou:', err);
+      });
+  }, [user]);
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
   const displayAge = getDisplayAge(profile);
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -264,7 +299,16 @@ export default function ProfileScreen() {
     // S77 — nome/bio nunca tiveram teto no client (bug separado, ver
     // recon); sem isso, um texto que passasse do teto das rules só falhava
     // no save com erro genérico, sem dizer o motivo.
-    if (countCodePoints(name) > MAX_NAME_LENGTH) {
+    // S135 — dois campos, dois tetos: nickname (público, curto de propósito)
+    // e legalName/nome completo (privado, mesmo teto que `name` já tinha).
+    if (countCodePoints(nickname) > MAX_NICKNAME_LENGTH) {
+      Alert.alert(
+        'Apelido muito longo',
+        `O apelido pode ter no máximo ${MAX_NICKNAME_LENGTH} caracteres.`,
+      );
+      return;
+    }
+    if (countCodePoints(legalNameInput) > MAX_NAME_LENGTH) {
       Alert.alert('Nome muito longo', `O nome pode ter no máximo ${MAX_NAME_LENGTH} caracteres.`);
       return;
     }
@@ -298,7 +342,7 @@ export default function ProfileScreen() {
       // nunca pelos AboutRow acima.
       const aboutHiddenPatch = aboutHidden.length > 0 ? aboutHidden : deleteField();
       await updateUserProfile(user.uid, {
-        name,
+        nickname,
         // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
         // perfil assim reconcilia de quebra o `age` armazenado, que o build
         // antigo ainda lê direto. O fallback existe pra conta sem birthDate:
@@ -319,6 +363,26 @@ export default function ProfileScreen() {
         about: aboutPatch,
         aboutHidden: aboutHiddenPatch,
       });
+      // S135 — nome real mora em subdocumento próprio, fora de
+      // updateUserProfile (que só escreve o doc público). Campo só é
+      // editável quando !profile?.verified (ver Field abaixo), então só
+      // chega aqui alterado nesse caso. Sem write se o valor não mudou —
+      // evita update vazio a cada save do resto do perfil.
+      if (legalNameInput !== (legalName?.name ?? '')) {
+        if (legalName === null) {
+          await createLegalName(user.uid, legalNameInput);
+        } else {
+          await updateLegalName(user.uid, legalNameInput);
+        }
+        // S135 (correção pós-auditoria) — sem isto, `legalName` fica null
+        // pra sempre na sessão (o useEffect acima só roda no mount, e a tela
+        // fica sempre montada por ser Tab.Screen): o PRÓXIMO save cairia de
+        // novo no ramo createLegalName sobre um doc que já existe, e as
+        // rules negam esse write (affectedKeys além de 'name'). Preserva
+        // createdAt existente (updateLegalName não o toca); undefined no
+        // caso de create (doc novo) não é lido em lugar nenhum do app.
+        setLegalName({ name: legalNameInput, createdAt: legalName?.createdAt });
+      }
       await refreshProfile();
       setEditing(false);
     } catch {
@@ -681,7 +745,7 @@ export default function ProfileScreen() {
           {!editing && (
             <>
               <View style={styles.nameRow}>
-                <Text style={styles.profileName}>{profile?.name}</Text>
+                <Text style={styles.profileName}>{getDisplayName(profile)}</Text>
                 {profile?.verified && <VerifiedBadge size={18} />}
                 {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
@@ -793,15 +857,21 @@ export default function ProfileScreen() {
           (editing ? (
             <View style={styles.card}>
               <Field
-                label="Nome"
-                value={name}
-                onChange={setName}
+                label="Como quer ser chamado"
+                value={nickname}
+                onChange={setNickname}
+                maxLength={MAX_NICKNAME_LENGTH}
+              />
+              <Field
+                label="Nome completo"
+                value={legalNameInput}
+                onChange={setLegalNameInput}
                 maxLength={MAX_NAME_LENGTH}
                 locked={!!profile?.verified}
                 lockedHint={
                   profile?.verified
                     ? 'Não é possível alterar o nome depois que o perfil é verificado. Precisa corrigir? Fale com o suporte.'
-                    : undefined
+                    : 'Visível só pra você e pro time de verificação.'
                 }
               />
               <Field

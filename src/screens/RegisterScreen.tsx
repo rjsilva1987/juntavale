@@ -88,6 +88,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const { register } = useAuth();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
+  // S135 — "como quer ser chamado", nome público exibido no app inteiro.
+  // Separado do "Nome completo" (`name` acima, que vira privado — só o
+  // dono e o time de verificação enxergam).
+  const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -118,7 +122,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   };
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
+    if (!name || !nickname || !email || !password) {
       Alert.alert('Atenção', 'Preencha todos os campos.');
       return;
     }
@@ -153,6 +157,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
         email.trim(),
         password,
         name.trim(),
+        nickname.trim(),
         birthResult.date,
         bio.trim(),
         selectedInterests,
@@ -208,6 +213,15 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 onChangeText={setName}
               />
 
+              <Text style={styles.label}>Como quer ser chamado</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Rapha"
+                placeholderTextColor={theme.colors.textLight}
+                value={nickname}
+                onChangeText={setNickname}
+              />
+
               <Text style={styles.label}>E-mail</Text>
               <TextInput
                 style={styles.input}
@@ -242,7 +256,7 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
               <AnimatedPressable
                 style={styles.btnPrimary}
                 onPress={() => {
-                  if (!name || !email || !password || !confirmPassword)
+                  if (!name || !nickname || !email || !password || !confirmPassword)
                     return Alert.alert('Atenção', 'Preencha todos os campos.');
                   if (password.length < 6)
                     return Alert.alert('Atenção', 'Senha deve ter ao menos 6 caracteres.');

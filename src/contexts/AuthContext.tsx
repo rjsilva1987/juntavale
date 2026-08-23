@@ -8,7 +8,7 @@ import {
   User,
   updateProfile,
 } from 'firebase/auth';
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 import { LookingFor } from '@/constants/lookingFor';
@@ -42,6 +42,7 @@ interface AuthContextType {
     email: string,
     password: string,
     name: string,
+    nickname: string,
     birthDate: Date,
     bio: string,
     interests: string[],
@@ -107,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     name: string,
+    nickname: string,
     birthDate: Date,
     bio: string,
     interests: string[],
@@ -139,7 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const age = calculateAge(birthDate, new Date());
       const photoURL = await uploadProfilePhoto(cred.user.uid, photoUri);
       const newProfile: Omit<UserProfile, 'uid'> = {
-        name,
+        nickname,
         age,
         bio,
         photoURL,
@@ -150,12 +152,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         vale,
         gender,
       };
-      await setDoc(doc(db, 'users', cred.user.uid), {
+      // S135 — dois writes atômicos no mesmo batch: doc público (nickname,
+      // sem o nome real) + subdocumento privado legalName (nome real, só
+      // dono/admin leem — ver firestoreService.ts). Continua dentro do
+      // mesmo try que já existia: se qualquer um dos dois falhar, o catch
+      // abaixo desfaz a conta Auth recém-criada (deleteUser), cobrindo os
+      // dois writes como antes cobria só o do perfil público.
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'users', cred.user.uid), {
         ...newProfile,
         uid: cred.user.uid,
         birthDate,
         createdAt: serverTimestamp(),
       });
+      batch.set(doc(db, 'users', cred.user.uid, 'private', 'legalName'), {
+        name,
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
 
       setProfile({ ...newProfile, uid: cred.user.uid });
     } catch (e) {

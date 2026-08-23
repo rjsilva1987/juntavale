@@ -23,6 +23,7 @@ import {
   listenActiveMomentos,
   MomentoWithId,
 } from '@/services/momentoService';
+import { getDisplayName } from '@/utils/profile';
 
 // Sem dayjs/relativeTime plugin novo (nenhum outro ponto do projeto já
 // configura dayjs.extend(relativeTime)) — cálculo manual a partir da
@@ -220,7 +221,7 @@ export default function MomentosScreen() {
                     />
                   ) : null}
                   <Text style={styles.feedCardName} numberOfLines={1}>
-                    {author?.name ?? ''}
+                    {getDisplayName(author)}
                   </Text>
                 </View>
               </AnimatedPressable>

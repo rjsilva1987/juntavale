@@ -171,7 +171,10 @@ fire-and-forget, sem listener adicional.
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ### S135 — "Como quer ser chamado" separado do nome completo
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** IMPLEMENTADA em código (rules, client e Cloud Functions) —
+falta (a) Raphael rodar `functions/scripts/migrateNicknames.js` DEPOIS do
+deploy de `firestore.rules`, e (b) teste em aparelho. Ainda não fechada —
+só migra pra "Fechadas recentemente" depois da auditoria aprovar.
 
 Hoje o cadastro tem um só campo de nome, preenchido com nome completo, e ele
 é o que aparece em todo lugar do app — o que causa truncamento em card e
@@ -273,6 +276,28 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   de onde votar — precisa de uma terceira conta comum que nunca tenha
   swipado o dono da enquete. A conta admin não serve, a S95 tirou o
   Descobrir dela.
+- S135 — cadastrar conta NOVA: os dois campos aparecem no Step 1
+  (`RegisterScreen`), os dois são obrigatórios pra avançar, e a conta nasce
+  com `nickname` no doc público e `legalName` (nome real) no subdocumento
+  privado.
+- S135 — editar perfil: "Como quer ser chamado" (cap 30) segue editável
+  mesmo depois de verificado; "Nome completo" (cap 60) trava depois de
+  verificado, com o mesmo aviso de sempre; antes de verificado, o hint novo
+  ("Visível só pra você e pro time de verificação.") aparece embaixo do
+  campo.
+- S135 — conferir que o nickname (nunca o nome real) aparece em Descobrir,
+  ProfileSheet, MatchProfileScreen, Curtidas, Conversas (lista e header do
+  Chat) e no modal de match.
+- S135 — fila de verificação do admin (`AdminVerificationsScreen`/
+  `AdminVerificationDetailScreen`) mostra o NOME REAL, não o nickname —
+  conferir com uma conta que tenha os dois valores diferentes.
+- S135 — telas de denúncia/suporte do admin (`AdminReportsScreen`,
+  `AdminReportDetailScreen`, `MyReportsScreen`, `AdminSupportDetailScreen`)
+  continuam mostrando só o nickname, nunca o nome real.
+- S135 — conta LEGADA (criada antes desta sprint, ainda sem rodar
+  `migrateNicknames.js`): perfil e telas públicas caem no fallback pro
+  `name` antigo (`getDisplayName`); editar e salvar o perfil dessa conta
+  cria os campos novos (`nickname` + `legalName`) sem erro de permissão.
 
 **Espera o build 15:**
 
@@ -295,6 +320,9 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   ProfileSheet, Curtidas e fila de verificação do admin.
 - S126 — dono recebe o push anônimo quando alguém vota na enquete; Expo Go
   não entrega push no SDK 54, precisa do build.
+- S135 — título/corpo do push de match e de mensagem mostram o NICKNAME
+  (nunca o nome real); Expo Go não entrega push no SDK 54, precisa do
+  build.
 
 ---
 
@@ -326,6 +354,17 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 - Erro não é engolido em silêncio; falha que o usuário causou, o usuário vê.
 - A ficha das duas lojas promete "sem 'assine para ver quem curtiu você'" —
   nenhum modelo de monetização pode contradizer isso.
+- **S135 — nome real do usuário nunca aparece fora da tela de verificação do
+  admin.** Em TODO canto público (Descobrir, perfil, Curtidas, Conversas,
+  pushes) e em toda tela de admin que NÃO seja a fila de verificação
+  (`AdminReportsScreen`/`AdminReportDetailScreen`/`MyReportsScreen`/
+  `AdminSupportDetailScreen`), o nome exibido é sempre o `nickname` ("como
+  quer ser chamado", via `getDisplayName` em `src/utils/profile.ts`) — nunca
+  o nome legal completo (`users/{uid}/private/legalName`, legível só pelo
+  dono e pelo admin nas rules). Só `AdminVerificationsScreen`/
+  `AdminVerificationDetailScreen` mostram o nome real, porque é a referência
+  que o revisor humano confere contra a selfie. Qualquer tela nova que
+  exiba nome de usuário segue essa mesma regra por padrão.
 
 ## Armadilhas do chat (valem pra qualquer sprint que mexa em ChatScreen/listenMessages)
 
@@ -359,6 +398,16 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   (S102-B, apagar match) e `castPollVote` (S126, `pollVotes/{voterUid}`) —
   qualquer collection nova com o mesmo desenho (1 doc por par de uids,
   create-only) deve seguir o mesmo tratamento no catch.
+- **Trava de imutabilidade cujo campo travado NÃO mora no mesmo doc que a
+  condição que a liga/desliga precisa de `get()` cruzado, não do "mesmo
+  doc" (`resource.data`/`request.resource.data`) que basta quando os dois
+  vivem juntos.** Descoberto na S135: a trava de nome pós-verificação
+  (S76-B1) migrou de `users/{uid}.name` pra `users/{uid}/private/legalName`,
+  mas o campo `verified` continua só em `users/{uid}` (doc PAI) — a regra de
+  `update` do subdocumento precisa de
+  `get(/databases/$(database)/documents/users/$(userId)).data.get('verified', false)`,
+  mesmo molde já usado em `pollVotes`/`photoLikes` pra ler um doc diferente
+  do que está sendo escrito.
 
 ## Padrões de UI que valem para o projeto inteiro
 

@@ -17,6 +17,7 @@ import { LOOKING_FOR_LABELS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UserProfile } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 // S72-B2 — arrasto pra fechar: fecha se soltar depois de 1/3 da altura do
 // painel OU se o dedo estava se movendo rápido (mesmo sem passar do 1/3).
@@ -110,7 +111,7 @@ export function ProfileSheet({
         <View style={styles.headerNameGroup}>
           <View style={styles.nameAgeGroup}>
             <Text style={styles.name} numberOfLines={1}>
-              {profile?.name}
+              {getDisplayName(profile)}
             </Text>
             {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
           </View>

@@ -1,4 +1,19 @@
-// rules-stamp: S129-B (23/08/2026 — terceiro tique estilo WhatsApp
+// rules-stamp: S135 (23/08/2026 — nome real vira PRIVADO de verdade
+// (rules-level, não só escondido da UI): users/{uid} perde o campo `name`
+// [público, causava truncamento em card/cabeçalho — S134] e ganha
+// `nickname` [público, "como quer ser chamado", SEM trava de imutabilidade
+// — editável sempre, mesmo depois de verificado]; nome real migra pro novo
+// subdocumento users/{uid}/private/legalName [allow read: isOwner||isAdmin,
+// mesmo molde de private/registration], carregando a trava de imutabilidade
+// pós-verificação que antes vivia em `name` (S76-B1, removida daqui — ver
+// comentário no lugar de onde saiu). isValidProfile: `name` deixa de ser
+// exigido incondicionalmente, `nickname` entra como opcional [molde
+// gender/uf/vale] — só obrigatório no allow create [molde lookingFor/uf/
+// vale], nunca em isValidProfile, porque essa função roda no update também
+// e uma conta legada sem nickname ainda [janela até o script de migração
+// manual, functions/scripts/migrateNicknames.js, rodar] ficaria impedida
+// de salvar qualquer edição de perfil se nickname virasse obrigatório ali)
+// + S129-B (23/08/2026 — terceiro tique estilo WhatsApp
 // ("entregue"): novo campo deliveredAt em matches/{matchId}, mesmo padrão
 // de lastReadAt (S27/S86) — mapa por uid, cada participante só escreve a
 // própria chave, valor tem que ser timestamp) + S127 (23/08/2026 — Marcos e selos: nova collection
@@ -301,8 +316,23 @@ service cloud.firestore {
     // números soltos — mexer neles significa mexer nas constantes do app
     // E aqui.
     function isValidProfile(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 240
-        && data.age is number && data.age >= 18 && data.age <= 100
+      return data.age is number && data.age >= 18 && data.age <= 100
+        // S135 — nickname ("como quer ser chamado") é o novo nome público,
+        // e fica SÓ QUANDO PRESENTE aqui, mesmo molde de gender/uf/vale
+        // logo abaixo — de propósito NÃO é obrigatório dentro desta função
+        // (que roda tanto no create quanto no update): se virasse
+        // obrigatório aqui, toda conta EXISTENTE sem nickname ainda
+        // (migração é script manual, functions/scripts/migrateNicknames.js,
+        // rodado por Raphael depois do deploy — pode haver uma janela sem
+        // migração feita) ficaria impedida de salvar qualquer edição de
+        // perfil (até uma bio), porque request.resource.data no update é o
+        // documento resultante completo e nickname estaria ausente.
+        // uf/vale/lookingFor resolvem esse mesmo problema do jeito certo:
+        // obrigatórios só no allow create (conta nova), tolerantes aqui no
+        // update. name (legado) NÃO é mais validado aqui — sai do doc
+        // público a partir desta sprint, migra pra
+        // users/{uid}/private/legalName (ver match próprio abaixo).
+        && (!('nickname' in data) || (data.nickname is string && data.nickname.size() > 0 && data.nickname.size() <= 120))
         // S76-A — SÓ quando presente: perfis antigos não têm birthDate, e
         // esta função roda no update também — exigir sempre travaria toda
         // conta legada ao editar bio/foto/etc. 6570d ~ 18 anos e 36890d ~
@@ -418,8 +448,14 @@ service cloud.firestore {
         // S83-A — mesmo padrão de lookingFor/uf acima: obrigatório no
         // cadastro, sem o campo (ou fora do enum) o create inteiro é negado.
         && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']
+        // S135 — mesmo padrão de lookingFor/uf/vale acima: nickname é
+        // obrigatório só aqui, no create (conta nova sempre nasce com ele);
+        // isValidProfile trata como opcional pra não travar contas legadas
+        // no update, ver comentário lá.
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() > 0 && request.resource.data.nickname.size() <= 120
         && request.resource.data.keys().hasOnly(
-             ['uid', 'name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
+             ['uid', 'nickname', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'createdAt', 'prompts',
               'places', 'events', 'weeklyPromptAnswer'])
         && isValidProfile(request.resource.data);
@@ -467,22 +503,15 @@ service cloud.firestore {
                   && request.resource.data.vale == resource.data.vale)
             || (!('vale' in resource.data) && 'vale' in request.resource.data
                   && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']))
-        // S76-B1 — nome IMUTÁVEL a partir da aprovação da verificação. A
-        // verificação aqui é HUMANA (revisor confere selfie contra a Chave
-        // F): se o nome seguisse editável depois da aprovação, o selo
-        // passaria a afirmar algo que ninguém conferiu — a pessoa se
-        // verifica como si mesma e depois renomeia. Antes da aprovação a
-        // edição segue livre, pra que erro de digitação se conserte sozinho
-        // na janela pré-verificação. Duas partes só (não três como o vale):
-        // `name` é sempre obrigatório, garantido por isValidProfile no
-        // create E no update, então nunca existe o caso "ausente". Usa
-        // get('verified', false) porque conta que nunca enviou verificação
-        // não tem a chave — o default false deixa ela editar normalmente, e
-        // o curto-circuito do || evita dereferenciar name nesse caminho.
-        // `verified` NÃO precisa de get() cruzado como nas linhas 543/585/678:
-        // aqui o documento avaliado É o do próprio usuário.
-        && (resource.data.get('verified', false) != true
-            || request.resource.data.name == resource.data.name)
+        // S76-B1, migrado na S135: a trava de nome IMUTÁVEL pós-verificação
+        // saiu daqui — `name` deixou de existir no doc público (vira
+        // `nickname`, sem trava nenhuma, editável sempre) e o NOME REAL
+        // passou a morar em users/{uid}/private/legalName, subdocumento
+        // próprio com a mesma trava (ver match /private/legalName abaixo,
+        // logo após /private/registration). Motivo de não dar pra manter a
+        // trava em cima de `nickname`: nickname é público e não é mais a
+        // identidade que o revisor confere contra a selfie — travar ele
+        // pós-verificação não faria sentido de produto nem resolveria nada.
         // S76-B2 — birthDate IMUTÁVEL a partir da aprovação da verificação,
         // mesma lógica do nome logo acima: o revisor humano confere a
         // identidade, e a idade derivada dessa data passa a ser uma
@@ -506,7 +535,7 @@ service cloud.firestore {
         // gravado. Travar `age` faria esse save ser negado por inteiro.
         // Quem trava a identidade é o birthDate; o age precisa poder subir.
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-             ['name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
+             ['nickname', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about',
               'aboutHidden', 'poll'])
@@ -562,6 +591,40 @@ service cloud.firestore {
           && request.resource.data.chaveF.matches('^[A-Z]?\\d{1,7}$') // formato relaxado: F+7 ainda casa
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.keys().hasOnly(['chaveF', 'createdAt']);
+
+        allow delete: if false;
+      }
+
+      // users/{userId}/private/legalName (S135) — nome real/completo, o que
+      // era o campo `name` de users/{userId} até esta sprint. Sai do doc
+      // público (que agora só tem `nickname`, sem trava nenhuma) porque o
+      // nome real deixa de ser exibido em QUALQUER canto do app — vira
+      // referência interna, usada só pelo próprio dono e pelo time de
+      // verificação (revisor confere selfie contra a Chave F e, agora,
+      // contra este subdocumento em vez do doc público). Mesmo molde de
+      // allow read de private/registration acima: isOwner || isAdmin.
+      match /private/legalName {
+        allow read: if isOwner(userId) || isAdmin();
+
+        allow create: if isOwner(userId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 240
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['name', 'createdAt']);
+
+        // Trava S76-B1, migrada da S135: nome real imutável a partir da
+        // aprovação da verificação humana. Antes da aprovação, o dono pode
+        // corrigir (mesma lógica pré-S135, só que agora o campo travado não
+        // é mais `users/{uid}.name` e sim este subdocumento). `verified`
+        // mora no doc PAI (users/{userId}), não aqui — por isso o get()
+        // cruzado, molde igual ao usado em pollVotes (linha ~590) e não o
+        // "mesmo doc" que o antigo S76-B1 usava (lá o campo travado e o
+        // campo `verified` estavam no mesmo documento).
+        allow update: if isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.get('verified', false) != true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 240;
 
         allow delete: if false;
       }

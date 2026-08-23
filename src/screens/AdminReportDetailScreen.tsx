@@ -36,15 +36,20 @@ import {
   Report,
   ReportMessage,
 } from '@/services/reportService';
+import { getDisplayName } from '@/utils/profile';
 
 type AdminReportDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'AdminReportDetail'>;
 
 // Conta denunciada/denunciante pode não existir mais — a function de apagar
 // conta não apaga `reports` de propósito (ver reportService.ts). null ==
 // perfil não encontrado, cai pro uid como fallback em vez de travar a tela.
+//
+// S135 — fora de escopo mostrar o nome real aqui: usa getDisplayName
+// (nickname), NUNCA legalName — só a tela de verificação (Admin
+// Verificações) mostra o nome real, decisão de produto explícita da sprint.
 function partyLabel(uid: string, profile: UserProfile | null | undefined): string {
   if (profile === null) return 'Conta removida';
-  return profile?.name ?? uid;
+  return profile ? getDisplayName(profile) : uid;
 }
 
 export default function AdminReportDetailScreen({

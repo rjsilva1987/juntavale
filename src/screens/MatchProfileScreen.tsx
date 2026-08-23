@@ -38,6 +38,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
+import { getDisplayName } from '@/utils/profile';
 
 type MatchProfileScreenProps = NativeStackScreenProps<RootStackParamList, 'MatchProfile'>;
 
@@ -451,7 +452,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     navigation.replace('Chat', {
       matchId: chatMatchId,
       otherUid: uid,
-      otherName: profile?.name ?? name,
+      otherName: profile ? getDisplayName(profile) : name,
       otherPhoto: profile?.photoURL ?? photoURL,
     });
   };
@@ -463,7 +464,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     navigation.replace('Chat', {
       matchId: chatMatchId,
       otherUid: uid,
-      otherName: profile?.name ?? name,
+      otherName: profile ? getDisplayName(profile) : name,
       otherPhoto: profile?.photoURL ?? photoURL,
       draftMessage: message,
     });
@@ -554,7 +555,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
               <View style={styles.nameRow}>
                 <View style={styles.nameAgeGroup}>
                   <Text style={styles.name} numberOfLines={1}>
-                    {profile?.name ?? name}
+                    {profile ? getDisplayName(profile) : name}
                   </Text>
                   {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
                 </View>
@@ -652,7 +653,7 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
         visible={matchVisible}
         currentUserPhoto={myProfile?.photoURL}
         matchedUserPhoto={profile?.photoURL ?? photoURL}
-        matchedUserName={profile?.name ?? name}
+        matchedUserName={profile ? getDisplayName(profile) : name}
         myProfile={myProfile}
         theirProfile={profile}
         myVerified={myProfile?.verified}

@@ -15,6 +15,7 @@ import { RootStackParamList } from '@/navigation';
 import { REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import { listenReports, Report } from '@/services/reportService';
+import { getDisplayName } from '@/utils/profile';
 
 // Denúncia criada antes da S96-A não tem o campo `status` (client antigo do
 // reportUser não mandava) — ausente conta como pendente, mesma leitura do
@@ -25,9 +26,12 @@ function isPending(report: Report): boolean {
 
 // Conta denunciada/denunciante pode não existir mais — a function de apagar
 // conta não apaga `reports` de propósito. null == perfil não encontrado.
+//
+// S135 — fora de escopo mostrar o nome real aqui: getDisplayName
+// (nickname), NUNCA legalName — mesma decisão de AdminReportDetailScreen.tsx.
 function partyLabel(uid: string, profile: UserProfile | null | undefined): string {
   if (profile === null) return 'Conta removida';
-  return profile?.name ?? uid;
+  return profile ? getDisplayName(profile) : uid;
 }
 
 export default function AdminReportsScreen() {

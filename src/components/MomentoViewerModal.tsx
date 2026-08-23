@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ReportReason, reportUser } from '@/services/blockService';
 import { UserProfile } from '@/services/firestoreService';
 import { MomentoWithId } from '@/services/momentoService';
+import { getDisplayName } from '@/utils/profile';
 
 interface MomentoViewerModalProps {
   momento: MomentoWithId | null;
@@ -42,7 +43,7 @@ export function MomentoViewerModal({
   const { user } = useAuth();
   const [reportVisible, setReportVisible] = useState(false);
 
-  const authorName = isOwnMomento ? 'Você' : (authorProfile?.name ?? '');
+  const authorName = isOwnMomento ? 'Você' : getDisplayName(authorProfile);
 
   const handleReport = async (reason: ReportReason, details: string) => {
     if (!user || !momento) return;

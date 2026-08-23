@@ -16,6 +16,7 @@ import { RootStackParamList } from '@/navigation';
 import { REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile } from '@/services/firestoreService';
 import { listenMyReports, Report } from '@/services/reportService';
+import { getDisplayName } from '@/utils/profile';
 
 type MyReportsScreenProps = NativeStackScreenProps<RootStackParamList, 'MyReports'>;
 
@@ -86,7 +87,12 @@ export default function MyReportsScreen({ navigation }: MyReportsScreenProps) {
       getUserProfile(uid)
         .then((profile) => {
           if (cancelled) return;
-          setReportedNames((prev) => ({ ...prev, [uid]: profile?.name ?? null }));
+          // S135 — fora de escopo mostrar o nome real aqui: getDisplayName
+          // (nickname), NUNCA legalName — mesma decisão de AdminReportsScreen.tsx.
+          setReportedNames((prev) => ({
+            ...prev,
+            [uid]: profile ? getDisplayName(profile) : null,
+          }));
         })
         .catch(() => {
           // Sem retry (uid já está em requestedUidsRef) e sem gravar no

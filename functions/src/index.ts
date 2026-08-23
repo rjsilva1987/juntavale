@@ -60,7 +60,17 @@ async function getUserBasicInfo(
   const snap = await db.doc(`users/${uid}`).get();
   const data = snap.data();
   if (!data) return null;
-  return { name: data.name as string, photoURL: data.photoURL as string | undefined };
+  // S135 — nome público passa a ser `nickname`; `name` vira fallback pra
+  // conta legada ainda não migrada (functions/scripts/migrateNicknames.js).
+  // Cloud Functions não importa src/, então não dá pra reusar getDisplayName
+  // (src/utils/profile.ts) — mesma lógica replicada aqui à mão. Chave
+  // retornada continua `name` de propósito: só a FONTE no doc muda, os
+  // vários call sites que leem `.name` no objeto retornado não precisam
+  // mudar.
+  return {
+    name: (data.nickname ?? data.name) as string,
+    photoURL: data.photoURL as string | undefined,
+  };
 }
 
 async function sendExpoNotifications(messages: ExpoPushMessage[]): Promise<void> {
@@ -471,7 +481,14 @@ export const onVerificationSubmitted = onDocumentWritten(
     if (isAdminUid(uid)) return; // admin verificando a si mesmo
 
     const userSnap = await db.doc(`users/${uid}`).get();
-    const name = (userSnap.data()?.name as string | undefined) ?? 'Alguém';
+    // S135 — mesmo fallback nickname ?? name (legado) de getUserBasicInfo
+    // acima: leitura direta do doc, fora daquela função (não notifica o
+    // usuário, notifica o ADMIN sobre um pedido novo — fora do escopo
+    // original da S135, mas sem este fallback toda conta pós-migração
+    // apareceria como "Alguém" pra sempre, já que `name` deixou de existir
+    // no doc público).
+    const userData = userSnap.data();
+    const name = ((userData?.nickname ?? userData?.name) as string | undefined) ?? 'Alguém';
 
     const token = await getPushToken(ADMIN_UID);
     if (!token) return;
