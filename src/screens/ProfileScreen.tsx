@@ -25,6 +25,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AboutPicker } from '@/components/AboutPicker';
 import { AboutRow } from '@/components/AboutRow';
 import { AboutVisibilityModal } from '@/components/AboutVisibilityModal';
+import { AchievementsCard } from '@/components/AchievementsCard';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { FounderBadge } from '@/components/FounderBadge';
@@ -1089,6 +1090,13 @@ export default function ProfileScreen() {
             )}
           </View>
         )}
+
+        {/* S127 — Marcos e selos: card "Conquistas", mesma condição de
+            visibilidade dos cards de Enquete/Prompt da semana acima (só no
+            próprio perfil, fora do modo de edição). Posicionado APÓS as duas
+            seções acima, de propósito — não reabrir a ordem fechada na
+            S132. */}
+        {!editing && !isAdmin && <AchievementsCard />}
 
         {/* Prompts (S33) — edição via modais próprios, independente do form
             de nome/idade/bio/gênero/interesses acima (mesmo padrão da grade

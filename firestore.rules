@@ -1,4 +1,11 @@
-// rules-stamp: S128 (22/08/2026 — Super Curtida diária: novo doc
+// rules-stamp: S127 (23/08/2026 — Marcos e selos: nova collection
+// users/{uid}/achievements/{achievementId} [id firstMatch|profileComplete|
+// tenDaysInApp, doc {unlockedAt}], create-only e write EXCLUSIVO de Cloud
+// Function via Admin SDK — allow read restrito ao dono, allow write: if
+// false pra todo mundo, inclusive o próprio dono; matchesCount [novo campo
+// em users/{uid}] de propósito NÃO entra em hasOnly nenhum de create/update,
+// mesmo tratamento já dado a founderNumber/pollCounts, só Admin SDK escreve)
+// + S128 (22/08/2026 — Super Curtida diária: novo doc
 // users/{uid}/superLikes/dailyGrant [irmão do superLikes/usage, campos
 // {year,month,day} UTC, sem contador — create/update só grava a data de
 // hoje, e só quando o valor anterior do doc, se existir, é de outro dia];
@@ -606,6 +613,21 @@ service cloud.firestore {
 
       allow update: if false;
       allow delete: if isSignedIn() && resource.data.likerUid == request.auth.uid;
+    }
+
+    // ───────────────────────── users/{uid}/achievements/{achievementId} (S127 — Marcos e selos) ─────────────────────────
+    //
+    // 3 conquistas determinísticas nesta sprint (firstMatch, profileComplete,
+    // tenDaysInApp — catálogo em src/constants/achievements.ts), doc =
+    // {unlockedAt: serverTimestamp}. Create-only, escrita EXCLUSIVA por Cloud
+    // Function via Admin SDK (onMatchCreated/onUserProfileUpdated/
+    // tenDaysInAppCheck em functions/src/index.ts) — mesmo padrão
+    // Cloud-Function-only já usado por founderNumber/pollCounts: `allow
+    // write: if false` bloqueia o client por completo, inclusive o próprio
+    // dono, e o Admin SDK ignora esta regra normalmente.
+    match /users/{uid}/achievements/{achievementId} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
     }
 
     // ───────────────────────── users/{uid}/superLikes/usage (Super Like Fase 2) ─────────────────────────

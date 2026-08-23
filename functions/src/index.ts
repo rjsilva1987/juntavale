@@ -93,6 +93,35 @@ export const onMatchCreated = onDocumentCreated(
     const users = snap.data().users as string[];
     const initiatedBy = snap.data().initiatedBy as string | undefined;
 
+    // S127 — Marcos e selos: matchesCount é incrementado SÓ aqui (Admin SDK)
+    // — o client nunca escreve este campo, ver firestore.rules e o
+    // comentário em src/services/firestoreService.ts. Transação por uid
+    // (mesmo padrão de assignFounderNumber acima) pra evitar leitura suja
+    // quando a mesma pessoa dá dois matches quase simultâneos. Quando o novo
+    // valor é exatamente 1 (primeiro match de todos), cria
+    // users/{uid}/achievements/firstMatch NA MESMA transação — create-only,
+    // nunca sobrescreve um doc que já exista.
+    for (const uid of users) {
+      try {
+        await db.runTransaction(async (transaction) => {
+          const userRef = db.doc(`users/${uid}`);
+          const userSnap = await transaction.get(userRef);
+          const currentCount = (userSnap.data()?.matchesCount as number | undefined) ?? 0;
+          const newCount = currentCount + 1;
+
+          transaction.update(userRef, { matchesCount: newCount });
+
+          if (newCount === 1) {
+            transaction.set(db.doc(`users/${uid}/achievements/firstMatch`), {
+              unlockedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        });
+      } catch (error) {
+        console.error('[onMatchCreated] falha ao incrementar matchesCount:', uid, error);
+      }
+    }
+
     const messages: ExpoPushMessage[] = [];
     for (const uid of users) {
       // Nao notifica quem FECHOU o match (initiatedBy): essa pessoa acabou de
@@ -1418,5 +1447,82 @@ export const onPollChanged = onDocumentUpdated(
     votesSnap.forEach((doc) => batch.delete(doc.ref));
     batch.update(db.doc(`users/${uid}`), { pollCounts: FieldValue.delete() });
     await batch.commit();
+  },
+);
+
+// S127 — Marcos e selos: desbloqueia users/{uid}/achievements/profileComplete
+// (Admin SDK, create-only — o client nunca escreve nesta subcoleção, ver
+// firestore.rules) quando o critério LEVE de perfil completo é satisfeito:
+// (bio não vazia OU pelo menos 1 campo de `about` preenchido) E mais de 1
+// foto. Não detecta transição false->true, só checa se o doc ainda não
+// existe antes de criar — idempotente por construção, sem transação (uma
+// corrida rara entre dois disparos quase simultâneos no máximo tentaria
+// criar duas vezes; o segundo write só sobrescreve o mesmo unlockedAt,
+// inofensivo). onDocumentUpdated PRÓPRIO em users/{uid}, independente de
+// onPollChanged (outro trigger no mesmo documento, acima) — não mexe nele.
+export const onUserProfileUpdated = onDocumentUpdated(
+  { document: 'users/{uid}', region: REGION },
+  async (event) => {
+    const after = event.data?.after.data();
+    if (!after) return;
+
+    const bio = (after.bio as string | undefined) ?? '';
+    const about = after.about as Record<string, unknown> | undefined;
+    const photos = (after.photos as string[] | undefined) ?? [];
+
+    const hasBio = bio.trim().length > 0;
+    const hasAboutField = !!about && Object.keys(about).length > 0;
+    const profileComplete = (hasBio || hasAboutField) && photos.length > 1;
+    if (!profileComplete) return;
+
+    const { uid } = event.params;
+    const achievementRef = db.doc(`users/${uid}/achievements/profileComplete`);
+    try {
+      const achievementSnap = await achievementRef.get();
+      if (achievementSnap.exists) return;
+      await achievementRef.set({ unlockedAt: FieldValue.serverTimestamp() });
+    } catch (error) {
+      console.error('[onUserProfileUpdated] falha ao desbloquear profileComplete:', uid, error);
+    }
+  },
+);
+
+// S127 — Marcos e selos: terceira scheduled function do projeto (mesmo
+// esqueleto de staleMatchReminder), 1x/dia, horário próprio (21h) pra não
+// empilhar com staleMatchReminder (19h) nem reengagementPush (20h). Encontra
+// contas com createdAt <= agora - 10 dias e desbloqueia
+// users/{uid}/achievements/tenDaysInApp (Admin SDK, create-only) pra quem
+// ainda não tem o doc — idempotente por checagem de existência, sem estado
+// próprio (uma conta elegível continua sendo varrida todo dia até ganhar o
+// doc; depois disso o achievementSnap.exists já pula ela em ~O(1) leitura).
+export const tenDaysInAppCheck = onSchedule(
+  { schedule: '0 21 * * *', timeZone: 'America/Sao_Paulo', region: REGION },
+  async () => {
+    const now = Timestamp.now();
+    const tenDaysAgo = Timestamp.fromMillis(now.toMillis() - 10 * 24 * 60 * 60 * 1000);
+
+    // Range num único campo (createdAt) — mesmo raciocínio de
+    // staleMatchReminder: usa o índice single-field automático, não deveria
+    // pedir índice composto no deploy.
+    const usersSnap = await db.collection('users').where('createdAt', '<=', tenDaysAgo).get();
+
+    let unlockedCount = 0;
+    for (const userDoc of usersSnap.docs) {
+      const uid = userDoc.id;
+      try {
+        const achievementRef = db.doc(`users/${uid}/achievements/tenDaysInApp`);
+        const achievementSnap = await achievementRef.get();
+        if (achievementSnap.exists) continue;
+
+        await achievementRef.set({ unlockedAt: FieldValue.serverTimestamp() });
+        unlockedCount++;
+      } catch (error) {
+        console.error('[tenDaysInAppCheck] falha ao processar usuário:', uid, error);
+      }
+    }
+
+    console.log(
+      `[tenDaysInAppCheck] candidatos: ${usersSnap.size} | desbloqueados: ${unlockedCount}`,
+    );
   },
 );

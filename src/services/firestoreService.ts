@@ -166,6 +166,13 @@ export interface UserProfile {
   // inclusive o dono, NUNCA grava este campo (ver firestore.rules: não entra
   // em hasOnly nenhum). Chave ausente = contagem zero pra aquela opção.
   pollCounts?: Record<string, number>;
+  // S127 — Marcos e selos: contador de matches, incrementado SÓ pela Cloud
+  // Function onMatchCreated (Admin SDK) — mesmo padrão Cloud-Function-only
+  // de founderNumber/pollCounts acima; o client nunca escreve este campo
+  // (ver firestore.rules: não entra em hasOnly nenhum). Ausente = 0 matches.
+  // Usado só pra decidir o desbloqueio de achievements/firstMatch
+  // (users/{uid}/achievements — ver functions/src/index.ts).
+  matchesCount?: number;
 }
 
 // Escrito só pela Cloud Function onMessageCreated (Admin SDK) — o client
