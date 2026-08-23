@@ -1,4 +1,16 @@
-// rules-stamp: S123 (22/08/2026 — nova collection users/{ownerUid}/photoLikes/
+// rules-stamp: S128 (22/08/2026 — Super Curtida diária: novo doc
+// users/{uid}/superLikes/dailyGrant [irmão do superLikes/usage, campos
+// {year,month,day} UTC, sem contador — create/update só grava a data de
+// hoje, e só quando o valor anterior do doc, se existir, é de outro dia];
+// swipes/{swipeId} allow create, ramo direction=='superlike', passa a ser
+// um OR de dois ramos [verified continua a PRIMEIRA condição, FORA do OR]:
+// Ramo A consome o dailyGrant do dia via getAfter/exists/get [mesmo padrão
+// do usage], Ramo B é a validação mensal já existente, cópia idêntica, sem
+// nenhuma mudança de lógica) + S128-fix (22/08/2026 — correção pós-auditoria:
+// Ramo A ganhou existsAfter(dailyGrant) como PRIMEIRA condição, curto-
+// circuito antes de qualquer getAfter(dailyGrant).data.*, porque getAfter()
+// de doc inexistente lança erro e negava a allow create INTEIRA [não só o
+// ramo] pra client pré-S128 que nunca escreve dailyGrant no batch) + S123 (22/08/2026 — nova collection users/{ownerUid}/photoLikes/
 // {likeId}, curtir foto pós-match [MatchProfileScreen, !isPreview]: likeId
 // determinístico `${likerUid}_${encodeURIComponent(photoUrl)}`, toggle via
 // create/delete diretos (nunca update — allow update: if false). allow read
@@ -628,6 +640,36 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ───────────────────────── users/{uid}/superLikes/dailyGrant (S128 — Super Curtida diária) ─────────────────────────
+    //
+    // Data (UTC) do último grant diário grátis consumido — doc irmão do
+    // usage acima, mesma coleção. Não tem contador: create/update só grava
+    // year/month/day de HOJE (bate com request.time.year()/.month()/.day()),
+    // e só é permitido quando o valor anterior do doc (se existir, via
+    // resource.data) tem data diferente de hoje — se bater com hoje, o
+    // grant já foi usado e a escrita é negada. Ver bloco swipes/{swipeId}
+    // create abaixo (ramo A) pra como isso trava a segunda super curtida do
+    // dia a cair na cota mensal.
+    match /users/{uid}/superLikes/dailyGrant {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'day'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && request.resource.data.day == request.time.day();
+      allow update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['year', 'month', 'day'])
+        && request.resource.data.year == request.time.year()
+        && request.resource.data.month == request.time.month()
+        && request.resource.data.day == request.time.day()
+        && (
+          resource.data.year != request.time.year()
+          || resource.data.month != request.time.month()
+          || resource.data.day != request.time.day()
+        );
+      allow delete: if false;
+    }
+
     // ───────────────────────── users/{uid}/replies/usage (S74 — quota de "Responder") ─────────────────────────
     //
     // Contador mensal de respostas (bilhete em curtida normal, via prompt),
@@ -805,18 +847,52 @@ service cloud.firestore {
           request.resource.data.direction != 'superlike'
           || (
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
-            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
-            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month()
-            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count <= 3
             && (
-              !exists(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage)
-                ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
-                : (
-                  (get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
-                    && get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month())
-                    ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count + 1
-                    : getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
+              // S128 — Ramo A: grant diário grátis. A primeira super curtida
+              // do dia UTC consome o dailyGrant (escrito no MESMO batch, daí
+              // getAfter) em vez do contador mensal — NÃO precisa validar
+              // usage aqui. Só é permitido quando o doc não existia antes do
+              // write, ou existia com data diferente de hoje (senão o grant
+              // de hoje já foi usado — cai no Ramo B).
+              //
+              // Correção pós-auditoria S128 — existsAfter() como PRIMEIRA
+              // condição, curto-circuito antes de qualquer .data.year/month/
+              // day: getAfter() de doc inexistente LANÇA ERRO (não retorna
+              // false), o que negaria a allow create INTEIRA — não só este
+              // ramo. Client pré-S128 nunca escreve dailyGrant no batch (só
+              // usage+swipe, como sempre fez), então sem esta guarda todo
+              // superlike de app antigo (inclusive via Ramo B, mensal)
+              // seria negado até o usuário atualizar o app.
+              (
+                existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant)
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.year == request.time.year()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.month == request.time.month()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.day == request.time.day()
+                && (
+                  !exists(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant)
+                  || get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.year != request.time.year()
+                  || get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.month != request.time.month()
+                  || get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/dailyGrant).data.day != request.time.day()
                 )
+              )
+              ||
+              // Ramo B: cota mensal — validação já existente antes do S128,
+              // sem nenhuma alteração de lógica.
+              (
+                getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month()
+                && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count <= 3
+                && (
+                  !exists(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage)
+                    ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
+                    : (
+                      (get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.year == request.time.year()
+                        && get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.month == request.time.month())
+                        ? getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == get(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count + 1
+                        : getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/superLikes/usage).data.count == 1
+                    )
+                )
+              )
             )
           )
         );

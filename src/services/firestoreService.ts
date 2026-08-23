@@ -532,6 +532,17 @@ interface SuperLikeUsage {
   count: number;
 }
 
+// S128 — data (UTC) do último grant diário grátis consumido. Doc irmão do
+// SuperLikeUsage acima (mesma coleção, outro id): se não existe, ou a data
+// guardada é diferente de hoje, o grant de hoje ainda não foi usado. Não tem
+// contador — é só a data, comparada em recordSwipe (client) e nas rules
+// (getAfter/get, mesmo padrão do usage).
+interface SuperLikeDailyGrant {
+  year: number;
+  month: number;
+  day: number;
+}
+
 // S74-A — contador mensal de "Responder" (bilhete em curtida normal, via
 // prompt), mesma forma do SuperLikeUsage acima, em doc separado
 // (users/{uid}/replies/usage) — quota independente da de super like.
@@ -640,24 +651,50 @@ export const recordSwipe = async (
     // Contador mensal em UTC — bate com request.time.year()/month() usados
     // nas rules (getAfter() do batch abaixo), que o servidor calcula em UTC.
     const usageRef = doc(db, 'users', fromUid, 'superLikes', 'usage');
-    const usageSnap = await getDoc(usageRef);
+    // S128 — grant diário grátis (users/{uid}/superLikes/dailyGrant), doc
+    // irmão do usage acima: lido em paralelo, mesmo padrão de leitura.
+    const dailyGrantRef = doc(db, 'users', fromUid, 'superLikes', 'dailyGrant');
+    const [usageSnap, dailyGrantSnap] = await Promise.all([
+      getDoc(usageRef),
+      getDoc(dailyGrantRef),
+    ]);
     const now = new Date();
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth() + 1;
+    const day = now.getUTCDate();
 
-    const usage = usageSnap.exists() ? (usageSnap.data() as SuperLikeUsage) : null;
-    const isSameMonth = usage != null && usage.year === year && usage.month === month;
-
-    if (isSameMonth && usage.count >= SUPER_LIKE_LIMIT) {
-      throw new SuperLikeQuotaExceededError();
-    }
-
-    const nextCount = isSameMonth ? usage.count + 1 : 1;
+    const dailyGrant = dailyGrantSnap.exists()
+      ? (dailyGrantSnap.data() as SuperLikeDailyGrant)
+      : null;
+    const isGrantUsedToday =
+      dailyGrant != null &&
+      dailyGrant.year === year &&
+      dailyGrant.month === month &&
+      dailyGrant.day === day;
 
     const batch = writeBatch(db);
-    batch.set(usageRef, { year, month, count: nextCount });
-    batch.set(swipeRef, swipeData);
-    await batch.commit();
+
+    if (!isGrantUsedToday) {
+      // Primeira super curtida do dia UTC: consome o grant grátis, NÃO
+      // toca em usageRef — não conta pra cota mensal.
+      batch.set(dailyGrantRef, { year, month, day });
+      batch.set(swipeRef, swipeData);
+      await batch.commit();
+    } else {
+      // Grant de hoje já usado: comportamento mensal existente, inalterado.
+      const usage = usageSnap.exists() ? (usageSnap.data() as SuperLikeUsage) : null;
+      const isSameMonth = usage != null && usage.year === year && usage.month === month;
+
+      if (isSameMonth && usage.count >= SUPER_LIKE_LIMIT) {
+        throw new SuperLikeQuotaExceededError();
+      }
+
+      const nextCount = isSameMonth ? usage.count + 1 : 1;
+
+      batch.set(usageRef, { year, month, count: nextCount });
+      batch.set(swipeRef, swipeData);
+      await batch.commit();
+    }
   } else if (direction === 'like' && trimmedNote) {
     // S74-A/B — contador de "Responder", mesmo desenho do superlike acima
     // (getDoc do usage, cálculo de mês em UTC, writeBatch juntando usage e

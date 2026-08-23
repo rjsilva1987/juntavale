@@ -66,11 +66,28 @@ obriga a refazer as respostas de jogos de azar dadas à Apple e pode empurrar a
 classificação etária pra cima.
 
 ### S128 — Super Curtida diária
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** ABERTA · em correção (rodada 1/2 pós-auditoria) · sem decisões · sem recon
 
 1 Super Curtida grátis por dia pra quem abriu o app. Recompensa por retorno,
 não por sorte. Pressupõe que a Super Curtida seja escassa hoje — a recon
 começa por confirmar isso.
+
+**Correção pós-auditoria (rodada 1, 22/08/2026)** — 2 falhas da implementação
+já feita, sem reabrir nenhuma decisão de produto:
+1. `firestore.rules`, Ramo A do `allow create` de `swipes/{swipeId}`: faltava
+   `existsAfter(dailyGrant)` como guarda antes de `getAfter(dailyGrant).data.*`
+   — `getAfter()` de doc inexistente lança erro e negava a `allow create`
+   INTEIRA (não só o Ramo A) pra client pré-S128, que nunca escreve
+   `dailyGrant` no batch. Corrigido com `existsAfter()` como primeira
+   condição do Ramo A (curto-circuito).
+2. `src/hooks/useSuperLikeQuota.ts`: `dailyGrantAvailable` não reavaliava na
+   virada do dia UTC (só mudava quando o doc `dailyGrant` mudava, e ele só
+   muda quando o grant É USADO) — corrigido com reavaliação periódica
+   (setTimeout recursivo, 1x/min, mesmo padrão de `usePresenceHeartbeat.ts`).
+   Também havia race condition entre os dois listeners (`usage` e
+   `dailyGrant`) no carregamento inicial — corrigido tipando
+   `dailyGrantAvailable` como `boolean | null` (`null` = ainda carregando,
+   nunca tratado como "esgotado").
 
 ### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon

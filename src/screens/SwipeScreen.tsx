@@ -78,7 +78,11 @@ export default function SwipeScreen() {
   const { user, profile } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { filters, saveFilters, clearFilters } = useFilters();
-  const { remaining: superLikesRemaining, limit: superLikeLimit } = useSuperLikeQuota();
+  const {
+    remaining: superLikesRemaining,
+    limit: superLikeLimit,
+    dailyGrantAvailable,
+  } = useSuperLikeQuota();
   // S74-B — quota própria de "Responder", contador separado do super like.
   const { remaining: replyRemaining } = useReplyQuota();
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
@@ -457,7 +461,10 @@ export default function SwipeScreen() {
       showVerificationRequiredAlert();
       return;
     }
-    if (superLikesRemaining === 0) {
+    // S128-fix — dailyGrantAvailable === false (não !dailyGrantAvailable):
+    // enquanto o hook ainda não sabe (null, 1º snapshot não chegou), não
+    // bloqueia por engano.
+    if (superLikesRemaining === 0 && dailyGrantAvailable === false) {
       showSuperLikeQuotaAlert();
       return;
     }
@@ -785,7 +792,9 @@ export default function SwipeScreen() {
             size={48}
             onPress={handleSuperLikePress}
             iconColor={theme.colors.onSecondary}
-            dimmed={superLikesRemaining === 0 || !profile?.verified}
+            dimmed={
+              (superLikesRemaining === 0 && dailyGrantAvailable === false) || !profile?.verified
+            }
             badge={`${superLikesRemaining}/${superLikeLimit}`}
           />
           <ActionButton
