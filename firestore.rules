@@ -1,4 +1,14 @@
-// rules-stamp: S121 (22/08/2026 — nova collection raiz momentos/{uid} [doc ID
+// rules-stamp: S123 (22/08/2026 — nova collection users/{ownerUid}/photoLikes/
+// {likeId}, curtir foto pós-match [MatchProfileScreen, !isPreview]: likeId
+// determinístico `${likerUid}_${encodeURIComponent(photoUrl)}`, toggle via
+// create/delete diretos (nunca update — allow update: if false). allow read
+// aberto a isSignedIn(), igual match /users/{userId} — curtida de foto não é
+// anônima (revela quem curtiu, mas sem lista de curtidores nesta sprint, só
+// contador no client). create exige likerUid == request.auth.uid, likerUid
+// != ownerUid, hasOnly(['photoUrl','likerUid','createdAt']), createdAt ==
+// request.time, e valida photoUrl contra o array `photos` do dono via
+// get() — só é possível curtir uma foto que de fato está no perfil.
+// delete exige resource.data.likerUid == request.auth.uid.) + S121 (22/08/2026 — nova collection raiz momentos/{uid} [doc ID
 // == uid do autor, story de 24h, audiência é a base inteira]: allow read exige
 // expiresAt > request.time [doc expirado fica ilegível antes mesmo da function
 // de limpeza rodar]; create/update exige dono, type in ['text','photo'],
@@ -560,6 +570,30 @@ service cloud.firestore {
 
       allow update: if false; // voto é imutável — nunca se reescreve, só se cria
       allow delete: if false; // sem "desfazer voto" nesta sprint
+    }
+
+    // ───────────────────────── users/{ownerUid}/photoLikes/{likeId} (S123 — Curtir foto) ─────────────────────────
+    //
+    // Toggle (curtir/descurtir), só em pós-match (MatchProfileScreen client,
+    // fora destas rules). likeId determinístico
+    // `${likerUid}_${encodeURIComponent(photoUrl)}` — permite setDoc/
+    // deleteDoc diretos, sem query prévia. Curtida NÃO é anônima (allow read
+    // aberto, mesma abertura de match /users/{userId} acima), mas esta
+    // sprint só expõe o contador no client, sem lista de curtidores.
+    match /users/{ownerUid}/photoLikes/{likeId} {
+      allow read: if isSignedIn(); // mesma abertura de match /users/{userId} — não é anônimo (decisão 7)
+
+      allow create: if isSignedIn()
+        && request.resource.data.likerUid == request.auth.uid
+        && request.resource.data.likerUid != ownerUid
+        && request.resource.data.keys().hasOnly(['photoUrl', 'likerUid', 'createdAt'])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.photoUrl is string
+        && exists(/databases/$(database)/documents/users/$(ownerUid))
+        && request.resource.data.photoUrl in get(/databases/$(database)/documents/users/$(ownerUid)).data.photos;
+
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.likerUid == request.auth.uid;
     }
 
     // ───────────────────────── users/{uid}/superLikes/usage (Super Like Fase 2) ─────────────────────────

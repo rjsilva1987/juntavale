@@ -27,11 +27,14 @@ import {
   castPollVote,
   getMatchById,
   getMyPollVote,
+  getPhotoLikes,
   getSwipe,
   getUserProfile,
+  likePhoto,
   recordSwipe,
   SwipeContext,
   undoSwipe,
+  unlikePhoto,
   UserProfile,
 } from '@/services/firestoreService';
 import { getDisplayAge } from '@/utils/birthDate';
@@ -73,6 +76,15 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
   // voto já dado via getMyPollVote.
   const [myPollVote, setMyPollVote] = useState<number | null>(null);
   const [pollVoteResolved, setPollVoteResolved] = useState(false);
+  // S123 — curtidas de foto, pós-match apenas (ver useEffect abaixo, que só
+  // carrega quando !isPreview). Doc inteiro da subcoleção, pequena (limitada
+  // ao nº de matches do dono) — ver getPhotoLikes.
+  const [photoLikes, setPhotoLikes] = useState<{ photoUrl: string; likerUid: string }[]>([]);
+  // S123 (auditoria) — mesmo padrão de pollVoteResolved acima: só true
+  // dentro do .then() de getPhotoLikes, nunca no .catch() (falha fechada —
+  // se a leitura falhar, onPress do pill fica undefined em vez de arriscar
+  // curtir/descurtir em cima de um estado desatualizado).
+  const [photoLikesResolved, setPhotoLikesResolved] = useState(false);
   const carouselRef = useRef<PhotoCarouselHandle>(null);
 
   // Sem Pan concorrendo aqui (diferente do card da Descobrir) — o tap só
@@ -166,6 +178,27 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
       cancelled = true;
     };
   }, [profile?.poll, user, uid]);
+
+  // S123 — carrega as curtidas de foto só em pós-match (!isPreview): curtir
+  // foto não vale no Descobrir/preview. Mesmo padrão de cancelamento por
+  // flag dos dois useEffect acima (getSwipe/getMyPollVote).
+  useEffect(() => {
+    if (isPreview || !user || !uid) return;
+    let cancelled = false;
+    getPhotoLikes(uid)
+      .then((likes) => {
+        if (cancelled) return;
+        setPhotoLikes(likes);
+        setPhotoLikesResolved(true);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[MatchProfile] getPhotoLikes falhou:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPreview, user, uid]);
 
   const handleBlock = () => {
     if (!user) return;
@@ -341,6 +374,73 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
     }
   };
 
+  // S123 — curtir/descurtir a foto atualmente aberta no carrossel, só em
+  // pós-match (!isPreview, ver renderização mais abaixo). Otimista: mexe no
+  // array em memória ANTES do write terminar; reverte só se o erro não for
+  // o permission-denied esperado de corrida (mesma checagem por `.code` já
+  // usada em handleSwipeAction/handleVotePoll acima).
+  const handleTogglePhotoLike = async () => {
+    if (!user) return;
+    const currentPhotoUrl = photos[photoIndex];
+    if (!currentPhotoUrl) return;
+    const alreadyLikedByMe = photoLikes.some(
+      (like) => like.photoUrl === currentPhotoUrl && like.likerUid === user.uid,
+    );
+    if (alreadyLikedByMe) {
+      setPhotoLikes((prev) =>
+        prev.filter((like) => !(like.photoUrl === currentPhotoUrl && like.likerUid === user.uid)),
+      );
+      try {
+        await unlikePhoto(uid, user.uid, currentPhotoUrl);
+      } catch (e) {
+        const isPermissionDenied =
+          typeof e === 'object' &&
+          e !== null &&
+          'code' in e &&
+          (e as { code?: unknown }).code === 'permission-denied';
+        if (isPermissionDenied) return;
+        console.error('[MatchProfile] unlikePhoto falhou:', e);
+        setPhotoLikes((prev) => [...prev, { photoUrl: currentPhotoUrl, likerUid: user.uid }]);
+      }
+    } else {
+      setPhotoLikes((prev) => [...prev, { photoUrl: currentPhotoUrl, likerUid: user.uid }]);
+      try {
+        await likePhoto(uid, user.uid, currentPhotoUrl);
+      } catch (e) {
+        const isPermissionDenied =
+          typeof e === 'object' &&
+          e !== null &&
+          'code' in e &&
+          (e as { code?: unknown }).code === 'permission-denied';
+        if (isPermissionDenied) {
+          // S123 (auditoria) — permission-denied aqui pode significar "eu já
+          // tinha curtido essa foto antes" (otimista já está certo) OU que a
+          // curtida de fato não foi registrada. Confirma com uma leitura real
+          // antes de decidir, mesmo espírito de handleSwipeAction acima.
+          const likes = await getPhotoLikes(uid).catch(() => null);
+          const stillLiked = likes?.some(
+            (like) => like.photoUrl === currentPhotoUrl && like.likerUid === user.uid,
+          );
+          if (stillLiked) return;
+          setPhotoLikes((prev) =>
+            prev.filter(
+              (like) => !(like.photoUrl === currentPhotoUrl && like.likerUid === user.uid),
+            ),
+          );
+          Alert.alert(
+            'Ação não registrada',
+            'Não foi possível curtir esta foto agora. Tente novamente.',
+          );
+          return;
+        }
+        console.error('[MatchProfile] likePhoto falhou:', e);
+        setPhotoLikes((prev) =>
+          prev.filter((like) => !(like.photoUrl === currentPhotoUrl && like.likerUid === user.uid)),
+        );
+      }
+    }
+  };
+
   const handleSendMessage = () => {
     if (!user) return;
     const chatMatchId = [user.uid, uid].sort().join('_');
@@ -376,6 +476,13 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
 
   const photos = profile?.photos?.length ? profile.photos : photoURL ? [photoURL] : [];
 
+  // S123 — derivado direto do array em memória, sem novo estado: a foto
+  // atual do carrossel (photoIndex) e quem a curtiu.
+  const currentPhotoUrl = photos[photoIndex];
+  const currentPhotoLikes = photoLikes.filter((like) => like.photoUrl === currentPhotoUrl);
+  const likedByMe = currentPhotoLikes.some((like) => like.likerUid === user?.uid);
+  const photoLikeCount = currentPhotoLikes.length;
+
   const myInterests = useMemo(() => myProfile?.interests ?? [], [myProfile?.interests]);
 
   // S76-B2 — idade derivada de birthDate, ver getDisplayAge.
@@ -406,19 +513,42 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
           />
         ) : (
           <ScrollView contentContainerStyle={styles.content}>
-            <GestureDetector gesture={photoTapGesture}>
-              <View
-                style={styles.photosCard}
-                onLayout={(e) => setPhotoAreaWidth(e.nativeEvent.layout.width)}
-              >
-                <PhotoCarousel
-                  ref={carouselRef}
-                  photos={photos}
-                  style={styles.photosCarousel}
-                  onIndexChange={setPhotoIndex}
-                />
-              </View>
-            </GestureDetector>
+            <View
+              style={styles.photosCard}
+              onLayout={(e) => setPhotoAreaWidth(e.nativeEvent.layout.width)}
+            >
+              <GestureDetector gesture={photoTapGesture}>
+                <View style={styles.photosCarouselWrap}>
+                  <PhotoCarousel
+                    ref={carouselRef}
+                    photos={photos}
+                    style={styles.photosCarousel}
+                    onIndexChange={setPhotoIndex}
+                  />
+                </View>
+              </GestureDetector>
+              {/* S123 — curtir foto, só pós-match: espelha os botões de
+                  swipe like/nope logo abaixo, que só aparecem quando
+                  isPreview. Os dots do carrossel ocupam o topo, por isso
+                  ancorado bottom+right. Sempre visível quando !isPreview,
+                  mesmo com count 0 — não esconde por curtida zero. */}
+              {!isPreview && (
+                <View style={styles.photoLikePillWrap} pointerEvents="box-none">
+                  <AnimatedPressable
+                    style={styles.photoLikePill}
+                    onPress={photoLikesResolved ? handleTogglePhotoLike : undefined}
+                    accessibilityLabel={likedByMe ? 'Descurtir foto' : 'Curtir foto'}
+                  >
+                    <Ionicons
+                      name={likedByMe ? 'heart' : 'heart-outline'}
+                      size={16}
+                      color={theme.colors.white}
+                    />
+                    <Text style={styles.photoLikePillText}>{photoLikeCount}</Text>
+                  </AnimatedPressable>
+                </View>
+              )}
+            </View>
 
             <View style={styles.infoCard}>
               <View style={styles.nameRow}>
@@ -560,6 +690,34 @@ const styles = StyleSheet.create({
     ...theme.shadows.medium,
   },
   photosCarousel: { flex: 1 },
+  // S123 (auditoria) — o GestureDetector agora envolve só o carrossel, não
+  // mais o photoLikePillWrap (ver JSX acima): o pill de curtir precisa
+  // ficar fora dessa subárvore pra o Pressable receber o toque em vez do
+  // Gesture.Tap do carrossel disputar (e vencer) o mesmo toque.
+  photosCarouselWrap: { flex: 1 },
+  // S123 — mesmo padrão visual de photoCountBadge/lookingForBadge do
+  // SwipeScreen.tsx: rgba(0,0,0,0.55), full radius, padding pequeno. Wrap
+  // absolute posiciona o pill sem interferir no layout do carrossel; o pill
+  // em si NÃO herda position absolute (só o wrap).
+  photoLikePillWrap: {
+    position: 'absolute',
+    bottom: theme.spacing.sm,
+    right: theme.spacing.sm,
+  },
+  photoLikePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  photoLikePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.white,
+  },
 
   infoCard: {
     backgroundColor: theme.colors.surface,

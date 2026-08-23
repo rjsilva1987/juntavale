@@ -749,6 +749,53 @@ export const castPollVote = async (
   });
 };
 
+// ─── Curtir foto (S123) ─────────────────────────────────────
+//
+// Pós-match apenas (MatchProfileScreen, !isPreview) — a UI decide isso, não
+// este service. Chave da foto é a própria URL (NÃO migra o schema
+// `photos: string[]` do perfil). Toggle: users/{ownerUid}/photoLikes/{likeId},
+// likeId determinístico via photoLikeId abaixo — permite setDoc/deleteDoc
+// diretos, sem query prévia. Ver firestore.rules pro create/delete.
+
+const photoLikeId = (likerUid: string, photoUrl: string): string =>
+  `${likerUid}_${encodeURIComponent(photoUrl)}`;
+
+// setDoc sem merge: se o doc já existir (corrida — like em outro
+// aparelho/tela ao mesmo tempo), as rules negam o create (ele não é um
+// "recreate", é sempre create do ponto de vista das rules) e a Promise
+// rejeita com permission-denied. Isso é ESPERADO, não é bug — mesmo espírito
+// do comentário em castPollVote acima (a decisão de tratar isso na UI fica
+// pro chamador, MatchProfileScreen.handleTogglePhotoLike).
+export const likePhoto = async (
+  ownerUid: string,
+  likerUid: string,
+  photoUrl: string,
+): Promise<void> => {
+  await setDoc(doc(db, 'users', ownerUid, 'photoLikes', photoLikeId(likerUid, photoUrl)), {
+    photoUrl,
+    likerUid,
+    createdAt: serverTimestamp(),
+  });
+};
+
+export const unlikePhoto = async (
+  ownerUid: string,
+  likerUid: string,
+  photoUrl: string,
+): Promise<void> => {
+  await deleteDoc(doc(db, 'users', ownerUid, 'photoLikes', photoLikeId(likerUid, photoUrl)));
+};
+
+export const getPhotoLikes = async (
+  ownerUid: string,
+): Promise<{ photoUrl: string; likerUid: string }[]> => {
+  const snap = await getDocs(collection(db, 'users', ownerUid, 'photoLikes'));
+  return snap.docs.map((d) => ({
+    photoUrl: d.data().photoUrl as string,
+    likerUid: d.data().likerUid as string,
+  }));
+};
+
 // ─── Matches ──────────────────────────────────────────────
 
 export const getMatches = (uid: string, callback: (matches: Match[]) => void) => {

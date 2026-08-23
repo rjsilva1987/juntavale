@@ -117,7 +117,7 @@ function LikeCard({
               onError={() => setLikedPhotoFailed(true)}
             />
             <Text style={styles.likedPhotoLabel} numberOfLines={1}>
-              Curtiu sua foto
+              Curtiu você
             </Text>
           </View>
         )}
