@@ -107,18 +107,6 @@ pilha de cards, se o offset/escala do card de trás é intencional (efeito
 de baralho) ou desalinhamento, e o que já existe de animação de
 opacidade.
 
-### S134 — Bug: idade some quando o nome é longo
-**Status:** ABERTA · sem decisões · sem recon
-
-Nome e idade são renderizados no mesmo texto com truncamento de 1 linha;
-com nome comprido as reticências comem a idade. Visto no MatchProfileScreen
-com "Beatriz Cristina…" (22/08/2026), sem a idade na tela.
-Regra: a IDADE DEVE APARECER SEMPRE — quem trunca é o nome.
-Recon quando a sprint abrir: achar TODOS os lugares que juntam nome e
-idade num só texto (card do Descobrir, MatchProfileScreen, ProfileSheet,
-Curtidas, Conversas) — a correção tem que valer em todos, não só no da
-captura.
-
 ### S129-B — Tiques estilo WhatsApp (entregue)
 **Status:** ABERTA · sem decisões · sem recon
 
@@ -134,6 +122,7 @@ porque exigiria recibo por dispositivo.
 
 | Sprint | O que era |
 |---|---|
+| S134 | Bug: idade some quando o nome é longo — nome e idade viravam UMA string dentro de `Text numberOfLines={1}`; nome comprido truncava a string inteira e cortava a idade junto. Corrigido nos 5 arquivos onde isso ocorria (`MatchProfileScreen.tsx`, `SwipeScreen.tsx`/`ProfileCard`, `ProfileSheet.tsx`, `LikesScreen.tsx`, `AdminVerificationsScreen.tsx`): nome e idade agora são DOIS `Text` dentro de um `View` (`nameAgeGroup`/`likerNameAgeGroup`) — só o `Text` do nome tem `numberOfLines`+`flexShrink`, o `Text` da idade (`nameAge`/`likerNameAge`) nunca encolhe e só renderiza com guard `displayAge != null`. De caminho, corrigido bug lateral em `SwipeScreen.tsx` e `LikesScreen.tsx`: antes exibiam literalmente `"Nome, null"` quando `displayAge` era `null` (concatenação direta sem guard); agora não renderizam o trecho da idade nesse caso. Client puro, sem rules/functions. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S132 | Enquete visível e votável fora do Descobrir — agora aparece também no perfil do match (MatchProfileScreen), não só no card do Descobrir (ProfileSheet) — commit `a326077`. Client puro. **Fechada em código, ainda SEM teste em aparelho.** |
 | S102-B | Desfazer match de dentro da conversa — commit `5b6c49f`. Function `unmatch` (onCall, southamerica-east1) **já deployada em 21/08**. **Fechada em código, ainda SEM teste.** |
 | S102-C | Denunciar mensagem específica do chat, reusando a fila de denúncias do admin (S96) — commit `825b56b`, 6 arquivos. `firestore.rules` **já deployadas em 21/08** (saída do deploy trouxe "uploading rules" e "released rules"). NENHUMA Cloud Function envolvida. **Fechada em código, SEM teste.** |
@@ -206,7 +195,11 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 
 **Espera o build 15:**
 
-- S101, S122, S129-A, S130, S131 (bateria a definir).
+- S101, S122, S129-A, S130, S131, S134 (bateria a definir).
+- S134 — conferir em aparelho de verdade, com nome real comprido (não só
+  simulador), que a idade aparece por completo ao lado do nome truncado nos
+  5 pontos: card do Descobrir (frente e trás), MatchProfileScreen,
+  ProfileSheet, Curtidas e fila de verificação do admin.
 - S126 — dono recebe o push anônimo quando alguém vota na enquete; Expo Go
   não entrega push no SDK 54, precisa do build.
 
@@ -273,6 +266,24 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   (S102-B, apagar match) e `castPollVote` (S126, `pollVotes/{voterUid}`) —
   qualquer collection nova com o mesmo desenho (1 doc por par de uids,
   create-only) deve seguir o mesmo tratamento no catch.
+
+## Padrões de UI que valem para o projeto inteiro
+
+- **Campo obrigatório nunca entra na mesma string que um campo truncável.**
+  Descoberto na S134: nome + idade concatenados numa string única dentro de
+  `Text numberOfLines={1}` faz o RN truncar a STRING INTEIRA quando o nome
+  sozinho já preenche a largura — a idade (que vem depois na string) some
+  junto, mesmo sendo obrigatória. Correção: `View` wrapper
+  (`flexDirection: 'row', alignItems: 'center', flexShrink: 1`) com DOIS
+  `Text` — o campo que pode truncar leva `numberOfLines`+`flexShrink`, o
+  campo obrigatório não leva nenhum dos dois (nunca encolhe/corta). Vale
+  para qualquer par nome+atributo obrigatório renderizado em linha única,
+  não só nome+idade.
+- **Nunca concatenar valor opcional direto na string do `Text`.** Escrever
+  `` `${nome}, ${idade}` `` sem guard produz literalmente `"Nome, null"` na
+  tela quando o valor é `null`/`undefined` (visto em `SwipeScreen.tsx` e
+  `LikesScreen.tsx` antes da S134). Renderizar condicionalmente:
+  `{valor != null && <Text>, {valor}</Text>}`.
 
 ## Baseline técnica
 

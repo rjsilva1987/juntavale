@@ -103,10 +103,12 @@ export default function AdminVerificationsScreen() {
                     </View>
                   )}
                   <View style={styles.info}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {item.profile?.name ?? 'Usuário'}
-                      {displayAge != null ? `, ${displayAge}` : ''}
-                    </Text>
+                    <View style={styles.nameAgeGroup}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {item.profile?.name ?? 'Usuário'}
+                      </Text>
+                      {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
+                    </View>
                     <Text style={styles.subLabel}>Pendente de revisão</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
@@ -158,6 +160,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   info: { flex: 1 },
-  name: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
+  name: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text, flexShrink: 1 },
   subLabel: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 2 },
+  // S134 — nome e idade em Text separados: só o nome trunca (numberOfLines
+  // no Text do nome), a idade nunca encolhe/corta.
+  nameAgeGroup: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  nameAge: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
 });

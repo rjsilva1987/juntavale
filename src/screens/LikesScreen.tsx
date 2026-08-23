@@ -99,9 +99,12 @@ function LikeCard({
       <View style={styles.likerInfo}>
         <View style={styles.likerTopRow}>
           <View style={styles.likerNameRow}>
-            <Text style={styles.likerName} numberOfLines={1}>
-              {profile.name}, {displayAge}
-            </Text>
+            <View style={styles.likerNameAgeGroup}>
+              <Text style={styles.likerName} numberOfLines={1}>
+                {profile.name}
+              </Text>
+              {displayAge != null && <Text style={styles.likerNameAge}>, {displayAge}</Text>}
+            </View>
             {profile.verified === true && <VerifiedBadge size={14} />}
           </View>
           <AnimatedPressable style={styles.menuBtn} onPress={onMenuPress} hitSlop={8}>
@@ -516,6 +519,11 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     flexShrink: 1,
   },
+  // S134 — nome e idade em Text separados: só o nome trunca (numberOfLines
+  // no Text do nome), a idade nunca encolhe/corta. minWidth: 0 propagado de
+  // likerNameRow, senão o shrink não funciona dentro do flex aninhado.
+  likerNameAgeGroup: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0 },
+  likerNameAge: { color: theme.colors.white, fontWeight: '600', fontSize: theme.fontSize.sm },
   menuBtn: {
     width: 22,
     height: 22,

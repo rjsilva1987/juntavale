@@ -552,10 +552,12 @@ export default function MatchProfileScreen({ route, navigation }: MatchProfileSc
 
             <View style={styles.infoCard}>
               <View style={styles.nameRow}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {profile?.name ?? name}
-                  {displayAge != null ? `, ${displayAge}` : ''}
-                </Text>
+                <View style={styles.nameAgeGroup}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {profile?.name ?? name}
+                  </Text>
+                  {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
+                </View>
                 {profile?.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
                 {profile?.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
               </View>
@@ -735,6 +737,10 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     flexShrink: 1,
   },
+  // S134 — nome e idade em Text separados: só o nome trunca (numberOfLines
+  // no Text do nome), a idade nunca encolhe/corta.
+  nameAgeGroup: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  nameAge: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
   ufRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   ufText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
   // S88 — espelha ufText, mas com margem própria: o respiro de 4px da UF

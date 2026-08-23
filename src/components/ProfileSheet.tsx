@@ -108,10 +108,12 @@ export function ProfileSheet({
 
       <View style={styles.header}>
         <View style={styles.headerNameGroup}>
-          <Text style={styles.name} numberOfLines={1}>
-            {profile?.name}
-            {displayAge != null ? `, ${displayAge}` : ''}
-          </Text>
+          <View style={styles.nameAgeGroup}>
+            <Text style={styles.name} numberOfLines={1}>
+              {profile?.name}
+            </Text>
+            {displayAge != null && <Text style={styles.nameAge}>, {displayAge}</Text>}
+          </View>
           {profile?.verified && <VerifiedBadge size={18} />}
         </View>
         <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -189,6 +191,10 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     flexShrink: 1,
   },
+  // S134 — nome e idade em Text separados: só o nome trunca (numberOfLines
+  // no Text do nome), a idade nunca encolhe/corta.
+  nameAgeGroup: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  nameAge: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.text },
   // S108-A — mesmo objeto de MatchProfileScreen.tsx:451-462 /
   // ProfileScreen.tsx:1530-1541 (primaryLight de fundo, texto primary 700).
   lookingForRow: {

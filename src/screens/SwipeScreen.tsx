@@ -927,9 +927,12 @@ function ProfileCard({
       <View style={pcStyles.info}>
         <View style={pcStyles.nameRow}>
           <View style={pcStyles.nameTextGroup}>
-            <Text style={pcStyles.name} numberOfLines={1}>
-              {profile.name}, {displayAge}
-            </Text>
+            <View style={pcStyles.nameAgeGroup}>
+              <Text style={pcStyles.name} numberOfLines={1}>
+                {profile.name}
+              </Text>
+              {displayAge != null && <Text style={pcStyles.nameAge}>, {displayAge}</Text>}
+            </View>
             {profile.verified ? <VerifiedBadge size={18} /> : <PendingVerificationChip />}
             {profile.founderNumber != null && <FounderBadge number={profile.founderNumber} />}
             {photos.length > 1 && (
@@ -1169,6 +1172,10 @@ const pcStyles = StyleSheet.create({
     marginBottom: 4,
   },
   nameTextGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  // S134 — nome e idade em Text separados: só o nome trunca (numberOfLines
+  // no Text do nome), a idade nunca encolhe/corta.
+  nameAgeGroup: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  nameAge: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.white },
   infoBtn: {
     backgroundColor: 'rgba(0,0,0,0.35)',
     borderRadius: theme.borderRadius.full,
