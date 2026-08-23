@@ -42,13 +42,43 @@ curtida (modelo Instagram). Em aberto se entra comentário junto.
 
 Interage com S122: notificação por curtida é candidata a virar spam.
 
-### S124 — Grupos / salas
-**Status:** ABERTA · sem decisões · sem recon
+### S124-A — Grupos: esqueleto
+**Status:** ABERTA · decisões tomadas · sem recon
 
-Sala de conversa por tema (corrida, viagem, concurso) ou por instituição, pra
-dar motivo de voltar ao app mesmo sem match.
+Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
 
-**Custo alto:** modelo de dados novo + superfície de moderação nova.
+**Decisões de produto tomadas (Raphael, 22/08/2026):**
+- QUALQUER usuário pode criar grupo — não é privilégio de admin.
+- Todo grupo tem PRAZO DE ENCERRAMENTO, escolhido por quem cria, com teto
+  de 1 MÊS. Grupo vencido some. Serve pra eliminar grupo morto e criar
+  urgência real de participar.
+- Grupo entra na fila de denúncias existente (mesma collection `reports`
+  da S96/S102-C), reusando o molde de campos opcionais.
+
+**Recon quando a sprint abrir:**
+1. Como o chat 1:1 guarda mensagens hoje (matches/{id}/messages?) — o
+   grupo pode reusar o molde, e o `deleteAccount` precisa saber apagar
+   participação em grupo.
+2. Como a expiração da S121 foi feita (rule com expiresAt > request.time +
+   function agendada `expireMomentos`) — mesmo desenho serve aqui.
+3. Onde a denúncia de grupo encaixa no AdminReportDetailScreen.
+
+### S124-B — Grupos: camadas de engajamento
+**Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S124-A
+
+Três camadas por cima do grupo pronto, todas REUSANDO o que já existe:
+1. Enquete dentro do grupo — reusa a S126 (já implementada).
+2. Contador de gente ativa agora no grupo — reusa a presença da S79-C2.
+3. Selo de fundador do grupo — reusa os selos da S127.
+
+**NÃO FAZER nesta frente (decisão de produto, Raphael 22/08/2026):**
+- Ranking de quem mais fala — vira competição de barulho e constrange
+  quem não participa. Público do app são colegas identificados.
+- Push a cada mensagem de grupo — leva o usuário a desativar o push do
+  app inteiro, e aí perde-se também a notificação de match, que é a que
+  importa.
+- Sequência diária / streak — cria obrigação, e obrigação em app social
+  entre colegas de trabalho vira desconforto.
 
 ### S125 — Eventos / encontros
 **Status:** ABERTA · sem decisões · sem recon
