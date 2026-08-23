@@ -28,14 +28,14 @@ Gravar e enviar mensagem de áudio — a mais cara de todas: gravação,
 upload, storage e moderação de conteúdo que não dá pra buscar por texto.
 
 ### S121 — Momento de 24h
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** IMPLEMENTADA em 22/08/2026 (commit 746f163) · rules do Firestore e do Storage deployadas · function expireMomentos criada · SEM teste em aparelho
 
 Story que expira: publica texto ou foto e some em 24h.
 
 **Decisões:** audiência é a base inteira, não só matches.
 
 ### S123 — Curtir foto
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** IMPLEMENTADA em 22/08/2026 (commit 78f6fb4) · escopo pós-match, sem function e sem push · rules deployadas · SEM teste em aparelho
 
 Curtir a **foto**, não a pessoa, com contador na foto e notificação por
 curtida (modelo Instagram). Em aberto se entra comentário junto.
@@ -57,7 +57,7 @@ Alguém marca um encontro (ex.: happy hour) e quem topa entra numa lista de
 participantes. Mesmo custo de moderação da S124.
 
 ### S127 — Marcos e selos
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** IMPLEMENTADA em 22/08/2026 (commit ccf8926) · rules deployadas · functions onUserProfileUpdated e tenDaysInAppCheck criadas · SEM teste em aparelho
 
 Conquistas: "primeiro match", "perfil completo", "10 dias no app".
 
@@ -66,7 +66,7 @@ obriga a refazer as respostas de jogos de azar dadas à Apple e pode empurrar a
 classificação etária pra cima.
 
 ### S128 — Super Curtida diária
-**Status:** ABERTA · em correção (rodada 1/2 pós-auditoria) · sem decisões · sem recon
+**Status:** IMPLEMENTADA em 22/08/2026 (commit ed0513a) · correção pós-auditoria rodada 1 APLICADA (existsAfter nas rules, reavaliação periódica no hook) · rules deployadas · SEM teste em aparelho
 
 1 Super Curtida grátis por dia pra quem abriu o app. Recompensa por retorno,
 não por sorte. Pressupõe que a Super Curtida seja escassa hoje — a recon
