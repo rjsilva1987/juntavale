@@ -388,6 +388,36 @@ real mas deixou os dois editáveis pelo usuário.
 3. Onde vive o fluxo de chamado de suporte (S84, S94) pra saber onde
    encaixar a edição pelo admin.
 
+### S139 — Bug: momento de terceiros não carrega (permission-denied)
+**Status:** ABERTA · sem decisões · sem recon · BUG da S121
+
+Reproduzido no Expo Go em 22/08/2026, com as rules da S121 já deployadas.
+Ao abrir a aba de Momentos, nenhum momento de outra pessoa aparece e o log
+mostra:
+
+    ERROR [listenActiveMomentos] erro no listener:
+    [FirebaseError: Missing or insufficient permissions.]
+
+CRIAR o próprio momento FUNCIONA e ele aparece com o contador de 24h — ou
+seja, a escrita está correta e o problema está só na LEITURA de terceiros.
+
+**Hipótese a confirmar na recon:** a rule de leitura de `momentos/{uid}`
+exige `expiresAt > request.time`. Regra com desigualdade em campo obriga a
+QUERY do client a filtrar pelo mesmo campo, com operador e ordenação
+compatíveis — senão o Firestore nega o listener inteiro. O dono continua
+vendo o próprio momento porque há ramo separado liberando por uid.
+Passou em `tsc` e lint porque é incompatibilidade de runtime entre query e
+rule, invisível em compilação.
+
+**Recon quando a sprint abrir:**
+1. A query exata de `listenActiveMomentos` em `src/services/momentoService.ts`
+   — where, orderBy, limit.
+2. O `allow read` de `momentos/{uid}` em `firestore.rules`, em especial a
+   condição `expiresAt > request.time`.
+3. Se a query satisfaz a rule; se não, qual dos dois lados corrigir.
+4. Se falta índice composto em `firestore.indexes.json` pra essa
+   combinação de where + orderBy.
+
 ---
 
 ## Fechadas recentemente
