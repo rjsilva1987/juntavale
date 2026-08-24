@@ -635,6 +635,52 @@ produto e deve parar no portão.
 3. Como o chat identifica a origem de uma mensagem (a S129-A fez citação
    de mensagem) — a resposta ao momento precisa mostrar a que ele se refere.
 
+### S144 — Infraestrutura: reduzir custo de token por sprint
+**Status:** ABERTA · decisões tomadas · sem recon · 4 partes independentes
+
+Motivo (Raphael, 24/08/2026): o consumo por sprint está alto demais. As
+quatro causas abaixo foram levantadas a partir do que se observou na
+sessão de 22-24/08, quando ~15 sprints rodaram seguidas.
+
+**S144-A — `ARQUITETURA.md` (maior ganho, fazer primeiro)**
+Toda recon hoje remapeia o mesmo terreno estável: quais collections
+existem, o que cada uma das 27 functions faz, onde ficam os moldes
+reusáveis (expiração da S121, pedido de entrada da S124-A, visibilidade
+por campo da S109, denúncia da S96/S102-C, contador agregado da S126).
+Criar um `ARQUITETURA.md` CURTO com esse mapa e fazer o `jv-recon` lê-lo
+ANTES de investigar o repo. Mantido à mão, não gerado.
+⚠️ Só compensa se ficar curto e verdadeiro — documento longo e
+desatualizado custa token e ainda engana.
+
+**S144-B — Enxugar o carimbo do `firestore.rules`**
+O `rules-stamp` é uma cadeia contínua de comentários da linha 1 até ~105,
+com uma entrada por sprint desde a S-Matrícula. Ele entra em toda leitura
+do arquivo, em toda sprint que toca rules. Manter no topo só as ~5
+entradas mais recentes e mover o histórico pro FIM do arquivo (ou pro
+`ARQUITETURA.md`).
+⚠️ A regra da casa de atualizar o carimbo a cada sprint de rules CONTINUA
+valendo — o que muda é onde o histórico antigo mora.
+
+**S144-C — Quebrar o `functions/src/index.ts` em módulos**
+São 27 functions num arquivo só, e o pacote já está em ~94 KB. Quem mexe
+em uma function carrega todas. Quebrar por domínio (chat, momentos,
+grupos, eventos, admin, agendadas) e reexportar do `index.ts`.
+Ganho extra: o erro "Cannot determine backend specification. Timeout after
+10000" apareceu TRÊS vezes em 22/08, sempre na primeira function de cada
+lote de deploy — é o CLI carregando o arquivo inteiro dentro de 10s.
+⚠️ Os nomes exportados NÃO podem mudar, senão o deploy recria as functions
+em vez de atualizar.
+
+**S144-D — Política de sprint pequena**
+Sprints grandes custam desproporcionalmente mais: S124-A saiu com 2441
+linhas e 15 arquivos; S135 com 25 arquivos e 5 functions redeployadas.
+Adotar como regra da casa: quando a recon indicar que a sprint passa de
+~500 linhas ou ~8 arquivos, QUEBRAR em partes antes de implementar — como
+já foi feito com S124-A/B e S143-A/B.
+
+**Ordem sugerida:** A, depois C, depois B. A parte D é regra, não código —
+entra no `CLAUDE.md` ou no arquivo do `/sprint`.
+
 ---
 
 ## Fechadas recentemente
