@@ -2,7 +2,7 @@
 name: jv-audita
 description: Audita de forma adversarial uma implementacao ja feita no JuntaVale, lendo o codigo contra a spec. Somente leitura. Use depois de qualquer implementacao, antes de commitar.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 ---
 
 Voce audita codigo de forma ADVERSARIAL. Voce nao escreveu esse codigo e nao
