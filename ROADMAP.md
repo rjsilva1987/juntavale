@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 23/08/2026
+**Última atualização:** 24/08/2026
 
 ---
 
@@ -349,6 +349,44 @@ cabeçalho (foi a origem visível da S134).
    pro portão.
 4. Onde a AdminVerificationsScreen mostra o nome — ela precisa passar a
    mostrar o nome REAL, senão o admin perde a referência pra conferir.
+
+### S138 — Nome completo e apelido imutáveis, edição só via suporte
+**Status:** ABERTA · decisões tomadas · sem recon
+
+Fecha o desenho iniciado na S135, que separou o apelido público do nome
+real mas deixou os dois editáveis pelo usuário.
+
+**Decisões de produto tomadas (Raphael, 22/08/2026):**
+1. MIGRAÇÃO: copiar, em toda a base existente, o valor de "como quer ser
+   chamado" para o campo de NOME COMPLETO. É valor INICIAL, não definitivo
+   — quem quiser corrigir o nome completo pede pelo suporte.
+2. Os DOIS campos (nome completo e apelido) passam a ser IMUTÁVEIS pelo
+   usuário no app, a qualquer momento — inclusive antes da verificação.
+   Isso ESTENDE a trava da S76-B, que hoje só congela nome e idade a partir
+   da verificação.
+3. A ÚNICA via de alteração é o chamado de suporte: o admin edita.
+
+**Consequências a resolver na sprint:**
+- Rule nova: admin precisa poder escrever `name` e `nickname` em
+  users/{uid} de terceiros. Hoje o admin responde chamado, mas não edita
+  perfil de outra pessoa — é superfície de escrita nova e precisa ser
+  estreita (só esses dois campos, só admin).
+- Tela no admin pra fazer essa edição a partir do chamado.
+- O RegisterScreen e a tela de editar perfil precisam parar de oferecer os
+  dois campos como editáveis, com copy explicando que a mudança é via
+  suporte.
+- Script de migração no molde de `scripts/limpeza.js`: dry-run por padrão,
+  `--confirm` pra valer, e trava `--project=<id>` conferida contra o
+  project_id da chave de serviço.
+
+**Recon quando a sprint abrir:**
+1. Como a S135 modelou `nickname` e o nome real, e como o fallback
+   `nickname ?? name` funciona hoje (client e `getUserBasicInfo` nas
+   functions).
+2. Como a trava da S76-B está escrita nas rules — a nova trava tem que
+   conviver com ela, não duplicar.
+3. Onde vive o fluxo de chamado de suporte (S84, S94) pra saber onde
+   encaixar a edição pelo admin.
 
 ---
 
