@@ -1,4 +1,18 @@
-// rules-stamp: S125 (24/08/2026 — Eventos/encontros. Nova collection raiz
+// rules-stamp: S137 (24/08/2026 — correção de bug em produção: criar conta
+// falhava em build 14 (Android) e 1.0.5 (iOS), publicados nas lojas, e só
+// funcionava no Expo Go. Causa: client antigo ainda escreve o campo `name`
+// no create de users/{uid}, mas a S135 passou a exigir `nickname` e tirou
+// `name` do hasOnly, então o create do client antigo quebrava em dois
+// pontos ao mesmo tempo. Correção: allow create de users/{uid} passa a
+// aceitar nickname OU name, EXCLUSIVOS entre si NO CREATE — o allow
+// update, intocado, não impede o doc ganhar o outro campo depois (ver
+// nota na regra abaixo). Conserta só o cadastro: o update segue
+// rejeitando `name`, então conta do build 14 ainda falha por inteiro no
+// 1º save de perfil que edite o nome (bio/fotos/etc. juntos, ver nota
+// abaixo). TEMPORARIO — sai quando o build 15 substituir o build 14
+// (Android) e a versão 1.0.5 (iOS) nas lojas; sem data fixa porque depende
+// de quando isso acontecer.)
+// + S125 (24/08/2026 — Eventos/encontros. Nova collection raiz
 // events/{eventId} [creatorId, title<=120, description opcional<=2000
 // (mesmos tetos de groups/{groupId}.name/description), startsAt timestamp
 // >request.time, createdAt==request.time, participantCount==1 na criação,
@@ -541,14 +555,41 @@ service cloud.firestore {
         // S83-A — mesmo padrão de lookingFor/uf acima: obrigatório no
         // cadastro, sem o campo (ou fora do enum) o create inteiro é negado.
         && request.resource.data.vale in ['BB', 'CAIXA', 'BRB']
-        // S135 — mesmo padrão de lookingFor/uf/vale acima: nickname é
-        // obrigatório só aqui, no create (conta nova sempre nasce com ele);
-        // isValidProfile trata como opcional pra não travar contas legadas
-        // no update, ver comentário lá.
-        && request.resource.data.nickname is string
-        && request.resource.data.nickname.size() > 0 && request.resource.data.nickname.size() <= 120
+        // S135 — mesmo padrão de lookingFor/uf/vale acima: nickname era
+        // obrigatório sozinho aqui, no create, até a S137 abrir a
+        // alternativa `name` abaixo (client legado) — hoje um dos dois é
+        // obrigatório, não mais só nickname; isValidProfile trata nickname
+        // como opcional pra não travar contas legadas no update, ver
+        // comentário lá.
+        // S137 — TEMPORARIO: client do build 14 (Android) / 1.0.5 (iOS), ainda
+        // publicado nas lojas, escreve `name` (não `nickname`) no create. Sem
+        // este ramo, o create dele quebra: falta `nickname` obrigatório E `name`
+        // não está mais no hasOnly desde a S135. Aceita OS DOIS formatos, mas
+        // EXCLUSIVOS entre si NO CREATE (evita doc nascer ambíguo) — remover
+        // o ramo `name` (e 'name' do hasOnly abaixo) quando o build 15
+        // substituir os dois nas lojas.
+        // Conserta só o create — o allow update (intocado) segue com
+        // `name` fora do hasOnly de affectedKeys: uma conta nascida aqui só
+        // com `name` (build 14) tem o PRIMEIRO save de perfil negado por
+        // inteiro (bio/fotos/tudo junto) se a pessoa editar o nome nessa
+        // tela, porque `name` não é uma chave alterável no update. E como o
+        // update não impede a coexistência, uma conta assim pode ganhar
+        // `nickname` depois (build novo) sem nunca perder o `name` antigo —
+        // a exclusividade daqui só vale no instante do create. Migração
+        // futura (rodar migrateNicknames.js de novo após o build 15
+        // substituir os dois) precisa achar tanto doc só-name quanto doc
+        // com os dois campos.
+        && (
+             (request.resource.data.nickname is string
+               && request.resource.data.nickname.size() > 0 && request.resource.data.nickname.size() <= 120
+               && !('name' in request.resource.data))
+             ||
+             (request.resource.data.name is string
+               && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 240
+               && !('nickname' in request.resource.data))
+           )
         && request.resource.data.keys().hasOnly(
-             ['uid', 'nickname', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
+             ['uid', 'nickname', 'name', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'createdAt', 'prompts',
               'places', 'events', 'weeklyPromptAnswer'])
         && isValidProfile(request.resource.data);
