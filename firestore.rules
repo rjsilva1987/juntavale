@@ -1,4 +1,20 @@
-// rules-stamp: S137 (24/08/2026 — correção de bug em produção: criar conta
+// rules-stamp: S139 (24/08/2026 — correção de bug em produção: momento de
+// terceiros não carregava (permission-denied) na base inteira. Causa:
+// allow read de momentos/{uid} tinha uma condição única (resource.data.
+// expiresAt > request.time) valendo pra get() e list(); pra uma query/
+// listener (listenActiveMomentos, momentoService.ts), o Firestore precisa
+// PROVAR estruturalmente que a regra vale pro conjunto de resultados ao
+// longo da vida do listener, e uma condição dependente de request.time
+// (que muda a cada avaliação) não é provável dessa forma — o Firestore
+// nega o list INTEIRO com permission-denied. get() (getMyMomento, doc por
+// ID) não sofre disso, avalia documento a documento com o dado real, por
+// isso só o feed quebrava. Fix: allow read vira allow get (mantém a
+// checagem de expiresAt, protege contra doc "zumbi" acessível por ID
+// direto antes de expireMomentos varrer) + allow list SEM checagem de
+// expiresAt (mesmo padrão de groups/{groupId} — leitura ampla pra
+// qualquer autenticado —, filtragem de expirados fica exclusivamente com
+// a query do client, que já faz where('expiresAt','>',...) corretamente.))
+// + S137 (24/08/2026 — correção de bug em produção: criar conta
 // falhava em build 14 (Android) e 1.0.5 (iOS), publicados nas lojas, e só
 // funcionava no Expo Go. Causa: client antigo ainda escreve o campo `name`
 // no create de users/{uid}, mas a S135 passou a exigir `nickname` e tirou
@@ -2109,15 +2125,31 @@ service cloud.firestore {
     // ───────────────────────── momentos (S121) ─────────────────────────
     //
     // Story que expira em 24h — audiência é a BASE INTEIRA (decisão de
-    // produto do ROADMAP), não só matches: allow read não checa amizade nem
-    // match, só isSignedIn(). Doc ID == uid do autor (1 momento ativo por
-    // usuário, publicar de novo SOBRESCREVE via setDoc sem merge).
+    // produto do ROADMAP), não só matches: nem allow get nem allow list
+    // checam amizade ou match, só isSignedIn() (a diferença entre os dois
+    // é só a checagem de expiresAt, ver comentários abaixo de cada allow).
+    // Doc ID == uid do autor (1 momento ativo por usuário, publicar de
+    // novo SOBRESCREVE via setDoc sem merge).
     match /momentos/{uid} {
-      // Doc expirado (expiresAt <= agora) fica ilegível mesmo antes de a
-      // function de limpeza (expireMomentos) rodar e apagar de fato — evita
-      // doc "zumbi" acessível por quem tiver o uid. O client trata
-      // permission-denied aqui como "sem momento ativo" (momentoService.ts).
-      allow read: if isSignedIn() && resource.data.expiresAt > request.time;
+      // get (leitura por ID direto, ex. getMyMomento): doc expirado
+      // (expiresAt <= agora) fica ilegível mesmo antes de a function de
+      // limpeza (expireMomentos) rodar e apagar de fato — só evita LEITURA
+      // DIRETA POR ID do doc expirado antes da limpeza, não é barreira de
+      // segurança: o mesmo doc continua descobrível via allow list logo
+      // abaixo, que não checa expiresAt. O client trata permission-denied
+      // aqui como "sem momento ativo" (momentoService.ts).
+      allow get: if isSignedIn() && resource.data.expiresAt > request.time;
+
+      // list (feed, listenActiveMomentos/onSnapshot): SEM checagem de
+      // expiresAt — o Firestore não consegue provar estruturalmente uma
+      // condição dependente de request.time pro conjunto de resultados de
+      // uma query/listener (muda a cada avaliação), então nega o list
+      // inteiro com permission-denied (causa raiz do bug de momento de
+      // terceiros não carregar, S139). Filtragem de expirados no feed é
+      // responsabilidade exclusiva da query do client (where('expiresAt',
+      // '>', ...) em listenActiveMomentos) — mesmo padrão já usado em
+      // groups/{groupId} acima ("Leitura ampla pra qualquer autenticado").
+      allow list: if isSignedIn();
 
       allow create, update: if isOwner(uid)
         && request.resource.data.authorId == uid

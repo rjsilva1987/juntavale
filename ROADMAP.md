@@ -389,7 +389,9 @@ real mas deixou os dois editáveis pelo usuário.
    encaixar a edição pelo admin.
 
 ### S139 — Bug: momento de terceiros não carrega (permission-denied)
-**Status:** ABERTA · sem decisões · sem recon · BUG da S121
+**Status:** EM CORREÇÃO · causa raiz confirmada · fix aplicado em
+`firestore.rules` (não deployado — Raphael faz o deploy) · aguardando
+auditoria
 
 Reproduzido no Expo Go em 22/08/2026, com as rules da S121 já deployadas.
 Ao abrir a aba de Momentos, nenhum momento de outra pessoa aparece e o log
@@ -401,22 +403,32 @@ mostra:
 CRIAR o próprio momento FUNCIONA e ele aparece com o contador de 24h — ou
 seja, a escrita está correta e o problema está só na LEITURA de terceiros.
 
-**Hipótese a confirmar na recon:** a rule de leitura de `momentos/{uid}`
-exige `expiresAt > request.time`. Regra com desigualdade em campo obriga a
-QUERY do client a filtrar pelo mesmo campo, com operador e ordenação
-compatíveis — senão o Firestore nega o listener inteiro. O dono continua
-vendo o próprio momento porque há ramo separado liberando por uid.
-Passou em `tsc` e lint porque é incompatibilidade de runtime entre query e
-rule, invisível em compilação.
+**Causa raiz confirmada (comparação byte-a-byte das rules deployadas com o
+arquivo local via Firebase MCP + checagem do mecanismo de validação de
+query do Firestore contra a documentação oficial):** o `allow read` de
+`momentos/{uid}` tinha uma condição única
+(`resource.data.expiresAt > request.time`) valendo tanto pra `get()`
+quanto pra `list()`. Pra uma query/listener (`listenActiveMomentos`,
+`onSnapshot`), o Firestore precisa PROVAR estruturalmente que a regra vale
+pro conjunto de resultados ao longo de toda a vida do listener, e uma
+condição dependente de `request.time` (que muda a cada avaliação) não é
+provável dessa forma — o Firestore nega o `list` INTEIRO com
+`permission-denied`. `get()` (leitura por ID, `getMyMomento`) não sofre
+disso, é avaliado documento a documento com o dado real, por isso só o
+feed de terceiros quebrava e o próprio momento do dono sempre funcionou.
+NÃO era problema de índice composto nem de incompatibilidade entre a
+query do client e a rule — a query de `listenActiveMomentos`
+(`where('expiresAt','>',Timestamp.now())` + `orderBy('expiresAt','desc')`)
+já estava correta; é limitação estrutural do Firestore pra provar regras
+com `request.time` em `list`/listener, ver bullet novo em "Padrões de
+escrita no Firestore" abaixo.
 
-**Recon quando a sprint abrir:**
-1. A query exata de `listenActiveMomentos` em `src/services/momentoService.ts`
-   — where, orderBy, limit.
-2. O `allow read` de `momentos/{uid}` em `firestore.rules`, em especial a
-   condição `expiresAt > request.time`.
-3. Se a query satisfaz a rule; se não, qual dos dois lados corrigir.
-4. Se falta índice composto em `firestore.indexes.json` pra essa
-   combinação de where + orderBy.
+**Fix aplicado:** `allow read` separado em `allow get` (mantém
+`expiresAt > request.time`, protege doc "zumbi" acessível por ID direto
+antes de `expireMomentos` varrer) e `allow list` (sem checagem de
+`expiresAt`, mesmo padrão de `groups/{groupId}` — filtragem de expirados
+no feed passa a ser responsabilidade exclusiva da query do client, que já
+filtra corretamente). Único arquivo tocado: `firestore.rules`.
 
 ### S140 — Bug: conta do build 14 quebra ao salvar perfil com nome editado
 **Status:** ABERTA · sem decisões · sem recon · achado da auditoria da S137
@@ -595,6 +607,13 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   "Criador" ao lado; no chat de grupo (`GroupChatScreen`), o mesmo selo
   aparece ao lado do nome só nas mensagens do CRIADOR, nunca nas de outro
   membro.
+- S139 — **depois que Raphael fizer o deploy das rules corrigidas**: com a
+  conta A publicando um momento ativo, abrir a aba de Momentos com a conta
+  B e conferir que o momento de A aparece (sem `permission-denied` no
+  log); confirmar que `getMyMomento` (o próprio momento do dono) continua
+  funcionando igual antes; e que um momento expirado (aguardar os
+  ~24h, ou reduzir `expiresAt` manualmente no Console pra simular) some do
+  feed de B sem erro.
 
 **Espera o build 15:**
 
@@ -753,6 +772,27 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   exato" só é seguro dentro da mesma transação atômica que faz a leitura —
   não como parâmetro carregado em um momento anterior e potencialmente
   desatualizado no momento da escrita.
+- **`allow read` com condição dependente de `request.time` (ou qualquer
+  valor que muda a cada avaliação) nunca pode ser a ÚNICA regra de leitura
+  de uma collection consultada por `list`/`onSnapshot` — só funciona pra
+  `get()` de doc por ID.** Descoberto na S139: `momentos/{uid}` tinha só
+  `allow read: if isSignedIn() && resource.data.expiresAt > request.time;`
+  e `listenActiveMomentos` (`onSnapshot`) sempre voltava
+  `permission-denied`, mesmo com a query do client já filtrando
+  `where('expiresAt','>',...)` corretamente. Motivo: pra uma query/
+  listener, o Firestore precisa PROVAR estruturalmente que a regra vale
+  pro conjunto de resultados ao longo de toda a vida do listener — uma
+  condição com `request.time` não é provável dessa forma, e o Firestore
+  nega o `list` INTEIRO, não filtra doc a doc. `get()` (doc por ID) não
+  sofre disso, é avaliado com o dado real, por isso `getMyMomento`
+  funcionava e só o feed de terceiros quebrava. Correção: separar
+  `allow get` (mantém a condição de `expiresAt`, protege doc "zumbi"
+  acessível por ID direto) de `allow list` (sem condição de tempo,
+  filtragem de expirados delegada inteiramente à query do client — mesmo
+  padrão já usado em `groups/{groupId}`, "Leitura ampla pra qualquer
+  autenticado"). Qualquer collection nova consultada por `list`/listener
+  com regra de leitura que dependa de `request.time` cai na mesma
+  armadilha.
 
 ## Padrões de UI que valem para o projeto inteiro
 
