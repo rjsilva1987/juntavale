@@ -52,6 +52,12 @@ export interface Report {
   momentoId?: string;
   momentoText?: string;
   momentoPhotoUrl?: string;
+  // S124-A — presentes só quando a denúncia partiu de um grupo
+  // (GroupDetailScreen/GroupChatScreen). reportedId, nesse caso, é o
+  // creatorId do grupo (ver blockService.reportUser) — groupId/groupName
+  // são só o rótulo exibido no painel do admin, sem foto (grupo não tem).
+  groupId?: string;
+  groupName?: string;
 }
 
 export interface ReportMessage {

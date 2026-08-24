@@ -43,7 +43,7 @@ curtida (modelo Instagram). Em aberto se entra comentário junto.
 Interage com S122: notificação por curtida é candidata a virar spam.
 
 ### S124-A — Grupos: esqueleto
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** EM IMPLEMENTAÇÃO · decisões tomadas · recon feita (23/08/2026)
 
 Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
 
@@ -55,13 +55,43 @@ Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
 - Grupo entra na fila de denúncias existente (mesma collection `reports`
   da S96/S102-C), reusando o molde de campos opcionais.
 
-**Recon quando a sprint abrir:**
-1. Como o chat 1:1 guarda mensagens hoje (matches/{id}/messages?) — o
-   grupo pode reusar o molde, e o `deleteAccount` precisa saber apagar
-   participação em grupo.
-2. Como a expiração da S121 foi feita (rule com expiresAt > request.time +
-   function agendada `expireMomentos`) — mesmo desenho serve aqui.
-3. Onde a denúncia de grupo encaixa no AdminReportDetailScreen.
+**Decisões de produto tomadas nesta sprint (automático, 23/08/2026):**
+- Entrada no grupo é por PEDIDO do usuário + aprovação do criador — nunca
+  lista aberta nem convite direto.
+- `reportedId` de uma denúncia de grupo é o uid do CRIADOR do grupo, reusando
+  a regra de `reports` como já existe (sem tornar `reportedId` opcional).
+- Bloqueio 1:1 (`blocks`) não tem nenhum efeito dentro do grupo nesta
+  sprint — mensagem de grupo nunca recalcula visibilidade por par bloqueado.
+- Sem teto de participantes, sem remoção de membro pelo criador e sem
+  exclusão antecipada do grupo pelo criador nesta sprint — grupo só termina
+  por expiração (ou exclusão de conta do criador).
+- Membro comum pode sair a qualquer momento; o CRIADOR não sai do próprio
+  grupo (só some via expiração ou exclusão de conta).
+- Se o criador apaga a conta, o grupo inteiro é apagado — mesmo padrão já
+  aplicado a matches/momentos do próprio usuário.
+- Sem aba nova na tab bar: entrada via item de menu na ProfileScreen, mesmo
+  padrão visual de "Usuários bloqueados", dentro da guarda `!isAdmin`.
+- SEM push a cada mensagem de grupo — decisão permanente (ver S124-B "NÃO
+  FAZER" abaixo), já vale neste esqueleto.
+- SEM reações/tique de entregue/edição/exclusão de mensagem no chat de
+  grupo nesta sprint — só texto e foto, mesmo mínimo do chat 1:1.
+
+**Recon feita (23/08/2026):**
+1. Chat 1:1 guarda mensagens em `matches/{matchId}/messages` — o molde de
+   campos/validação de `matches/{matchId}/messages` (`firestore.rules`) foi
+   copiado pro grupo restrito ao mínimo (texto + foto); `deleteAccount`
+   ganhou dois passos novos (grupos criados pelo uid via `recursiveDelete`;
+   participação em grupos de outros via `collectionGroup('members'|
+   'joinRequests').where('uid','==',uid)`, delete simples).
+2. Expiração da S121 (`expireMomentos`) foi copiada como
+   `expireGroups` — mesmo schedule horário, mesma releitura transacional por
+   doc antes do `recursiveDelete`; grupo não tem foto própria, mas mensagens
+   podem ter (`images/groupChats/{groupId}/`) — `expireGroups` limpa esse
+   prefixo com `bucket.deleteFiles` logo após o `recursiveDelete` (correção
+   pós-auditoria; a 1ª versão tinha comentário dizendo o oposto).
+3. Denúncia de grupo entra no `AdminReportDetailScreen` como bloco novo
+   `{!!report.groupId && (...)}`, mirror exato do bloco de `momentoId`,
+   mostrando só `groupName` (sem foto — grupo não tem).
 
 ### S124-B — Grupos: camadas de engajamento
 **Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S124-A
@@ -328,9 +358,48 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   `migrateNicknames.js`): perfil e telas públicas caem no fallback pro
   `name` antigo (`getDisplayName`); editar e salvar o perfil dessa conta
   cria os campos novos (`nickname` + `legalName`) sem erro de permissão.
+- S124-A — criar grupo (`CreateGroupScreen`) com nome/descrição/prazo;
+  conferir que ele aparece em "Meus grupos" e some de "Descobrir" pra quem
+  criou.
+- S124-A — com uma conta B: grupo do A aparece em "Descobrir"; pedir entrada
+  muda o estado da tela pra "Pedido enviado" + "Cancelar pedido"; cancelar
+  volta pro estado "Pedir pra entrar".
+- S124-A — pedir entrada duas vezes rápido (dois toques): segundo toque não
+  deve mostrar Alert de erro genérico (create-only, `permission-denied` vira
+  no-op silencioso em `requestToJoinGroup`).
+- S124-A — como criador: pedido pendente aparece na lista "Pedidos
+  pendentes" de `GroupDetailScreen`; aprovar move a conta B pra "Meus
+  grupos" dela e soma 1 em `memberCount`; rejeitar apaga o pedido sem
+  virar membro.
+- S124-A — membro comum (não-criador) consegue "Sair do grupo" (com
+  confirmação) e `memberCount` desce 1; criador NÃO tem essa opção.
+- S124-A — chat de grupo (`GroupChatScreen`): enviar texto e foto entre 2+
+  contas membros; conta SEM `verified` vê o banner de bloqueio, mesmo texto
+  do chat 1:1; conta que saiu do grupo enquanto a tela estava aberta vê o
+  banner "Você não é mais membro deste grupo".
+- S124-A — denunciar um grupo (menu do cabeçalho de `GroupDetailScreen`)
+  reusando o `ReportModal`; conferir que chega na fila do admin com
+  `reportedId` == uid do CRIADOR do grupo (não de quem denunciou) e que
+  `AdminReportDetailScreen` mostra o bloco "Grupo denunciado" com o
+  `groupName`.
+- S124-A — grupo expirado (prazo no passado, testável reduzindo o prazo
+  manualmente no Console pra simular) some da lista depois que a function
+  `expireGroups` varrer (até 1h) — navegar direto pro `groupId` expirado
+  (deep link/state stale) cai no estado "Este grupo não existe mais.", não
+  em erro genérico.
+- S124-A — apagar a conta do CRIADOR de um grupo apaga o grupo inteiro
+  (`deleteAccount`); apagar a conta de um MEMBRO comum só remove a
+  participação dele, o grupo continua existindo pros demais.
 
 **Espera o build 15:**
 
+- S124-A — quem cria o grupo recebe push de "Novo pedido pra entrar no
+  grupo" (`onGroupJoinRequestCreated`); quem tem o pedido aprovado recebe
+  push de "Pedido aprovado!" (`onGroupMemberCreated`), MAS o criador NUNCA
+  recebe esse segundo push sobre si mesmo na criação do próprio grupo.
+  Confirma também a decisão permanente: NENHUM push é disparado por
+  mensagem enviada no chat de grupo. Expo Go não entrega push no SDK 54,
+  precisa do build.
 - S101, S122, S129-A, S129-B, S130, S131, S133, S134 (bateria a definir).
 - S133 — arrastar o card atual no Descobrir e conferir que o card de trás
   fica invisível parado (translateX/Y = 0) e vai ganhando nitidez só
@@ -438,6 +507,47 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   `get(/databases/$(database)/documents/users/$(userId)).data.get('verified', false)`,
   mesmo molde já usado em `pollVotes`/`photoLikes` pra ler um doc diferente
   do que está sendo escrito.
+- **Query `collectionGroup()` tem DUAS exigências de infraestrutura
+  separadas — descoberto na S124-A em duas rodadas (implementação, depois
+  auditoria).** (1) REGRA: uma regra ANINHADA (`match
+  /groups/{groupId}/members/{uid}`) só autoriza `get()`/`onSnapshot()` de um
+  DOC ESPECÍFICO, com o `groupId` já conhecido — ela NÃO cobre uma query
+  `collectionGroup('members')`, que varre a subcoleção através de TODOS os
+  pais de uma vez sem o client saber o `groupId` de antemão. É preciso uma
+  regra declarada com wildcard recursivo no nível de TOPO (`match
+  /{path=**}/members/{memberUid} { allow read: if isSignedIn() &&
+  resource.data.uid == request.auth.uid; }`) — sem ela a query sempre volta
+  `permission-denied`. Essa foi a falta REAL que travava `listMyGroups`
+  (`groupService.ts`, e por tabela a `GroupsScreen` inteira): a 1ª versão
+  desta sprint só tinha a regra aninhada, e só a reauditoria pegou o buraco
+  (não é intuitivo — regra aninhada "parece" bastar, mas não basta pra
+  collection group query). (2) ÍNDICE: além da regra, o campo do filtro de
+  igualdade (`where('uid','==',uid)`) também precisa de índice explícito em
+  `firestore.indexes.json` (`fieldOverrides`, `queryScope:
+  "COLLECTION_GROUP"`) — o índice single-field automático do Firestore só
+  cobre `queryScope: "COLLECTION"` por padrão. Qualquer sprint futura que
+  faça a primeira query `collectionGroup()` de uma subcoleção nova precisa
+  lembrar dos DOIS ao mesmo tempo: a regra recursiva E o `fieldOverride` —
+  faltar só um dos dois já derruba a query em runtime.
+- **Contador denormalizado mantido pelo CLIENT (não por Cloud Function)
+  nunca usa `FieldValue.increment()` E precisa ler o valor FRESCO de dentro
+  de uma `runTransaction`, nunca de um valor já em mãos na tela.**
+  Descoberto/corrigido na S124-A: a 1ª versão de `approveJoinRequest`/
+  `leaveGroup` (`groupService.ts`) usava `writeBatch` recebendo
+  `currentMemberCount` como parâmetro (valor que a tela já tinha carregado)
+  e escrevia `currentMemberCount ± 1` — se esse valor estivesse desatualizado
+  (ex.: duas aprovações em sequência antes do listener propagar a primeira),
+  a rule negava o BATCH INTEIRO, inclusive as escritas que estavam corretas
+  (criar `members/{uid}`, apagar `joinRequests/{uid}`). A reauditoria trocou
+  as duas por `runTransaction`, que lê `groups/{groupId}` FRESCO
+  (`transaction.get`) e calcula `+1`/`-1` a partir do valor lido ALI DENTRO
+  — nunca de um parâmetro vindo da tela. Continua valendo o padrão de
+  `superLikes/usage`/`replies/usage` quanto a NÃO usar
+  `FieldValue.increment()` (as rules validam IGUALDADE exata contra
+  `resource.data.count`/`memberCount`), mas "ler antes e escrever o valor
+  exato" só é seguro dentro da mesma transação atômica que faz a leitura —
+  não como parâmetro carregado em um momento anterior e potencialmente
+  desatualizado no momento da escrita.
 
 ## Padrões de UI que valem para o projeto inteiro
 

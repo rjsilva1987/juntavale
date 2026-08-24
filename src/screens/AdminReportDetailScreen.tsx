@@ -343,6 +343,22 @@ export default function AdminReportDetailScreen({
                     </>
                   )}
 
+                  {/* S124-A — presente só quando a denúncia partiu de um
+                      grupo (GroupDetailScreen/GroupChatScreen). groupName é
+                      uma cópia truncada, não referência viva — o grupo pode
+                      ter expirado ou sido apagado depois. Sem foto: grupo não
+                      tem. */}
+                  {!!report.groupId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Grupo denunciado</Text>
+                      {!!report.groupName && (
+                        <Text style={styles.fieldValue} selectable>
+                          {report.groupName}
+                        </Text>
+                      )}
+                    </>
+                  )}
+
                   <AnimatedPressable
                     style={[styles.actionBtn, isPending ? styles.resolveBtn : styles.reopenBtn]}
                     onPress={handleToggleStatus}

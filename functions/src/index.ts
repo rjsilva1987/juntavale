@@ -1171,6 +1171,55 @@ export const expireMomentos = onSchedule(
   },
 );
 
+// S124-A — expira grupos (sala de conversa com prazo de encerramento, teto 1
+// mês). Mirror EXATO do padrão de expireMomentos acima: mesmo schedule/
+// timeZone/region, mesma releitura transacional por doc antes do
+// recursiveDelete (evita apagar por engano um doc que mudou entre a query e
+// o commit — aqui não há "sobrescrita" como em momentos, mas a transação
+// ainda garante que só apaga o que está de fato expirado no momento do
+// delete). recursiveDelete(ref) leva junto as 3 subcoleções (members,
+// joinRequests, messages), mas NÃO leva o Storage — mensagens de grupo podem
+// ter foto (images/groupChats/{groupId}/, ver uploadGroupChatImage em
+// groupService.ts), mesmo caso já coberto pelo passo de matches no
+// deleteAccount (images/chats/{matchId}/). Limpa esse prefixo logo após o
+// recursiveDelete ter sucesso, mesmo padrão de bucket.deleteFiles dentro de
+// try/catch-e-loga do bloco `type === 'photo'` de expireMomentos acima —
+// falha na limpeza de Storage não deve impedir a próxima iteração do loop.
+export const expireGroups = onSchedule(
+  { schedule: '0 * * * *', timeZone: 'America/Sao_Paulo', region: REGION },
+  async () => {
+    const now = Timestamp.now();
+    const snap = await db.collection('groups').where('expiresAt', '<=', now).get();
+
+    let deletedCount = 0;
+    for (const groupDoc of snap.docs) {
+      const ref = groupDoc.ref;
+      try {
+        let shouldDelete = false;
+        await db.runTransaction(async (transaction) => {
+          const fresh = await transaction.get(ref);
+          if (!fresh.exists) return;
+          const data = fresh.data() as { expiresAt?: Timestamp };
+          shouldDelete = !!data.expiresAt && data.expiresAt.toMillis() <= Timestamp.now().toMillis();
+        });
+        if (shouldDelete) {
+          await db.recursiveDelete(ref);
+          deletedCount++;
+          try {
+            await bucket.deleteFiles({ prefix: `images/groupChats/${ref.id}/` });
+          } catch (error) {
+            console.error('[expireGroups] falha ao apagar fotos do grupo:', ref.id, error);
+          }
+        }
+      } catch (error) {
+        console.error('[expireGroups] falha ao apagar grupo:', ref.id, error);
+      }
+    }
+
+    console.log(`[expireGroups] varridos: ${snap.size}, apagados: ${deletedCount}`);
+  },
+);
+
 export const deleteAccount = onCall(
   { region: REGION, memory: '512MiB', timeoutSeconds: 300 },
   async (request) => {
@@ -1286,6 +1335,42 @@ export const deleteAccount = onCall(
       console.log('[deleteAccount] momento apagado');
     } catch (error) {
       console.error('[deleteAccount] falha ao apagar momento:', uid, error);
+    }
+
+    // S124-A — grupos CRIADOS pelo usuário: recursiveDelete de cada um leva
+    // junto members/joinRequests/messages (mesmo padrão da etapa a) de
+    // matches, acima). Storage: images/groupChats/{groupId}/ por grupo —
+    // mesmo motivo de images/chats/{matchId} na etapa a), só que aqui o
+    // prefixo carrega o groupId, não o uid, daí o loop por doc em vez de um
+    // deleteFiles único.
+    try {
+      const ownedGroupsSnap = await db.collection('groups').where('creatorId', '==', uid).get();
+      console.log(`[deleteAccount] grupos criados encontrados: ${ownedGroupsSnap.size}`);
+      for (const groupDoc of ownedGroupsSnap.docs) {
+        await db.recursiveDelete(groupDoc.ref);
+        await bucket.deleteFiles({ prefix: `images/groupChats/${groupDoc.id}/` });
+      }
+      console.log(`[deleteAccount] grupos criados apagados: ${ownedGroupsSnap.size}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar grupos criados:', uid, error);
+    }
+
+    // S124-A — participação do usuário em grupos DE OUTROS: só o doc de
+    // participação (members/joinRequests), nunca o grupo inteiro — delete
+    // simples, não recursiveDelete. collectionGroup pra achar sem precisar
+    // saber de quais grupos o usuário participa (mesmo mecanismo de
+    // listMyGroups em groupService.ts, do lado do client).
+    try {
+      const [memberDocs, joinRequestDocs] = await Promise.all([
+        db.collectionGroup('members').where('uid', '==', uid).get(),
+        db.collectionGroup('joinRequests').where('uid', '==', uid).get(),
+      ]);
+      const refs = [...memberDocs.docs, ...joinRequestDocs.docs].map((d) => d.ref);
+      console.log(`[deleteAccount] participações em grupos encontradas: ${refs.length}`);
+      await deleteDocsInBatches(refs);
+      console.log(`[deleteAccount] participações em grupos apagadas: ${refs.length}`);
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar participações em grupos:', uid, error);
     }
 
     // f) Storage do perfil — avatares.
@@ -1541,5 +1626,69 @@ export const tenDaysInAppCheck = onSchedule(
     console.log(
       `[tenDaysInAppCheck] candidatos: ${usersSnap.size} | desbloqueados: ${unlockedCount}`,
     );
+  },
+);
+
+// S124-A — notifica o CRIADOR do grupo a cada pedido de entrada novo. Mesmo
+// padrão estrutural de onSuperLikeReceived (getPushToken + sendExpoNotifications,
+// sem título/corpo dependentes de dado sensível). SEM push a cada mensagem de
+// grupo (decisão de produto permanente, ver ROADMAP.md S124-B "NÃO FAZER") —
+// este trigger é só sobre o FLUXO de entrada, não sobre mensagens.
+export const onGroupJoinRequestCreated = onDocumentCreated(
+  { document: 'groups/{groupId}/joinRequests/{uid}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { groupId } = event.params;
+    const groupSnap = await db.doc(`groups/${groupId}`).get();
+    const group = groupSnap.data() as { name?: string; creatorId?: string } | undefined;
+    if (!group?.creatorId) return;
+
+    const token = await getPushToken(group.creatorId);
+    if (!token) return;
+
+    const requester = await getUserBasicInfo(event.params.uid);
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: 'Novo pedido pra entrar no grupo',
+        body: `${requester?.name ?? 'Alguém'} quer entrar em "${group.name ?? 'seu grupo'}"`,
+        data: { type: 'groupJoinRequest', groupId },
+      },
+    ]);
+  },
+);
+
+// S124-A — notifica o NOVO MEMBRO quando o pedido é aprovado (create de
+// groups/{groupId}/members/{uid}), MAS pula quando uid == creatorId do grupo
+// pai — o create do PRÓPRIO doc do criador acontece no mesmo writeBatch da
+// criação do grupo (ver firestore.rules), e notificar o criador de si mesmo
+// nesse instante não faz sentido de produto.
+export const onGroupMemberCreated = onDocumentCreated(
+  { document: 'groups/{groupId}/members/{uid}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { groupId, uid } = event.params;
+    const groupSnap = await db.doc(`groups/${groupId}`).get();
+    const group = groupSnap.data() as { name?: string; creatorId?: string } | undefined;
+    if (!group || group.creatorId === uid) return;
+
+    const token = await getPushToken(uid);
+    if (!token) return;
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: 'Pedido aprovado!',
+        body: `Você agora faz parte de "${group.name ?? 'um grupo'}"`,
+        data: { type: 'groupMemberApproved', groupId },
+      },
+    ]);
   },
 );

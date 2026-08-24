@@ -93,6 +93,29 @@ service firebase.storage {
       allow delete: if isParticipant();
     }
 
+    // ───────────────────────── group chat images (S124-A) ─────────────────────────
+    //
+    // Foto do chat de grupo, path images/groupChats/{groupId}/{ts}.jpg —
+    // mesmo molde de path/regra de images/chats/{matchId} acima, trocando
+    // "participante do match" (m.data.users) por "tem doc em
+    // groups/{groupId}/members/{uid}" via firestore.get() cross-service:
+    // mesma convenção já usada nas outras regras deste arquivo (nunca
+    // firestore.exists(), que não é usado em nenhum outro lugar aqui) — se o
+    // doc members/{uid} não existir, o próprio get() falha e a expressão
+    // inteira nega, mesmo efeito de um exists() explícito.
+    match /images/groupChats/{groupId}/{fileName} {
+      function isGroupMember() {
+        return isSignedIn()
+          && firestore.get(
+               /databases/(default)/documents/groups/$(groupId)/members/$(request.auth.uid)
+             ).data.uid == request.auth.uid;
+      }
+
+      allow read: if isGroupMember();
+      allow create, update: if isGroupMember() && isValidImage();
+      allow delete: if isGroupMember();
+    }
+
     // ───────────────────────── report images (S113) ─────────────────────────
     //
     // Anexo de foto na thread reports/{reportId}/messages. Mesmo mecanismo de

@@ -1220,6 +1220,19 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         )}
 
+        {/* S124-A — grupos: mesmo componente/estilo de "Usuários
+            bloqueados" logo abaixo, dentro da guarda !isAdmin (grupos é
+            feature de usuário comum). Sem aba nova na tab bar. */}
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('Groups')}
+          >
+            <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Grupos</Text>
+          </AnimatedPressable>
+        )}
+
         {/* Usuários bloqueados */}
         {!isAdmin && (
           <AnimatedPressable

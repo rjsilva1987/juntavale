@@ -32,6 +32,10 @@ import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScre
 import AdminVerificationsScreen from '@/screens/AdminVerificationsScreen';
 import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
+import CreateGroupScreen from '@/screens/CreateGroupScreen';
+import GroupChatScreen from '@/screens/GroupChatScreen';
+import GroupDetailScreen from '@/screens/GroupDetailScreen';
+import GroupsScreen from '@/screens/GroupsScreen';
 import LikesScreen from '@/screens/LikesScreen';
 import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
@@ -89,6 +93,14 @@ export type RootStackParamList = {
   };
   MatchesGrid: undefined;
   BlockedUsers: undefined;
+  // S124-A — grupos: sem aba nova (o app já tem 5), entrada via item de menu
+  // na ProfileScreen. GroupChat leva groupName por param (mesmo padrão de
+  // Chat acima) pra não depender de listenGroup resolver antes de montar o
+  // cabeçalho.
+  Groups: undefined;
+  CreateGroup: undefined;
+  GroupDetail: { groupId: string };
+  GroupChat: { groupId: string; groupName: string };
   Support: undefined;
   MyTickets: undefined;
   SupportThread: { ticketId: string };
@@ -361,6 +373,12 @@ export default function Navigation() {
             <Stack.Screen name="Verification" component={VerificationScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+            {/* S124-A — grupos: sem Tab.Screen, só Stack (mesmo bloco das
+                outras telas fora da tab bar). */}
+            <Stack.Screen name="Groups" component={GroupsScreen} />
+            <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+            <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+            <Stack.Screen name="GroupChat" component={GroupChatScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />

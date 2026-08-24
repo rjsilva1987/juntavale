@@ -1,0 +1,346 @@
+// src/services/groupService.ts
+//
+// S124-A — camada única de acesso a Firestore/Storage para "grupos" (salas de
+// conversa em grupo, com prazo de encerramento). Nenhuma tela importa
+// firebase/firestore diretamente (convenção do projeto) — GroupsScreen/
+// CreateGroupScreen/GroupDetailScreen/GroupChatScreen só chamam as funções
+// abaixo. Mesmo molde de momentoService.ts/reportService.ts.
+import {
+  addDoc,
+  collection,
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+
+import { db, storage } from '@/services/firebase';
+
+// Mesmo teto de nickname (firestore.rules) — nome do grupo.
+export const MAX_GROUP_NAME_LENGTH = 120;
+// Mesmo teto de bio (firestore.rules) — descrição do grupo.
+export const MAX_GROUP_DESCRIPTION_LENGTH = 2000;
+// Decisão de produto (S124-A): prazo de encerramento escolhido por quem
+// cria, teto de 1 mês. Espelha duration.value(30, 'd') em firestore.rules —
+// mexer aqui significa mexer lá também.
+export const MAX_GROUP_DURATION_DAYS = 30;
+
+export type GroupMemberRole = 'creator' | 'member';
+
+export interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  creatorId: string;
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
+  // Denormalizado, mantido pelo CLIENT junto com criação/entrada/saída de
+  // membro (ver createGroup/approveJoinRequest/leaveGroup abaixo) — nunca
+  // por Cloud Function. Início em 1 na criação (o criador já é membro).
+  memberCount: number;
+}
+
+export interface GroupMember {
+  uid: string;
+  joinedAt: Timestamp;
+  role: GroupMemberRole;
+}
+
+export interface GroupJoinRequest {
+  uid: string;
+  requestedAt: Timestamp;
+}
+
+// S124-A decisão 11 — mesmo mínimo do chat 1:1 (matches/{matchId}/messages),
+// SEM reações/replyTo/read-receipts/edição/exclusão: só texto e foto.
+export interface GroupMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  createdAt: Timestamp;
+  imageUrl?: string;
+}
+
+const groupRef = (groupId: string) => doc(db, 'groups', groupId);
+const memberRef = (groupId: string, uid: string) => doc(db, 'groups', groupId, 'members', uid);
+const joinRequestRef = (groupId: string, uid: string) =>
+  doc(db, 'groups', groupId, 'joinRequests', uid);
+const messagesCollection = (groupId: string) => collection(db, 'groups', groupId, 'messages');
+
+// permission-denied aqui significa "grupo expirou/foi apagado entre a
+// navegação e a leitura" (mesmo princípio de getMyMomento, momentoService.ts)
+// — nunca erro genérico. allow read de groups/{groupId} é isSignedIn(), então
+// isso só acontece pra doc que já sumiu.
+export const getGroup = async (groupId: string): Promise<Group | null> => {
+  try {
+    const snap = await getDoc(groupRef(groupId));
+    return snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Group, 'id'>) } : null;
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'permission-denied') return null;
+    throw error;
+  }
+};
+
+export const listenGroup = (groupId: string, callback: (group: Group | null) => void) => {
+  return onSnapshot(
+    groupRef(groupId),
+    (snap) =>
+      callback(snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Group, 'id'>) } : null),
+    (error) => {
+      // Mesmo tratamento de permission-denied de getGroup acima — grupo
+      // sumiu (expirou/foi apagado) enquanto a tela estava aberta.
+      if ((error as { code?: string })?.code === 'permission-denied') {
+        callback(null);
+        return;
+      }
+      console.error('[listenGroup] erro no listener:', error);
+    },
+  );
+};
+
+// writeBatch cria groups/{id} + groups/{id}/members/{creatorUid} (role
+// creator) no MESMO batch — exigência das rules (getAfter do doc pai no
+// create do member). memberCount nasce em 1: só o criador existe até a
+// primeira aprovação.
+export const createGroup = async (
+  creatorUid: string,
+  name: string,
+  description: string,
+  expiresAt: Date,
+): Promise<string> => {
+  const ref = doc(collection(db, 'groups'));
+  const batch = writeBatch(db);
+  batch.set(ref, {
+    name: name.trim(),
+    ...(description.trim() ? { description: description.trim() } : {}),
+    creatorId: creatorUid,
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromDate(expiresAt),
+    memberCount: 1,
+  });
+  batch.set(memberRef(ref.id, creatorUid), {
+    uid: creatorUid,
+    joinedAt: serverTimestamp(),
+    role: 'creator',
+  });
+  await batch.commit();
+  return ref.id;
+};
+
+// Grupos onde o uid é membro (inclui os que o próprio uid criou — o criador
+// também tem doc em members/). collectionGroup pra achar TODOS os
+// groups/*/members/{uid} do usuário sem precisar manter uma lista própria;
+// groupId vem do path do doc (d.ref.parent.parent), nunca do conteúdo.
+export const listMyGroups = async (uid: string): Promise<Group[]> => {
+  const memberDocs = await getDocs(query(collectionGroup(db, 'members'), where('uid', '==', uid)));
+  const groupIds = memberDocs.docs
+    .map((d) => d.ref.parent.parent?.id)
+    .filter((id): id is string => !!id);
+  const groups = await Promise.all(groupIds.map((id) => getGroup(id)));
+  return groups.filter((g): g is Group => g != null);
+};
+
+// "Descobrir": grupos ainda não expirados onde o uid NÃO é membro. Grupo já
+// expirado (mas ainda não varrido pela expireGroups) fica de fora — mesmo
+// corte de momentos/{uid} (S121).
+//
+// S124-A-fix (correção pós-auditoria) — NÃO exclui grupo com pedido
+// pendente: excluir também deixaria o grupo inacessível pra sempre (não
+// está em "Meus grupos" por ainda não ser membro, e sumiria de "Descobrir"
+// também), sem nenhuma tela pra voltar e ver "Pedido enviado"/cancelar. O
+// próprio `GroupDetailScreen` já resolve o estado certo (pedido pendente vs.
+// "Pedir pra entrar") ao reabrir o grupo — não precisa filtrar aqui.
+export const listDiscoverableGroups = async (uid: string): Promise<Group[]> => {
+  const [allSnap, myGroups] = await Promise.all([
+    getDocs(
+      query(
+        collection(db, 'groups'),
+        where('expiresAt', '>', Timestamp.now()),
+        orderBy('expiresAt', 'asc'),
+      ),
+    ),
+    listMyGroups(uid),
+  ]);
+  const myGroupIds = new Set(myGroups.map((g) => g.id));
+  return allSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Group, 'id'>) }))
+    .filter((g) => !myGroupIds.has(g.id));
+};
+
+export const getMyMembership = async (
+  groupId: string,
+  uid: string,
+): Promise<GroupMember | null> => {
+  const snap = await getDoc(memberRef(groupId, uid));
+  return snap.exists() ? (snap.data() as GroupMember) : null;
+};
+
+export const getMyJoinRequest = async (
+  groupId: string,
+  uid: string,
+): Promise<GroupJoinRequest | null> => {
+  const snap = await getDoc(joinRequestRef(groupId, uid));
+  return snap.exists() ? (snap.data() as GroupJoinRequest) : null;
+};
+
+// create-only nas rules (!exists(members/{uid})) — um permission-denied aqui
+// numa corrida (dois toques) significa "pedido já enviado", nunca erro
+// genérico (mesmo padrão já usado no projeto pra escrita create-only, ver
+// ROADMAP.md "Padrões de escrita no Firestore").
+export const requestToJoinGroup = async (groupId: string, uid: string): Promise<void> => {
+  try {
+    await setDoc(joinRequestRef(groupId, uid), {
+      uid,
+      requestedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'permission-denied') return;
+    throw error;
+  }
+};
+
+export const cancelJoinRequest = async (groupId: string, uid: string): Promise<void> => {
+  await deleteDoc(joinRequestRef(groupId, uid));
+};
+
+// Só o criador chama isto — a rejeição só apaga o pedido pendente.
+export const rejectJoinRequest = async (groupId: string, requesterUid: string): Promise<void> => {
+  await deleteDoc(joinRequestRef(groupId, requesterUid));
+};
+
+// S124-A-fix (correção pós-auditoria) — segundo argumento de erro
+// adicionado ao onSnapshot, mesmo padrão já usado em listenGroup acima
+// (era uma omissão, não uma escolha deliberada de deixar sem tratamento).
+export const listenJoinRequests = (
+  groupId: string,
+  callback: (requests: GroupJoinRequest[]) => void,
+) => {
+  const q = query(collection(db, 'groups', groupId, 'joinRequests'), orderBy('requestedAt', 'asc'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      callback(snap.docs.map((d) => d.data() as GroupJoinRequest));
+    },
+    (error) => {
+      console.error('[listenJoinRequests] erro no listener:', error);
+    },
+  );
+};
+
+// Aprovação: runTransaction do criador — cria members/{uid} + apaga
+// joinRequests/{uid} + incrementa memberCount.
+//
+// S124-A-fix (correção pós-auditoria) — TROCADO de writeBatch (que recebia
+// currentMemberCount já carregado na tela) pra runTransaction: com
+// writeBatch, um memberCount desatualizado na tela (ex.: dois approves em
+// sequência antes do listener propagar o primeiro) fazia a rule negar o
+// BATCH INTEIRO — inclusive o set do member e o delete do joinRequest, que
+// estavam corretos. A transação lê `groups/{groupId}` FRESCO (transaction.get,
+// não o parâmetro da tela) e escreve currentMemberCount+1 a partir desse
+// valor lido ali mesmo, eliminando a origem do dado desatualizado.
+export const approveJoinRequest = async (groupId: string, requesterUid: string): Promise<void> => {
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef(groupId));
+    if (!groupSnap.exists()) throw new Error('GROUP_NOT_FOUND');
+    const currentMemberCount = (groupSnap.data() as Omit<Group, 'id'>).memberCount;
+    transaction.set(memberRef(groupId, requesterUid), {
+      uid: requesterUid,
+      joinedAt: serverTimestamp(),
+      role: 'member',
+    });
+    transaction.delete(joinRequestRef(groupId, requesterUid));
+    transaction.update(groupRef(groupId), { memberCount: currentMemberCount + 1 });
+  });
+};
+
+// Sair do grupo: só membro comum (rules negam se role=='creator').
+//
+// S124-A-fix (correção pós-auditoria) — mesma troca de approveJoinRequest
+// acima: runTransaction lendo memberCount FRESCO em vez de receber
+// currentMemberCount como parâmetro. O `Math.max(0, ...)` que existia antes
+// não protegia nada de verdade (um valor de tela desatualizado que desse
+// negativo continuava sendo rejeitado pela rule, só numa forma diferente) —
+// lendo o valor real dentro da transação, o clamp deixa de ser necessário.
+export const leaveGroup = async (groupId: string, uid: string): Promise<void> => {
+  await runTransaction(db, async (transaction) => {
+    const groupSnap = await transaction.get(groupRef(groupId));
+    if (!groupSnap.exists()) throw new Error('GROUP_NOT_FOUND');
+    const currentMemberCount = (groupSnap.data() as Omit<Group, 'id'>).memberCount;
+    transaction.delete(memberRef(groupId, uid));
+    transaction.update(groupRef(groupId), { memberCount: currentMemberCount - 1 });
+  });
+};
+
+// ─── Messages ─────────────────────────────────────────────
+//
+// Sem paginação/janela (S101) de propósito — S124-A decisão 11: grupo de
+// chat nesta sprint é o mínimo (texto + foto), mesmo padrão simples de
+// listenReportMessages (reportService.ts), sem o custo de reproduzir a
+// paginação inteira do ChatScreen.
+
+// S124-A-fix (correção pós-auditoria) — segundo argumento de erro
+// adicionado ao onSnapshot, mesmo padrão de listenGroup/listenJoinRequests.
+export const listenGroupMessages = (
+  groupId: string,
+  callback: (messages: GroupMessage[]) => void,
+) => {
+  const q = query(messagesCollection(groupId), orderBy('createdAt', 'asc'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as GroupMessage));
+    },
+    (error) => {
+      console.error('[listenGroupMessages] erro no listener:', error);
+    },
+  );
+};
+
+export const sendGroupMessage = async (
+  groupId: string,
+  senderId: string,
+  text: string,
+  imageUrl?: string,
+): Promise<void> => {
+  await addDoc(messagesCollection(groupId), {
+    text,
+    senderId,
+    createdAt: serverTimestamp(),
+    ...(imageUrl ? { imageUrl } : {}),
+  });
+};
+
+// Mesmo molde de uploadChatImage (firestoreService.ts), path próprio
+// images/groupChats/{groupId}/{ts}.jpg — ver storage.rules.
+export const uploadGroupChatImage = async (
+  groupId: string,
+  localUri: string,
+  onProgress: (percent: number) => void,
+): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `images/groupChats/${groupId}/${Date.now()}.jpg`);
+  const task = uploadBytesResumable(storageRef, blob);
+
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(snapshot.bytesTransferred / snapshot.totalBytes),
+      reject,
+      () => resolve(),
+    );
+  });
+
+  return getDownloadURL(storageRef);
+};

@@ -39,6 +39,10 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
 // messageContext acima. Quem chama decide qual dos dois contexts passar —
 // nunca os dois juntos na mesma chamada, a função não valida mutex entre
 // eles.
+// S124-A — groupContext: presente só quando a denúncia parte de um grupo
+// (GroupDetailScreen/GroupChatScreen), mesmo molde dos dois acima. Quem
+// chama decide o reportedId (== creatorId do grupo) — esta função não
+// resolve isso sozinha.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
@@ -54,6 +58,10 @@ export const reportUser = async (
     momentoId: string;
     momentoText?: string;
     momentoPhotoUrl?: string;
+  },
+  groupContext?: {
+    groupId: string;
+    groupName: string;
   },
 ) => {
   await addDoc(collection(db, 'reports'), {
@@ -80,6 +88,12 @@ export const reportUser = async (
           ...(momentoContext.momentoPhotoUrl
             ? { momentoPhotoUrl: momentoContext.momentoPhotoUrl }
             : {}),
+        }
+      : {}),
+    ...(groupContext
+      ? {
+          groupId: groupContext.groupId,
+          groupName: groupContext.groupName,
         }
       : {}),
   });

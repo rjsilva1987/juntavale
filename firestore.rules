@@ -1,4 +1,37 @@
-// rules-stamp: S135 (23/08/2026 — nome real vira PRIVADO de verdade
+// rules-stamp: S124-A (23/08/2026 — Grupos: esqueleto. Nova collection raiz
+// groups/{groupId} [name<=120, description opcional<=2000, creatorId,
+// createdAt==request.time, expiresAt>request.time e <=+30d, memberCount
+// denormalizado mantido pelo CLIENT — writeBatch na criação (memberCount
+// nasce em 1, junto do doc do criador em members/), runTransaction na
+// aprovação/saída (ver S124-A-fix logo abaixo) — allow read isSignedIn() [audiência ampla, mesmo
+// padrão de momentos/S121, pra alimentar a aba "Descobrir"], allow update
+// restrito ao campo memberCount [+1 só pelo criador, -1 só por quem de fato
+// tinha members/{auth.uid} antes e não tem mais depois do batch], allow
+// delete: if false [sem exclusão antecipada, só expira]; subcoleções
+// members/{uid} [uid/joinedAt/role, create em 2 ramos — criador junto da
+// criação do grupo via getAfter, ou aprovação do criador quando existe
+// joinRequests/{uid} pendente —, delete só do próprio uid e nunca do
+// criador], joinRequests/{uid} [create-only pelo próprio uid quando
+// !exists(members/{uid}), delete pelo requerente ou pelo criador], messages
+// [mesmo molde/validação de matches/{matchId}/messages mas restrito a
+// texto+foto — SEM reações/replyTo/read-receipts/edição/exclusão —, create
+// exige groupAllowsPost [mirror de matchAllowsPost] + verified==true, allow
+// update/delete: if false]. reports/{reportId} ganha 2 campos opcionais
+// novos — groupId e groupName [<=120] — no create, mesmo molde de
+// momentoId/momentoText da S121, liberando denúncia de um grupo específico
+// reusando a mesma coleção/fila.) + S124-A-fix (23/08/2026 — correção
+// pós-auditoria: 2 match RECURSIVOS novos, top-level,
+// {path=**}/members/{memberUid} e {path=**}/joinRequests/{requestUid}
+// [ambos allow read: isSignedIn() && resource.data.uid==request.auth.uid] —
+// as regras aninhadas de groups/{groupId}/members|joinRequests acima só
+// cobrem get() de doc específico, NUNCA collectionGroup() query, que exige
+// wildcard recursivo declarado no nível de topo; sem isto, listMyGroups
+// (groupService.ts) sempre voltava permission-denied e a GroupsScreen
+// inteira nunca carregava; approveJoinRequest/leaveGroup TROCADOS de
+// writeBatch [memberCount vindo de parâmetro carregado na tela, podia
+// desatualizar] pra runTransaction [memberCount lido FRESCO de dentro da
+// própria transação])
+// + S135 (23/08/2026 — nome real vira PRIVADO de verdade
 // (rules-level, não só escondido da UI): users/{uid} perde o campo `name`
 // [público, causava truncamento em card/cabeçalho — S134] e ganha
 // `nickname` [público, "como quer ser chamado", SEM trava de imutabilidade
@@ -200,6 +233,17 @@ service cloud.firestore {
     // de checar duas condições sobre o mesmo doc com um único get() faturado.
     function matchAllowsPost(m, uid) {
       return uid in m.users && m.get('blockedBy', []).size() == 0;
+    }
+
+    // S124-A — mirror de matchAllowsPost acima, pra groups/{groupId}/messages.
+    // Diferença de forma: matchAllowsPost recebe o doc do match JÁ LIDO (m),
+    // porque a lista de participantes vive dentro dele (m.users); um grupo
+    // não guarda a lista de membros no doc pai (é a subcoleção members/ que
+    // guarda), então aqui não há "doc pré-lido" pra receber — o exists()
+    // FAZ a leitura. Mesma ideia (uid tem que estar autorizado a postar),
+    // mecanismo adaptado ao desenho de dados diferente.
+    function groupAllowsPost(groupId, uid) {
+      return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(uid));
     }
 
     // Um item de users/{uid}.prompts[] — { id: string, answer: string }.
@@ -1204,6 +1248,204 @@ service cloud.firestore {
       }
     }
 
+    // ───────────────────────── groups (S124-A — Grupos: esqueleto) ─────────────────────────
+    //
+    // Sala de conversa em grupo, com prazo de encerramento (teto 1 mês).
+    // Entrada por PEDIDO do usuário + aprovação do criador (não é lista
+    // aberta, não é convite direto) — ver members/ e joinRequests/ abaixo.
+    // Bloqueio 1:1 (blocks) NÃO tem efeito aqui nesta sprint (decisão de
+    // produto): mensagem de grupo nunca recalcula visibilidade por par
+    // bloqueado, ao contrário de matches/{matchId}/messages acima.
+    match /groups/{groupId} {
+      // Leitura ampla pra qualquer autenticado — igual momentos/{uid} (S121)
+      // e users/{userId}: a aba "Descobrir" da GroupsScreen precisa listar
+      // grupo aberto onde o usuário AINDA NÃO é membro, o que exige poder
+      // ler o doc antes de pedir entrada. A LISTA DE MEMBROS (quem está
+      // dentro) segue fechada — isso mora em members/ abaixo, com read
+      // restrito.
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && (!('description' in request.resource.data)
+            || (request.resource.data.description is string
+                && request.resource.data.description.size() <= 2000))
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'd')
+        && request.resource.data.memberCount == 1
+        && request.resource.data.keys().hasOnly(
+             ['name', 'description', 'creatorId', 'createdAt', 'expiresAt', 'memberCount']);
+
+      // memberCount é denormalizado, mantido pelo CLIENT (não por Cloud
+      // Function) junto com a escrita da subcoleção members/ — sempre no
+      // MESMO writeBatch (criação, aprovação, saída). Só o campo memberCount
+      // pode mudar por aqui; nome/descrição/prazo são fixos após a criação
+      // (sem edição nesta sprint). Dois ramos: sobe 1 (aprovação, só o
+      // criador) ou desce 1 (saída, só quem de fato TINHA um doc em
+      // members/{auth.uid} antes deste write e não tem mais depois —
+      // exists()+!existsAfter() garante que é uma saída de verdade, não um
+      // decremento arbitrário de quem nunca foi membro). Não há checagem
+      // cruzada de que a aprovação de fato criou um members/{uid} novo no
+      // mesmo batch — mesmo grau de rigor que o resto do arquivo aceita pra
+      // contador denormalizado (ver comentário "memberCount... mantido pelo
+      // client" na spec desta sprint); memberCount é só um número de
+      // exibição, não gate de acesso.
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+        && request.resource.data.memberCount is number
+        && (
+          (request.resource.data.memberCount == resource.data.memberCount + 1
+            && request.auth.uid == resource.data.creatorId)
+          ||
+          (request.resource.data.memberCount == resource.data.memberCount - 1
+            && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid))
+            && !existsAfter(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)))
+        );
+
+      // Sem exclusão antecipada do grupo pelo criador nesta sprint (decisão
+      // de produto) — grupo só termina por expiração (função agendada
+      // expireGroups) ou pela exclusão de conta do criador (deleteAccount);
+      // as duas vias usam Admin SDK, que ignora esta regra.
+      allow delete: if false;
+
+      // ─────────────── groups/{groupId}/members ───────────────
+      match /members/{uid} {
+        // Leitura: o próprio uid sempre pode ler o PRÓPRIO doc (mesmo que
+        // ainda não exista — é assim que a tela descobre "eu sou membro?");
+        // quem JÁ é membro pode ler a lista inteira (contagem/identificação
+        // de membros dentro do grupo).
+        allow read: if isSignedIn()
+          && (request.auth.uid == uid
+              || exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)));
+
+        // Dois caminhos de create: (a) o CRIADOR grava o próprio doc, role
+        // 'creator', no MESMO writeBatch que cria o grupo (getAfter, doc pai
+        // ainda não existe antes deste batch — mesmo padrão já usado em
+        // support/{ticketId}/messages, S38); (b) o criador aprova outro uid,
+        // role 'member', só quando existe um joinRequests/{uid} pendente
+        // correspondente — aqui o grupo JÁ existe, então get() plain basta.
+        allow create: if isSignedIn()
+          && request.resource.data.uid == uid
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.role in ['creator', 'member']
+          && request.resource.data.keys().hasOnly(['uid', 'joinedAt', 'role'])
+          && (
+            (request.resource.data.role == 'creator'
+              && request.auth.uid == uid
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)).data.creatorId == uid)
+            ||
+            (request.resource.data.role == 'member'
+              && get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId == request.auth.uid
+              && exists(/databases/$(database)/documents/groups/$(groupId)/joinRequests/$(uid)))
+          );
+
+        allow update: if false; // sem trocar role/joinedAt depois de criado
+
+        // O próprio uid pode apagar o próprio doc (sair), EXCETO se for o
+        // criador (decisão de produto: criador não sai, só some via
+        // expiração/exclusão de conta). Ninguém apaga doc de outro membro —
+        // sem remoção de membro pelo criador nesta sprint.
+        allow delete: if isSignedIn() && request.auth.uid == uid && resource.data.role != 'creator';
+      }
+
+      // ─────────────── groups/{groupId}/joinRequests ───────────────
+      match /joinRequests/{uid} {
+        allow read: if isSignedIn()
+          && (request.auth.uid == uid
+              || request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId);
+
+        // create-only (sem update abaixo): !exists(members/{uid}) barra
+        // quem já é membro; a corrida de duplo tap (dois setDoc pro mesmo
+        // pedido já existente) cai no allow update: if false logo abaixo,
+        // que o client trata como "pedido já enviado", nunca erro genérico
+        // (mesmo padrão já usado no projeto pra escrita create-only, ver
+        // ROADMAP.md "Padrões de escrita no Firestore").
+        allow create: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.requestedAt == request.time
+          && request.resource.data.keys().hasOnly(['uid', 'requestedAt'])
+          && !exists(/databases/$(database)/documents/groups/$(groupId)/members/$(uid));
+
+        allow update: if false;
+
+        // Cancelar (o próprio requerente) OU rejeitar (o criador do grupo).
+        allow delete: if isSignedIn()
+          && (request.auth.uid == uid
+              || request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId);
+      }
+
+      // ─────────────── groups/{groupId}/messages ───────────────
+      //
+      // Mesmo MOLDE de campos/validação de matches/{matchId}/messages acima
+      // (S124-A decisão 11), restrito ao mínimo: só texto e foto, SEM
+      // reações/replyTo/read-receipts/edição/exclusão. allow update, delete
+      // ficam se false — não existe "apagar pros dois" nem editar aqui
+      // nesta sprint (ao contrário do chat 1:1).
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
+
+        allow create: if isSignedIn()
+          && groupAllowsPost(groupId, request.auth.uid)
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && (!('imageUrl' in request.resource.data) || request.resource.data.imageUrl is string)
+          && (request.resource.data.text.size() > 0 || 'imageUrl' in request.resource.data)
+          && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl']);
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ───────────────────────── collection group reads (S124-A) ─────────────────────────
+    //
+    // CONTRAINTUITIVO — não apagar/consolidar isto achando que é duplicata
+    // das regras aninhadas `groups/{groupId}/members/{uid}` e
+    // `groups/{groupId}/joinRequests/{uid}` acima. Uma regra aninhada só
+    // autoriza LER UM DOC ESPECÍFICO (get/onSnapshot de um path completo,
+    // com groupId já conhecido) — ela NÃO cobre uma query
+    // `collectionGroup('members')`/`collectionGroup('joinRequests')`, que
+    // varre a subcoleção através de TODOS os grupos de uma vez sem o client
+    // saber o groupId de antemão. Pra uma collection group query ser
+    // autorizada, o Firestore exige uma regra declarada com o wildcard
+    // recursivo `{path=**}` bem aqui, no nível de topo.
+    //
+    // `listMyGroups` (groupService.ts) usa `collectionGroup('members')` pra
+    // achar "em quais grupos eu sou membro" sem manter uma lista própria —
+    // sem a regra `members` abaixo, essa query sempre voltava
+    // permission-denied e GroupsScreen ("Meus grupos"/"Descobrir") nunca
+    // carregava. A regra `joinRequests` gêmea não tem chamador no client
+    // hoje (o único uso client-side de `collectionGroup('joinRequests')`
+    // era pra EXCLUIR grupo com pedido pendente de "Descobrir" — removido
+    // na correção pós-auditoria, ver `listDiscoverableGroups`, porque
+    // escondia o único jeito de o usuário ver "Pedido enviado"/cancelar);
+    // mantida mesmo assim, mesmo molde da irmã `members`, porque é inofensiva
+    // (só autoextrada, ver parágrafo abaixo) e cobre o mesmo padrão que o
+    // Admin SDK já usa via `collectionGroup('joinRequests')` em
+    // `deleteAccount` (functions/src/index.ts — Admin SDK ignora rules, não
+    // depende desta regra, mas o padrão de dados é o mesmo).
+    //
+    // Não amplia o acesso além do que as regras aninhadas já garantiam: o
+    // filtro `where('uid', '==', uid)` da própria query, combinado com
+    // `resource.data.uid == request.auth.uid` aqui, só deixa cada usuário
+    // enxergar o PRÓPRIO doc de participação — nunca o de outro uid, nem
+    // por collection group. O criador continua sem conseguir listar
+    // joinRequests de OUTROS grupos por aqui (ele já lê os do PRÓPRIO grupo
+    // via a regra aninhada acima, que não precisa disto).
+    match /{path=**}/members/{memberUid} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+    match /{path=**}/joinRequests/{requestUid} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // ───────────────────────── blocks (S19) ─────────────────────────
     //
     // O client só cria/apaga o doc de bloqueio — nunca escreve users/{uid}.blockedUsers
@@ -1291,10 +1533,22 @@ service cloud.firestore {
                 && request.resource.data.momentoText.size() <= 400))
         && (!('momentoPhotoUrl' in request.resource.data)
             || request.resource.data.momentoPhotoUrl is string)
+        // S124-A — denúncia de um grupo (GroupDetailScreen/GroupChatScreen),
+        // mesmo mecanismo dos campos opcionais acima: groupId é o ID do doc
+        // groups/{groupId}; reportedId, nesse caso, é o creatorId do grupo
+        // (decidido pelo CLIENT em blockService.reportUser, não aqui —
+        // reportedId continua string livre igual sempre foi). groupName é
+        // cópia truncada, mesmo teto de momentoId/messageId (sem teto
+        // próprio) mas com teto explícito de 120 (mesmo cap do nome do
+        // grupo em groups/{groupId}.name).
+        && (!('groupId' in request.resource.data) || request.resource.data.groupId is string)
+        && (!('groupName' in request.resource.data)
+            || (request.resource.data.groupName is string
+                && request.resource.data.groupName.size() <= 120))
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
               'matchId', 'messageId', 'messageText', 'messageImageUrl',
-              'momentoId', 'momentoText', 'momentoPhotoUrl']);
+              'momentoId', 'momentoText', 'momentoPhotoUrl', 'groupId', 'groupName']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que
