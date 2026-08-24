@@ -642,7 +642,7 @@ Motivo (Raphael, 24/08/2026): o consumo por sprint está alto demais. As
 quatro causas abaixo foram levantadas a partir do que se observou na
 sessão de 22-24/08, quando ~15 sprints rodaram seguidas.
 
-**S144-A — `ARQUITETURA.md` (maior ganho, fazer primeiro)**
+**S144-A — `ARQUITETURA.md` (maior ganho, fazer primeiro)** · IMPLEMENTADA (auditoria aprovada, aguardando commit)
 Toda recon hoje remapeia o mesmo terreno estável: quais collections
 existem, o que cada uma das 27 functions faz, onde ficam os moldes
 reusáveis (expiração da S121, pedido de entrada da S124-A, visibilidade
