@@ -418,6 +418,34 @@ rule, invisível em compilação.
 4. Se falta índice composto em `firestore.indexes.json` pra essa
    combinação de where + orderBy.
 
+### S140 — Bug: conta do build 14 quebra ao salvar perfil com nome editado
+**Status:** ABERTA · sem decisões · sem recon · achado da auditoria da S137
+
+A S137 corrigiu o `allow create` de `users/{uid}` pra aceitar `name` do
+cliente antigo (build 14 Android / 1.0.5 iOS), mas NÃO tocou no
+`allow update` — que segue sem `name` no `hasOnly`.
+
+Consequência: conta criada pelo cliente antigo consegue se cadastrar, mas
+o primeiro "salvar perfil" que edite o nome derruba o save INTEIRO — bio,
+fotos, interesses, tudo junto, não só o nome. Foi registrado no comentário
+da S137 no `firestore.rules`.
+
+Duas ressalvas ligadas, também achadas pela auditoria da S137:
+1. Conta criada pelo cliente antigo nasce com o nome real no doc PÚBLICO,
+   sem o subdoc privado que a S135 criou pra proteger isso — é justamente
+   a exposição que a S135 existia pra fechar.
+2. O `functions/scripts/migrateNicknames.js` (S135) vai precisar rodar de
+   novo depois do build 15, e o cabeçalho dele hoje assume que não existem
+   contas pós-S135 sem `nickname` — premissa que a S137 invalidou.
+
+**Recon quando a sprint abrir:**
+1. O `allow update` de `users/{uid}` em `firestore.rules` — o `hasOnly` e o
+   que a `isValidProfile` valida hoje.
+2. Se a correção deve espelhar a da S137 (aceitar os dois formatos,
+   temporariamente) ou se é melhor esperar o build 15 substituir os dois
+   nas lojas e nunca tocar no update.
+3. Quantas contas na base hoje têm `name` sem `nickname`.
+
 ---
 
 ## Fechadas recentemente
