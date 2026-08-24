@@ -535,6 +535,52 @@ Arquivos tocados: `MomentoViewerModal.tsx`, `MomentosScreen.tsx`. Nenhuma
 leitura/escrita nova no Firestore, `firestore.rules`/`momentoService.ts`
 intocados.
 
+### S142 — Fluidez do chat, com foco no Android
+**Status:** ABERTA · sem decisões · sem recon · começa por RECON DE DIAGNÓSTICO
+
+Relatado por Raphael em 24/08/2026, testando em aparelho: o chat "ainda tem
+umas quebras" e não está tão fluido quanto o WhatsApp. E, comparando os dois
+sistemas, **no iPhone a fluidez está melhor que no Android** — mesmo código,
+comportamento diferente.
+
+**Esta sprint COMEÇA por diagnóstico, não por correção.** O sintoma está
+descrito de forma genérica e o terreno não foi mapeado; implementar sem
+recon aqui é chutar.
+
+**Candidatos a investigar, em ordem de impacto provável:**
+1. ENVIO OTIMISTA — se a bolha só aparece depois que o Firestore confirma,
+   é a maior fonte de sensação de travamento, sobretudo em rede ruim. O
+   WhatsApp desenha na hora com o tique de "enviando". Encaixa nos três
+   estados que a S129-B já criou.
+2. TECLADO — abrir o teclado deve empurrar a lista sem pular nem cobrir a
+   última mensagem. É o defeito mais comum em React Native e o que mais
+   parece "quebra". Também é a área onde iOS e Android divergem mais:
+   `KeyboardAvoidingView` tem comportamento diferente por plataforma, e
+   `android:windowSoftInputMode` no manifesto muda tudo — forte suspeita
+   pra diferença relatada entre os dois sistemas.
+3. ROLAGEM ao chegar mensagem nova — não arrastar à força quem está lendo
+   histórico; mostrar "↓ nova mensagem" como o WhatsApp.
+4. PAGINAÇÃO do histórico — carregar tudo de uma vez trava a abertura da
+   conversa; carregar aos poucos ao rolar pra cima sem perder posição.
+5. "DIGITANDO…" — a presença da S79-C2 já existe, então é barato e dá
+   sensação de vida.
+
+**Recon quando a sprint abrir:**
+1. Como o `ChatScreen.tsx` renderiza a lista hoje: FlatList invertida?
+   `keyExtractor` estável? há `React.memo` no MessageBubble? quantos
+   listeners ativos por conversa?
+2. Se o envio é otimista ou espera o servidor.
+3. Como o teclado é tratado, e o que difere entre iOS e Android nesse
+   ponto — incluindo `app.json`/manifesto Android.
+4. Se há paginação do histórico ou carga total.
+5. Medir antes de mexer: quantas mensagens existem numa conversa de teste
+   e a partir de quantas a lista engasga.
+
+**Nota:** a diferença iOS x Android pode não ser só do chat — pode ser
+característica geral do aparelho de teste (modelo, versão do Android) ou do
+Expo Go. A recon deve dizer se o problema é do ChatScreen ou do app inteiro
+antes de qualquer correção.
+
 ---
 
 ## Fechadas recentemente
