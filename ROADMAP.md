@@ -165,9 +165,9 @@ Três camadas por cima do grupo pronto, todas REUSANDO o que já existe:
 `tsc --noEmit` limpo nos dois pacotes (app e `functions/`), lint sem erro
 novo (0 erros / 15 warnings, todos pré-existentes em arquivos não tocados
 por esta sprint — nenhum warning novo nos 5 arquivos mexidos/criados).
-Rules revisadas manualmente (sem dry-run de deploy). **NÃO deployado**
-(rules) — Raphael roda o deploy. SEM teste em aparelho ainda — só validado
-por tipo/lint/revisão manual.
+Rules DEPLOYADAS em 22/08/2026, junto com as functions
+onGroupPollVoteCreated, onGroupPollChanged e getGroupActiveNowCount. SEM
+teste em aparelho ainda — só validado por tipo/lint/revisão manual.
 
 ### S125 — Eventos / encontros
 **Status:** ABERTA · decisões tomadas · sem recon
@@ -315,7 +315,7 @@ fire-and-forget, sem listener adicional.
 - `firestore.rules` — `matches/{matchId}` update: `hasOnly` ganha
   `'deliveredAt'`; guard duplicado do padrão já usado em `lastReadAt`
   (cada uid só altera a própria chave, valor tem que ser timestamp).
-  **NÃO deployado.**
+  DEPLOYADO em 22/08/2026.
 
 `tsc --noEmit` limpo, lint sem erro novo (0 erros / 21 warnings, baseline
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
