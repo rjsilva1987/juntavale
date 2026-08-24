@@ -1,4 +1,18 @@
-// rules-stamp: S124-A (23/08/2026 — Grupos: esqueleto. Nova collection raiz
+// rules-stamp: S124-B (24/08/2026 — Grupos: camadas de engajamento. Enquete
+// de grupo: groups/{groupId} ganha `poll` {question,options} opcional,
+// mesmo teto de isValidProfile.poll [100/2/4, MAX_POLL_* de
+// src/constants/poll.ts, duplicado aqui de propósito — rules não importa
+// src/], liberado num RAMO NOVO do allow update restrito a
+// request.auth.uid == resource.data.creatorId, separado (OR) do ramo
+// memberCount já existente; `pollCounts` fora de qualquer hasOnly, só
+// Admin SDK escreve, mesmo tratamento do pollCounts de perfil; nova
+// subcoleção groups/{groupId}/pollVotes/{voterUid}, create-only, mirror de
+// users/{ownerUid}/pollVotes/{voterUid} com uma diferença — exige
+// exists(groups/{groupId}/members/{voterUid}), só membro vota. Camada 2
+// (contador de gente ativa agora) e camada 3 (selo de fundador do grupo)
+// NÃO tocam rules — a 1ª é 100% Admin SDK via callable
+// getGroupActiveNowCount [functions/src/index.ts], a 2ª é reuso visual puro
+// de group.creatorId, já legível.) + S124-A (23/08/2026 — Grupos: esqueleto. Nova collection raiz
 // groups/{groupId} [name<=120, description opcional<=2000, creatorId,
 // createdAt==request.time, expiresAt>request.time e <=+30d, memberCount
 // denormalizado mantido pelo CLIENT — writeBatch na criação (memberCount
@@ -1294,16 +1308,51 @@ service cloud.firestore {
       // contador denormalizado (ver comentário "memberCount... mantido pelo
       // client" na spec desta sprint); memberCount é só um número de
       // exibição, não gate de acesso.
+      // S124-B (camada 1 — Enquete de grupo) — allow update ganha um SEGUNDO
+      // ramo (OR), independente do memberCount abaixo: troca do campo
+      // `poll`, restrita ao CRIADOR (request.auth.uid ==
+      // resource.data.creatorId — a rule é quem garante de verdade, não a
+      // checagem isCreator da UI). Mesma validação de shape já usada em
+      // isValidProfile [poll de perfil, ~linha 437] duplicada aqui de
+      // propósito: rules não tem função compartilhada entre
+      // users/{userId} e groups/{groupId}, e mexer em isValidProfile pra
+      // aceitar um shape genérico arriscaria regressão numa validação já em
+      // produção. Ausente (deleteField()) é sempre válido — mesmo padrão de
+      // about/aboutHidden/poll de perfil. `pollCounts` de propósito NÃO
+      // entra em NENHUM hasOnly aqui — só Admin SDK escreve (ver
+      // onGroupPollVoteCreated/onGroupPollChanged, functions/src/index.ts).
       allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
-        && request.resource.data.memberCount is number
         && (
-          (request.resource.data.memberCount == resource.data.memberCount + 1
-            && request.auth.uid == resource.data.creatorId)
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberCount'])
+            && request.resource.data.memberCount is number
+            && (
+              (request.resource.data.memberCount == resource.data.memberCount + 1
+                && request.auth.uid == resource.data.creatorId)
+              ||
+              (request.resource.data.memberCount == resource.data.memberCount - 1
+                && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid))
+                && !existsAfter(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)))
+            )
+          )
           ||
-          (request.resource.data.memberCount == resource.data.memberCount - 1
-            && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid))
-            && !existsAfter(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)))
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['poll'])
+            && request.auth.uid == resource.data.creatorId
+            && (
+              !('poll' in request.resource.data)
+              || (
+                request.resource.data.poll is map
+                && request.resource.data.poll.keys().hasOnly(['question', 'options'])
+                && request.resource.data.poll.question is string
+                && request.resource.data.poll.question.size() > 0
+                && request.resource.data.poll.question.size() <= 100
+                && request.resource.data.poll.options is list
+                && request.resource.data.poll.options.size() >= 2
+                && request.resource.data.poll.options.size() <= 4
+              )
+            )
+          )
         );
 
       // Sem exclusão antecipada do grupo pelo criador nesta sprint (decisão
@@ -1401,6 +1450,36 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl']);
 
         allow update, delete: if false;
+      }
+
+      // ─── groups/{groupId}/pollVotes (S124-B, camada 1) ───
+      //
+      // Mirror de users/{ownerUid}/pollVotes/{voterUid} (S126, linha
+      // ~686): voto imutável (create-only), allow read restrito ao PRÓPRIO
+      // votante — o criador NÃO lê quem votou o quê, só o agregado
+      // (groups/{groupId}.pollCounts, escrito só pela Cloud Function
+      // onGroupPollVoteCreated via Admin SDK). Diferença em relação ao
+      // poll de perfil: exige que quem vota seja MEMBRO do grupo
+      // (exists(groups/{groupId}/members/{voterUid})) — perfil não tem
+      // conceito de "membro". Sem restrição de voterUid != creatorId (ao
+      // contrário do poll de perfil): o criador é membro do próprio grupo
+      // e pode votar na própria enquete, cenário normal aqui.
+      match /pollVotes/{voterUid} {
+        allow read: if isSignedIn() && request.auth.uid == voterUid;
+
+        allow create: if isSignedIn()
+          && request.auth.uid == voterUid
+          && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(voterUid))
+          && request.resource.data.keys().hasOnly(['optionIndex', 'createdAt'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.optionIndex is int
+          && request.resource.data.optionIndex >= 0
+          && exists(/databases/$(database)/documents/groups/$(groupId))
+          && get(/databases/$(database)/documents/groups/$(groupId)).data.poll.options.size()
+              > request.resource.data.optionIndex;
+
+        allow update: if false; // voto é imutável — nunca se reescreve, só se cria
+        allow delete: if false; // sem "desfazer voto" nesta sprint
       }
     }
 

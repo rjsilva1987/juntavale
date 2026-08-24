@@ -10,6 +10,7 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -20,12 +21,14 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 
-import { db, storage } from '@/services/firebase';
+import { db, functions, storage } from '@/services/firebase';
 
 // Mesmo teto de nickname (firestore.rules) — nome do grupo.
 export const MAX_GROUP_NAME_LENGTH = 120;
@@ -38,6 +41,16 @@ export const MAX_GROUP_DURATION_DAYS = 30;
 
 export type GroupMemberRole = 'creator' | 'member';
 
+// S124-B (camada 1 — Enquete de grupo) — mesmo shape de users/{uid}.poll
+// (firestoreService.ts:176), schema PARALELO (não aponta pra mesma
+// collection). Tetos em src/constants/poll.ts (MIN_POLL_OPTIONS/
+// MAX_POLL_OPTIONS/MAX_POLL_QUESTION_LENGTH/MAX_POLL_OPTION_LENGTH),
+// reusados, nunca duplicados.
+export interface GroupPoll {
+  question: string;
+  options: string[];
+}
+
 export interface Group {
   id: string;
   name: string;
@@ -49,6 +62,18 @@ export interface Group {
   // membro (ver createGroup/approveJoinRequest/leaveGroup abaixo) — nunca
   // por Cloud Function. Início em 1 na criação (o criador já é membro).
   memberCount: number;
+  // S124-B (camada 1) — só o criador cria/edita (setGroupPoll/removeGroupPoll
+  // abaixo), reforçado nas rules (firestore.rules: ramo novo do allow update
+  // de groups/{groupId}, restrito a request.auth.uid == creatorId). Trocar a
+  // pergunta zera os votos (onGroupPollChanged, functions/src/index.ts) —
+  // "substituir", não "editar em cima". Ausente = grupo sem enquete.
+  poll?: GroupPoll;
+  // S124-B — mapa esparso de contagem por opção (chave = índice como
+  // string), escrito SÓ pela Cloud Function onGroupPollVoteCreated (Admin
+  // SDK) — o client, inclusive o criador, NUNCA grava este campo (ver
+  // firestore.rules: não entra em nenhum hasOnly de client). Chave ausente =
+  // contagem zero pra aquela opção.
+  pollCounts?: Record<string, number>;
 }
 
 export interface GroupMember {
@@ -343,4 +368,76 @@ export const uploadGroupChatImage = async (
   });
 
   return getDownloadURL(storageRef);
+};
+
+// ─── Enquete de grupo (S124-B, camada 1) ─────────────────────
+//
+// Réplica FIEL do desenho de enquete de perfil (S126), escopada a
+// groups/{groupId} em vez de users/{uid} — schema NOVO e PARALELO, não
+// aponta pra mesma collection. Ver GroupPoll/Group.pollCounts acima.
+
+const groupPollVoteRef = (groupId: string, voterUid: string) =>
+  doc(db, 'groups', groupId, 'pollVotes', voterUid);
+
+// Só deve ser chamada pela UI quando isCreator (mesma checagem de
+// GroupDetailScreen.tsx) — quem garante de verdade é a rule (allow update
+// restrito a request.auth.uid == resource.data.creatorId).
+export const setGroupPoll = async (
+  groupId: string,
+  question: string,
+  options: string[],
+): Promise<void> => {
+  await updateDoc(groupRef(groupId), { poll: { question, options } });
+};
+
+// Mesmo padrão de handleRemovePoll (perfil, firestoreService.ts:333-338/
+// 650-660) — deleteField(), não gravar undefined. A limpeza de
+// pollVotes/pollCounts é responsabilidade da Cloud Function
+// onGroupPollChanged (reage à mudança do campo `poll`; deleteField() conta
+// como mudança).
+export const removeGroupPoll = async (groupId: string): Promise<void> => {
+  await updateDoc(groupRef(groupId), { poll: deleteField() });
+};
+
+// Mirror de getMyPollVote (firestoreService.ts:826-829).
+export const getMyGroupPollVote = async (
+  groupId: string,
+  voterUid: string,
+): Promise<number | null> => {
+  const snap = await getDoc(groupPollVoteRef(groupId, voterUid));
+  return snap.exists() ? (snap.data().optionIndex as number) : null;
+};
+
+// setDoc sem merge, mirror de castPollVote (firestoreService.ts:837-846):
+// mesmo comportamento esperado de corrida — se o doc já existe (voto em
+// outro aparelho/tela ao mesmo tempo), as rules negam o update (allow
+// update: if false) e a Promise rejeita com permission-denied. Isso é
+// ESPERADO, não é bug — o chamador (GroupDetailScreen) trata como "já
+// votou", nunca como Alert genérico de erro.
+export const castGroupPollVote = async (
+  groupId: string,
+  voterUid: string,
+  optionIndex: number,
+): Promise<void> => {
+  await setDoc(groupPollVoteRef(groupId, voterUid), {
+    optionIndex,
+    createdAt: serverTimestamp(),
+  });
+};
+
+// ─── Gente ativa agora (S124-B, camada 2) ────────────────────
+//
+// Decisão de arquitetura (registrada na spec): NÃO estender as rules de
+// presence/{uid} pra coparticipação em grupo (custo de get() em regra +
+// exposição de lastSeenAt individual de gente sem match). Callable SOB
+// DEMANDA, Admin SDK (bypassa rules), retorna só um número agregado —
+// NUNCA a lista de quem está ativo nem lastSeenAt individual. Ver
+// getGroupActiveNowCount em functions/src/index.ts.
+export const getGroupActiveNowCount = async (groupId: string): Promise<number> => {
+  const call = httpsCallable<{ groupId: string }, { count: number }>(
+    functions,
+    'getGroupActiveNowCount',
+  );
+  const result = await call({ groupId });
+  return result.data.count;
 };

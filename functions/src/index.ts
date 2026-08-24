@@ -1692,3 +1692,96 @@ export const onGroupMemberCreated = onDocumentCreated(
     ]);
   },
 );
+
+// S124-B (camada 1 — Enquete de grupo). Mirror EXATO de onPollVoteCreated
+// (S126, acima) pra groups/{groupId}.pollCounts, com uma diferença
+// deliberada: SEM push aqui. "Push a cada mensagem/evento de grupo" não
+// está nas 3 camadas aprovadas desta sprint (ver ROADMAP.md S124-B "NÃO
+// FAZER") e o ROADMAP só autoriza reusar o DESENHO da S126, não replicar o
+// push dela — o push de perfil avisa o DONO de um perfil pessoal; não há
+// "dono pessoal" simétrico num grupo, avisar TODO o grupo a cada voto seria
+// ruído. Revisitar isso é decisão de produto nova, fora desta sprint.
+// FieldValue.increment é atômico no servidor, mesmo raciocínio de
+// onPollVoteCreated: seguro contra concorrência sem transação nem leitura
+// prévia do valor atual.
+export const onGroupPollVoteCreated = onDocumentCreated(
+  { document: 'groups/{groupId}/pollVotes/{voterUid}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { groupId } = event.params;
+    const { optionIndex } = snap.data() as { optionIndex: number };
+
+    await db.doc(`groups/${groupId}`).update({
+      [`pollCounts.${optionIndex}`]: FieldValue.increment(1),
+    });
+  },
+);
+
+// S124-B (camada 1). Mirror de onPollChanged (S126, acima): pergunta/opções
+// trocadas (ou enquete removida via deleteField()) zera os votos antigos e o
+// agregado — "substituir", não "editar em cima". Mesma GUARDA ANTI-LOOP: este
+// update só toca pollCounts (FieldValue.delete()) e apaga pollVotes/*, nunca
+// `poll`, então a 2ª invocação que ele próprio dispara sempre vê
+// before.poll == after.poll e sai no primeiro if, sem repetir a limpeza.
+export const onGroupPollChanged = onDocumentUpdated(
+  { document: 'groups/{groupId}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const beforePoll = JSON.stringify(before.poll ?? null);
+    const afterPoll = JSON.stringify(after.poll ?? null);
+    if (beforePoll === afterPoll) return;
+
+    const { groupId } = event.params;
+    const votesSnap = await db.collection(`groups/${groupId}/pollVotes`).get();
+    const batch = db.batch();
+    votesSnap.forEach((doc) => batch.delete(doc.ref));
+    batch.update(db.doc(`groups/${groupId}`), { pollCounts: FieldValue.delete() });
+    await batch.commit();
+  },
+);
+
+// S124-B (camada 2 — Gente ativa agora). Réplica manual de PRESENCE_ONLINE_MS
+// (src/hooks/usePresenceHeartbeat.ts:20) — Cloud Functions não importa src/
+// (mesmo padrão de SUPPORT_CATEGORY_LABELS, topo do arquivo), sincronize
+// manualmente se a janela de "online" mudar lá.
+const PRESENCE_ONLINE_MS = 2 * 60 * 1000;
+
+// Decisão de arquitetura (spec S124-B): NÃO estender as rules de
+// presence/{uid} pra coparticipação em grupo (custo de get() em regra +
+// exposição de lastSeenAt individual de gente sem match). Callable SOB
+// DEMANDA em vez disso — Admin SDK bypassa rules, mas retorna só um NÚMERO
+// agregado, nunca a lista de uids nem lastSeenAt individual de ninguém.
+export const getGroupActiveNowCount = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Você precisa estar autenticado.');
+  }
+
+  const groupId = request.data?.groupId;
+  if (typeof groupId !== 'string' || groupId.length === 0) {
+    throw new HttpsError('invalid-argument', 'groupId inválido.');
+  }
+
+  const callerMemberSnap = await db.doc(`groups/${groupId}/members/${request.auth.uid}`).get();
+  if (!callerMemberSnap.exists) {
+    throw new HttpsError('permission-denied', 'Você não é membro deste grupo.');
+  }
+
+  const membersSnap = await db.collection(`groups/${groupId}/members`).get();
+  const presenceSnaps = await Promise.all(
+    membersSnap.docs.map((memberDoc) => db.doc(`presence/${memberDoc.id}`).get()),
+  );
+
+  const now = Date.now();
+  const count = presenceSnaps.reduce((total, presenceSnap) => {
+    const lastSeenAt = presenceSnap.data()?.lastSeenAt as Timestamp | undefined;
+    if (!lastSeenAt) return total;
+    return now - lastSeenAt.toMillis() < PRESENCE_ONLINE_MS ? total + 1 : total;
+  }, 0);
+
+  return { count };
+});

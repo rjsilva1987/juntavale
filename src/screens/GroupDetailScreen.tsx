@@ -15,6 +15,8 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { GroupFounderTag } from '@/components/GroupFounderTag';
+import { PollEditModal } from '@/components/PollEditModal';
 import { ReportModal } from '@/components/ReportModal';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,16 +26,21 @@ import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   approveJoinRequest,
   cancelJoinRequest,
+  castGroupPollVote,
+  getGroupActiveNowCount,
+  getMyGroupPollVote,
+  getMyJoinRequest,
+  getMyMembership,
   Group,
   GroupJoinRequest,
   GroupMember,
-  getMyJoinRequest,
-  getMyMembership,
   leaveGroup,
   listenGroup,
   listenJoinRequests,
   rejectJoinRequest,
+  removeGroupPoll,
   requestToJoinGroup,
+  setGroupPoll,
 } from '@/services/groupService';
 import { getDisplayName } from '@/utils/profile';
 
@@ -53,6 +60,26 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
   const [busyUid, setBusyUid] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
+
+  // S124-B (camada 3 — Selo de fundador do grupo) — resolve o profile do
+  // creatorId pra exibir "Criado por X" (nickname público, S135 — nunca
+  // nome real). undefined = ainda carregando, null = perfil não encontrado
+  // (conta apagada).
+  const [creatorProfile, setCreatorProfile] = useState<UserProfile | null | undefined>(undefined);
+
+  // S124-B (camada 1 — Enquete de grupo) — mesmo molde do painel de enquete
+  // do SwipeScreen/ProfileScreen (S126): pollModalVisible/pollSaving pro
+  // modal de criar/editar (só o criador), myPollVote/pollVoteResolved pro
+  // voto do usuário atual. `resolved` distingue "ainda não veio a resposta"
+  // de "de fato não votou" (myPollVote === null é ambíguo pros dois casos).
+  const [pollModalVisible, setPollModalVisible] = useState(false);
+  const [pollSaving, setPollSaving] = useState(false);
+  const [myPollVote, setMyPollVote] = useState<number | null>(null);
+  const [pollVoteResolved, setPollVoteResolved] = useState(false);
+
+  // S124-B (camada 2 — Gente ativa agora) — null enquanto não carregou (ou
+  // enquanto o usuário ainda não é membro, ver useEffect abaixo).
+  const [activeNowCount, setActiveNowCount] = useState<number | null>(null);
 
   // permission-denied (grupo expirou/foi apagado) já vira `null` dentro de
   // listenGroup — ver groupService.ts.
@@ -119,6 +146,127 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
       });
     })();
   }, [isCreator, pendingRequests, requesterProfiles]);
+
+  // S124-B (camada 3) — resolve o nome de quem criou pra linha "Criado por
+  // X". Roda de novo só se creatorId mudar (não muda na prática, mas o
+  // listener de group pode reemitir o mesmo doc).
+  useEffect(() => {
+    if (!group?.creatorId) return;
+    let cancelled = false;
+    getUserProfile(group.creatorId)
+      .then((p) => {
+        if (!cancelled) setCreatorProfile(p);
+      })
+      .catch((err) => {
+        console.error('[GroupDetailScreen] falha ao carregar perfil do criador:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [group?.creatorId]);
+
+  // S124-B (camada 1, S124-B-fix) — carrega o voto já dado (se houver) toda
+  // vez que o CONTEÚDO da enquete muda (question, options, qualquer campo —
+  // mesmo critério de JSON.stringify(poll) que onGroupPollChanged usa pra
+  // decidir se reseta pollVotes/pollCounts; deps por question sozinha
+  // deixava a tela achando que o voto antigo ainda valia quando só as
+  // opções mudavam) ou quando o grupo deixa de ter enquete. Sem enquete,
+  // não há nada a resolver — pollVoteResolved fica true e myPollVote null
+  // (estado inerte, os botões de voto nunca renderizam sem group.poll).
+  useEffect(() => {
+    if (!group?.poll || !user) {
+      setMyPollVote(null);
+      setPollVoteResolved(!group?.poll);
+      return;
+    }
+    let cancelled = false;
+    setPollVoteResolved(false);
+    getMyGroupPollVote(groupId, user.uid)
+      .then((vote) => {
+        if (!cancelled) setMyPollVote(vote);
+      })
+      .catch((err) => {
+        console.error('[GroupDetailScreen] falha ao carregar voto da enquete:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setPollVoteResolved(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId, JSON.stringify(group?.poll ?? null), user?.uid]);
+
+  // S124-B (camada 2) — sem polling automático nesta sprint: só recarrega
+  // no MOUNT (esta tela não usa useFocusEffect/navigation.addListener em
+  // nenhum outro ponto, ao contrário de GroupsScreen — spec autoriza cair
+  // pro mount quando não há esse padrão já em uso aqui). Só chama pra quem
+  // já é membro: a callable nega quem não é (permission-denied), e o
+  // número não faz sentido pra quem ainda nem entrou.
+  useEffect(() => {
+    if (!membership) return;
+    let cancelled = false;
+    getGroupActiveNowCount(groupId)
+      .then((count) => {
+        if (!cancelled) setActiveNowCount(count);
+      })
+      .catch((err) => {
+        console.error('[GroupDetailScreen] falha ao carregar contador de ativos:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, membership]);
+
+  const handleSavePoll = async (question: string, options: string[]) => {
+    setPollSaving(true);
+    try {
+      await setGroupPoll(groupId, question, options);
+      setPollModalVisible(false);
+    } catch (err) {
+      console.error('[GroupDetailScreen] falha ao salvar enquete:', err);
+      Alert.alert('Erro', 'Não foi possível salvar a enquete.');
+    } finally {
+      setPollSaving(false);
+    }
+  };
+
+  // Não apaga `pollCounts`/pollVotes aqui — isso é responsabilidade da
+  // Cloud Function onGroupPollChanged, que reage à mudança do campo `poll`
+  // (deleteField() conta como mudança), mesmo padrão de handleRemovePoll no
+  // perfil (firestoreService.ts).
+  const handleRemovePoll = async () => {
+    setPollSaving(true);
+    try {
+      await removeGroupPoll(groupId);
+      setPollModalVisible(false);
+    } catch (err) {
+      console.error('[GroupDetailScreen] falha ao remover enquete:', err);
+      Alert.alert('Erro', 'Não foi possível remover a enquete.');
+    } finally {
+      setPollSaving(false);
+    }
+  };
+
+  // Otimista, mesmo padrão de handleVotePoll (SwipeScreen, S126):
+  // permission-denied aqui significa "já tinha votado" (corrida — outro
+  // device/tela ao mesmo tempo), não erro genérico.
+  const handleVotePoll = async (optionIndex: number) => {
+    if (!user) return;
+    setMyPollVote(optionIndex);
+    try {
+      await castGroupPollVote(groupId, user.uid, optionIndex);
+    } catch (e) {
+      const isPermissionDenied =
+        typeof e === 'object' &&
+        e !== null &&
+        'code' in e &&
+        (e as { code?: unknown }).code === 'permission-denied';
+      if (isPermissionDenied) return;
+      setMyPollVote(null);
+      Alert.alert('Erro', 'Não foi possível registrar seu voto.');
+    }
+  };
 
   const handleRequestToJoin = async () => {
     if (!user) return;
@@ -350,7 +498,101 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
                   Encerra em {dayjs(group.expiresAt.toDate()).format('DD/MM/YYYY [às] HH:mm')}
                 </Text>
               </View>
+              {/* S124-B (camada 3 — Selo de fundador do grupo): reusa
+                  getDisplayName (S135 — nickname público, nunca nome real).
+                  O badge aqui é sempre "verdadeiro" por construção (a pessoa
+                  citada é sempre o creatorId) — mesmo vocabulário visual do
+                  FounderBadge, mas condicionado a group.creatorId, não a
+                  founderNumber. */}
+              <View style={styles.metaRow}>
+                <Ionicons
+                  name="person-circle-outline"
+                  size={16}
+                  color={theme.colors.textSecondary}
+                />
+                <Text style={styles.metaText}>
+                  Criado por{' '}
+                  {creatorProfile === undefined
+                    ? '…'
+                    : creatorProfile
+                      ? getDisplayName(creatorProfile)
+                      : 'alguém que apagou a conta'}
+                </Text>
+                <GroupFounderTag />
+              </View>
+              {/* S124-B (camada 2 — Gente ativa agora): sem ícone/selo novo
+                  (spec), texto simples. Só aparece pra quem já é membro —
+                  ver useEffect que carrega activeNowCount. */}
+              {activeNowCount != null && (
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaText}>
+                    {activeNowCount} {activeNowCount === 1 ? 'ativo' : 'ativos'} agora
+                  </Text>
+                </View>
+              )}
             </View>
+
+            {/* S124-B (camada 1 — Enquete de grupo): reusa PollEditModal
+                (genérico, não amarrado a users/{uid} — só recebe callbacks)
+                pra criar/editar. Card só aparece pra quem já é membro: só
+                membro pode votar (rules exigem exists(members/{voterUid})),
+                e mostrar pergunta+botões de voto pra quem nem entrou não faz
+                sentido de produto. */}
+            {membership && !!group.poll && (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Enquete</Text>
+                <Text style={styles.pollQuestionText}>{group.poll.question}</Text>
+                {!pollVoteResolved ? (
+                  <ActivityIndicator color={theme.colors.primary} />
+                ) : myPollVote != null ? (
+                  <>
+                    {group.poll.options.map((option, index) => (
+                      <View key={index} style={styles.pollCountRow}>
+                        <Text style={styles.pollCountOptionText} numberOfLines={1}>
+                          {option}
+                        </Text>
+                        <Text style={styles.pollCountValue}>{group.pollCounts?.[index] ?? 0}</Text>
+                      </View>
+                    ))}
+                    <Text style={styles.pollTotalText}>
+                      {Object.values(group.pollCounts ?? {}).reduce((sum, n) => sum + n, 0)} voto(s)
+                      no total
+                    </Text>
+                  </>
+                ) : (
+                  group.poll.options.map((option, index) => (
+                    <AnimatedPressable
+                      key={index}
+                      style={styles.pollOption}
+                      onPress={() => handleVotePoll(index)}
+                    >
+                      <Text style={styles.pollOptionText}>{option}</Text>
+                    </AnimatedPressable>
+                  ))
+                )}
+                {isCreator && (
+                  <AnimatedPressable
+                    style={styles.addPromptBtn}
+                    onPress={() => setPollModalVisible(true)}
+                  >
+                    <Ionicons name="pencil-outline" size={18} color={theme.colors.primary} />
+                    <Text style={styles.addPromptText}>Editar</Text>
+                  </AnimatedPressable>
+                )}
+              </View>
+            )}
+            {membership && !group.poll && isCreator && (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Enquete</Text>
+                <AnimatedPressable
+                  style={styles.addPromptBtn}
+                  onPress={() => setPollModalVisible(true)}
+                >
+                  <Ionicons name="add" size={18} color={theme.colors.primary} />
+                  <Text style={styles.addPromptText}>Criar enquete</Text>
+                </AnimatedPressable>
+              </View>
+            )}
 
             <View style={styles.actionsWrap}>{renderActions()}</View>
 
@@ -404,6 +646,16 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
         onClose={() => setReportVisible(false)}
         onSubmit={handleReport}
         title="Denunciar grupo"
+      />
+
+      <PollEditModal
+        visible={pollModalVisible}
+        initialQuestion={group?.poll?.question}
+        initialOptions={group?.poll?.options}
+        onSave={handleSavePoll}
+        onRemove={group?.poll ? handleRemovePoll : undefined}
+        onClose={() => setPollModalVisible(false)}
+        saving={pollSaving}
       />
     </Animated.View>
   );
@@ -508,4 +760,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // S124-B (camada 1 — Enquete de grupo) — mesmo vocabulário visual da
+  // enquete de perfil: pollQuestionText/pollCountRow/pollCountOptionText/
+  // pollCountValue/pollTotalText mirroram ProfileScreen.tsx (agregado);
+  // pollOption/pollOptionText mirroram ProfileSections.tsx (voto);
+  // addPromptBtn/addPromptText mirroram o botão "Criar"/"Editar" de
+  // ProfileScreen.tsx.
+  pollQuestionText: {
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  pollCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  pollCountOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text, flex: 1 },
+  pollCountValue: { fontSize: theme.fontSize.md, color: theme.colors.primary, fontWeight: '700' },
+  pollTotalText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  pollOption: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    backgroundColor: theme.colors.background,
+  },
+  pollOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  addPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  addPromptText: { fontSize: theme.fontSize.sm, color: theme.colors.primary, fontWeight: '700' },
 });

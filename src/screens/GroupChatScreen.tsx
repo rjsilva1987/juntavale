@@ -34,12 +34,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { GroupFounderTag } from '@/components/GroupFounderTag';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
+  getGroup,
   getMyMembership,
   GroupMessage,
   listenGroupMessages,
@@ -63,7 +65,19 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [creatorId, setCreatorId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<GroupMessage>>(null);
+
+  // S124-B (camada 3 — Selo de fundador do grupo) — a tela hoje só recebe
+  // groupId/groupName via route params (ver comentário de RootStackParamList
+  // acima), sem creatorId; getGroup(groupId) já existe em groupService.ts
+  // (S124-A) — busca uma vez no mount em vez de alterar
+  // RootStackParamList/os call sites de navigation.navigate.
+  useEffect(() => {
+    getGroup(groupId)
+      .then((g) => setCreatorId(g?.creatorId ?? null))
+      .catch((err) => console.error('[GroupChatScreen] falha ao carregar grupo:', err));
+  }, [groupId]);
 
   useEffect(() => {
     if (!user) return;
@@ -172,7 +186,12 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          {!isMe && !!senderName && <Text style={styles.senderName}>{senderName}</Text>}
+          {!isMe && !!senderName && (
+            <View style={styles.senderNameRow}>
+              <Text style={styles.senderName}>{senderName}</Text>
+              {!!creatorId && item.senderId === creatorId && <GroupFounderTag />}
+            </View>
+          )}
           {imageUrl ? (
             <Pressable onPress={() => setViewerImage(imageUrl)}>
               <Image
@@ -386,6 +405,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  // S124-B (camada 3) — linha própria pro nome + GroupFounderTag, mesmo
+  // padrão de nameRow (ProfileScreen: nome + VerifiedBadge/FounderBadge).
+  senderNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   senderName: {
     fontSize: theme.fontSize.xs,
     fontWeight: '700',

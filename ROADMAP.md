@@ -94,7 +94,8 @@ Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
    mostrando só `groupName` (sem foto — grupo não tem).
 
 ### S124-B — Grupos: camadas de engajamento
-**Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S124-A
+**Status:** EM IMPLEMENTAÇÃO (implementada, aguardando auditoria) · decisões
+tomadas · recon feita (24/08/2026)
 
 Três camadas por cima do grupo pronto, todas REUSANDO o que já existe:
 1. Enquete dentro do grupo — reusa a S126 (já implementada).
@@ -109,6 +110,64 @@ Três camadas por cima do grupo pronto, todas REUSANDO o que já existe:
   importa.
 - Sequência diária / streak — cria obrigação, e obrigação em app social
   entre colegas de trabalho vira desconforto.
+
+**Recon feita (24/08/2026):**
+1. `PollEditModal.tsx` (S126) é 100% genérico — recebe só
+   `question/options/onSave/onRemove/onClose/saving`, não amarrado a
+   `users/{uid}` — reusado DIRETO no `GroupDetailScreen`, sem componente
+   local novo pra edição.
+2. A EXIBIÇÃO da enquete, porém, não deu pra reusar direto: `ProfileScreen`
+   (dono vê agregado, nunca vota) e `ProfileSections` (visitante vota, nunca
+   vê agregado) têm regras de visibilidade MUTUAMENTE EXCLUSIVAS — nenhuma
+   das duas cobre "qualquer membro que já votou vê o agregado", que é o
+   comportamento pedido pra grupo. Bloco de exibição escrito local em
+   `GroupDetailScreen.tsx`, reusando só os TOKENS de estilo dos dois (mesmo
+   vocabulário visual, JSX próprio).
+3. `functions/src/index.ts` é um pacote TypeScript separado (`rootDir: src`
+   dentro de `functions/`, sem path alias, sem `react-native` nas deps) —
+   NÃO importa nada de `src/` do app (confirmado pelo comentário já
+   existente sobre `SUPPORT_CATEGORY_LABELS`). `PRESENCE_ONLINE_MS`
+   (`src/hooks/usePresenceHeartbeat.ts:20`) foi replicado manualmente na
+   function, com comentário apontando a fonte — mesmo padrão já
+   estabelecido no arquivo pra esse tipo de constante, não dá pra "exportar
+   em vez de duplicar" entre os dois pacotes.
+4. `GroupDetailScreen.tsx` não usa `useFocusEffect`/`navigation.addListener
+   ('focus', ...)` em nenhum ponto (ao contrário de `GroupsScreen.tsx`) —
+   camada 2 (contador de ativos) recarrega no MOUNT, seguindo o fallback já
+   previsto na spec pra tela sem esse padrão.
+
+**Implementação (24/08/2026):**
+- `src/services/groupService.ts` — `Group` ganha `poll?`/`pollCounts?`;
+  novo tipo `GroupPoll`; `setGroupPoll`/`removeGroupPoll`/
+  `getMyGroupPollVote`/`castGroupPollVote` (enquete) e
+  `getGroupActiveNowCount` (callable de gente ativa agora).
+- `functions/src/index.ts` — `onGroupPollVoteCreated`/`onGroupPollChanged`
+  (mirror de `onPollVoteCreated`/`onPollChanged` da S126, SEM push);
+  `getGroupActiveNowCount` (callable `onCall`, Admin SDK, retorna só
+  `{count}`); constante local `PRESENCE_ONLINE_MS` (ver recon item 3).
+- `firestore.rules` — `groups/{groupId}` allow update ganha ramo novo (OR)
+  pra `poll`, restrito ao criador, mesma validação de shape de
+  `isValidProfile.poll`; nova subcoleção `groups/{groupId}/pollVotes/
+  {voterUid}` (create-only, mirror do poll de perfil + checagem de
+  membro). `presence/{uid}` NÃO tocado (camada 2 é 100% Admin SDK via
+  callable). rules-stamp atualizado (linha 1).
+- `src/components/GroupFounderTag.tsx` (novo) — badge "Criador", mesmo
+  vocabulário visual do `FounderBadge.tsx`, sem ligação com
+  `founderNumber`/`ACHIEVEMENT_IDS`.
+- `src/screens/GroupDetailScreen.tsx` — card de enquete (criar/votar/ver
+  agregado, reusando `PollEditModal`), linha "Criado por X" +
+  `GroupFounderTag`, contador "X ativo(s) agora" (só membro, recarrega no
+  mount).
+- `src/screens/GroupChatScreen.tsx` — `getGroup(groupId)` no mount pra obter
+  `creatorId` (sem alterar `RootStackParamList`); `GroupFounderTag` ao lado
+  do nome do remetente quando `senderId === creatorId`.
+
+`tsc --noEmit` limpo nos dois pacotes (app e `functions/`), lint sem erro
+novo (0 erros / 15 warnings, todos pré-existentes em arquivos não tocados
+por esta sprint — nenhum warning novo nos 5 arquivos mexidos/criados).
+Rules revisadas manualmente (sem dry-run de deploy). **NÃO deployado**
+(rules) — Raphael roda o deploy. SEM teste em aparelho ainda — só validado
+por tipo/lint/revisão manual.
 
 ### S125 — Eventos / encontros
 **Status:** ABERTA · sem decisões · sem recon
@@ -390,6 +449,25 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 - S124-A — apagar a conta do CRIADOR de um grupo apaga o grupo inteiro
   (`deleteAccount`); apagar a conta de um MEMBRO comum só remove a
   participação dele, o grupo continua existindo pros demais.
+- S124-B (camada 1) — criador cria enquete de grupo (2 a 4 opções); membro
+  comum (conta B) consegue votar, e o resultado agregado aparece pra
+  QUALQUER membro que já votou — não só pro criador, diferença deliberada
+  em relação ao poll de perfil (S126), onde só o dono vê o agregado.
+- S124-B (camada 1) — trocar a pergunta (ou remover a enquete) zera
+  `pollCounts`/`pollVotes/*` de verdade (`onGroupPollChanged`); votar duas
+  vezes rápido (dois toques, ou dois devices/telas com a mesma conta) não
+  derruba a UI com Alert de erro genérico (cai no ramo `permission-denied` =
+  "já votou").
+- S124-B (camada 1) — membro NÃO-criador não vê botão de criar/editar/
+  remover enquete; quem não é membro do grupo não vota (rules exigem
+  `exists(members/{voterUid})`).
+- S124-B (camada 2) — abrir `GroupDetailScreen` como membro mostra "X
+  ativo(s) agora"; abrir a mesma tela sem ainda ser membro NÃO mostra o
+  número (a callable nega quem não é membro do grupo).
+- S124-B (camada 3) — `GroupDetailScreen` mostra "Criado por X" + selo
+  "Criador" ao lado; no chat de grupo (`GroupChatScreen`), o mesmo selo
+  aparece ao lado do nome só nas mensagens do CRIADOR, nunca nas de outro
+  membro.
 
 **Espera o build 15:**
 
