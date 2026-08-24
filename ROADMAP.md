@@ -581,6 +581,60 @@ característica geral do aparelho de teste (modelo, versão do Android) ou do
 Expo Go. A recon deve dizer se o problema é do ChatScreen ou do app inteiro
 antes de qualquer correção.
 
+### S143-A — Momento: navegar por toque nos lados
+**Status:** ABERTA · decisões tomadas · sem recon · ajuste da S121, DEPOIS da S141
+
+Modelo dos stories do Instagram: tocar na METADE ESQUERDA da tela volta um
+momento, tocar na METADE DIREITA avança um. Client puro, sem servidor.
+
+**Decisões (Raphael, 24/08/2026):** toque à esquerda volta um, toque à
+direita avança um.
+
+**Depende da S141**, que introduziu o avanço automático de 5s e a pausa ao
+segurar o dedo. O toque nos lados precisa conviver com os dois: toque curto
+navega, toque longo pausa — o gesto tem que distinguir os dois casos, e o
+timer dos 5s precisa reiniciar a cada navegação manual.
+
+**Recon quando a sprint abrir:**
+1. Como a S141 deixou o timer e o handler de pausa no `MomentoViewerModal`.
+2. Se o gesto de segurar já usa Pressable/GestureDetector — o toque curto
+   entra no mesmo lugar.
+3. O que acontece ao voltar no PRIMEIRO momento e ao avançar no ÚLTIMO
+   (o último já fecha, pela decisão da S141).
+
+### S143-B — Momento: curtir e comentar
+**Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S143-A
+
+Curtir o momento e responder a ele, no modelo dos stories do Instagram.
+
+**Decisões de produto tomadas (Raphael, 24/08/2026):**
+1. O COMENTÁRIO VAI PRO CHAT — responder um momento abre/usa a conversa
+   privada com o autor, como no Instagram. Não é comentário público no
+   momento.
+2. A CURTIDA NÃO É ANÔNIMA — o autor vê quem curtiu.
+
+**A resolver na sprint (consequência da decisão 1):**
+Como responde quem NÃO tem match com o autor? O momento é visível pra base
+inteira (decisão da S121), mas o chat hoje exige match. Duas saídas a
+avaliar na recon: reusar o molde do bilhete na curtida (S66, mensagem sem
+match) ou permitir comentar só a quem já tem match. Isso é decisão de
+produto e deve parar no portão.
+
+**Outras consequências:**
+- Curtida não anônima entre colegas identificados: o autor vê nome e vale
+  de quem curtiu. É coerente com o resto do app, mas muda comportamento.
+- Momento expira em 24h — decidir o que acontece com curtidas e com a
+  referência do comentário no chat quando o momento some.
+- Moderação: comentário que vira mensagem já cai na denúncia de mensagem
+  (S102-C); confirmar que o caminho funciona pra esse caso.
+
+**Recon quando a sprint abrir:**
+1. Como a S123 modelou curtir foto com contador — provável molde pra
+   curtida do momento.
+2. Como o bilhete da S66 permite mensagem sem match, se essa for a saída.
+3. Como o chat identifica a origem de uma mensagem (a S129-A fez citação
+   de mensagem) — a resposta ao momento precisa mostrar a que ele se refere.
+
 ---
 
 ## Fechadas recentemente
