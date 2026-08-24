@@ -32,7 +32,10 @@ import AdminVerificationDetailScreen from '@/screens/AdminVerificationDetailScre
 import AdminVerificationsScreen from '@/screens/AdminVerificationsScreen';
 import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
+import CreateEventScreen from '@/screens/CreateEventScreen';
 import CreateGroupScreen from '@/screens/CreateGroupScreen';
+import EventDetailScreen from '@/screens/EventDetailScreen';
+import EventsScreen from '@/screens/EventsScreen';
 import GroupChatScreen from '@/screens/GroupChatScreen';
 import GroupDetailScreen from '@/screens/GroupDetailScreen';
 import GroupsScreen from '@/screens/GroupsScreen';
@@ -101,6 +104,12 @@ export type RootStackParamList = {
   CreateGroup: undefined;
   GroupDetail: { groupId: string };
   GroupChat: { groupId: string; groupName: string };
+  // S125 — eventos: mesmo padrão de grupos acima, sem aba nova, entrada via
+  // item de menu na ProfileScreen. Sem chat de evento nesta sprint
+  // (decisão 10), por isso não há um "EventChat" equivalente a GroupChat.
+  Events: undefined;
+  CreateEvent: undefined;
+  EventDetail: { eventId: string };
   Support: undefined;
   MyTickets: undefined;
   SupportThread: { ticketId: string };
@@ -379,6 +388,10 @@ export default function Navigation() {
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
             <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
             <Stack.Screen name="GroupChat" component={GroupChatScreen} />
+            {/* S125 — eventos: mesmo bloco de grupos acima, sem Tab.Screen. */}
+            <Stack.Screen name="Events" component={EventsScreen} />
+            <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+            <Stack.Screen name="EventDetail" component={EventDetailScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />

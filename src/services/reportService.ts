@@ -58,6 +58,12 @@ export interface Report {
   // são só o rótulo exibido no painel do admin, sem foto (grupo não tem).
   groupId?: string;
   groupName?: string;
+  // S125 — presentes só quando a denúncia partiu de um evento
+  // (EventDetailScreen). reportedId, nesse caso, é o creatorId do EVENTO
+  // (ver blockService.reportUser) — eventId/eventName são só o rótulo
+  // exibido no painel do admin, sem foto (evento não tem).
+  eventId?: string;
+  eventName?: string;
 }
 
 export interface ReportMessage {

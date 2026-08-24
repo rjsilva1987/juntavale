@@ -1,4 +1,39 @@
-// rules-stamp: S124-B (24/08/2026 — Grupos: camadas de engajamento. Enquete
+// rules-stamp: S125 (24/08/2026 — Eventos/encontros. Nova collection raiz
+// events/{eventId} [creatorId, title<=120, description opcional<=2000
+// (mesmos tetos de groups/{groupId}.name/description), startsAt timestamp
+// >request.time, createdAt==request.time, participantCount==1 na criação,
+// purgeAt==startsAt+duration.value(30,'d') — mesmo teto de expiração de
+// grupo, calculado uma vez na criação, não em cada leitura], allow create
+// exige get(users/{uid}).data.get('verified', false)==true [molde do
+// verified de groups/{groupId}/messages, aplicado à criação do doc PAI];
+// allow read isSignedIn() && (startsAt>request.time [base inteira vê
+// evento ativo] || creatorId==auth.uid || exists(participants/{auth.uid})
+// [histórico pós-evento, só criador/aprovado, ~30 dias até o purge]);
+// allow update restrito a INCREMENTAR participantCount, só pelo criador,
+// SEM ramo de decremento [decisão técnica desta sprint — sair do evento
+// não desce o contador, ver leaveEvent em eventService.ts]; allow delete:
+// if false [só a function agendada expireEvents, Admin SDK]. Subcoleções:
+// participants/{uid} [mirror EXATO de groups/{groupId}/members/{uid},
+// role 'creator'|'participant' em vez de 'creator'|'member' — dois ramos de
+// create (criador junto da criação do evento via getAfter, ou aprovação
+// quando existe joinRequests/{uid} pendente), delete só do próprio uid e
+// nunca do criador]; joinRequests/{uid} [mirror EXATO de
+// groups/{groupId}/joinRequests/{uid}]; private/location [{text<=300,
+// createdAt} — allow create só do criador no MESMO BATCH da criação do
+// evento (getAfter), allow read isSignedIn() && (creatorId==auth.uid ||
+// exists(participants/{auth.uid})), allow update/delete: if false — local é
+// IMUTÁVEL após a criação, sem tela de edição nesta sprint]. Novo match
+// RECURSIVO top-level {path=**}/participants/{participantUid} [allow read:
+// isSignedIn() && resource.data.uid==request.auth.uid, mesmo molde de
+// {path=**}/members/{memberUid} — exigido pra listMyEvents
+// (collectionGroup('participants')) funcionar; {path=**}/joinRequests já
+// existia (S124-A-fix) e cobre events/{eventId}/joinRequests por ser
+// regra por NOME de subcoleção, não por caminho — não duplicada].
+// reports/{reportId} ganha 2 campos opcionais novos — eventId e eventName
+// [<=120, mesmo teto de groupName] — no create, mesmo molde de
+// groupId/groupName da S124-A; reportedId de denúncia de evento é sempre o
+// creatorId, resolvido pelo CLIENT (blockService.reportUser), nunca aqui.)
+// + S124-B (24/08/2026 — Grupos: camadas de engajamento. Enquete
 // de grupo: groups/{groupId} ganha `poll` {question,options} opcional,
 // mesmo teto de isValidProfile.poll [100/2/4, MAX_POLL_* de
 // src/constants/poll.ts, duplicado aqui de propósito — rules não importa
@@ -1483,6 +1518,139 @@ service cloud.firestore {
       }
     }
 
+    // ───────────────────────── events (S125) ─────────────────────────
+    //
+    // Mirror de groups/{groupId} acima, com 3 diferenças: (1) só usuário
+    // VERIFICADO cria (get() cruzado em users/{uid}.verified, mesmo molde
+    // do verified de groups/{groupId}/messages); (2) allow read cobre
+    // TAMBÉM o histórico pós-evento (~30 dias, até o purge da function
+    // expireEvents) pra quem é criador/participante aprovado — não só
+    // "ainda não aconteceu"; (3) allow update só tem ramo de INCREMENTO
+    // (sem decremento por saída — decisão técnica desta sprint, ver
+    // eventService.ts leaveEvent). Título/descrição reusam os MESMOS tetos
+    // de name/description de grupo (120/2000) — spec pede copiar, não
+    // inventar número novo.
+    match /events/{eventId} {
+      allow read: if isSignedIn()
+        && (resource.data.startsAt > request.time
+            || request.auth.uid == resource.data.creatorId
+            || exists(/databases/$(database)/documents/events/$(eventId)/participants/$(request.auth.uid)));
+
+      allow create: if isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 120
+        && (!('description' in request.resource.data)
+            || (request.resource.data.description is string
+                && request.resource.data.description.size() <= 2000))
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.startsAt > request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.participantCount == 1
+        && request.resource.data.purgeAt == request.resource.data.startsAt + duration.value(30, 'd')
+        && request.resource.data.keys().hasOnly(
+             ['creatorId', 'title', 'description', 'startsAt', 'createdAt', 'participantCount', 'purgeAt']);
+
+      // Só quem criou, só pra somar 1 em participantCount (aprovação de
+      // participante) — runTransaction lendo o valor FRESCO do lado do
+      // client (ver ROADMAP.md "Padrões de escrita no Firestore"), nunca
+      // FieldValue.increment(). SEM ramo de decremento: sair do evento
+      // (participants/{uid} delete abaixo) não mexe neste campo.
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.creatorId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+        && request.resource.data.participantCount == resource.data.participantCount + 1;
+
+      // Sem exclusão antecipada pelo criador nesta sprint — evento só
+      // termina pelo purge (~30 dias após startsAt, function expireEvents)
+      // ou pela exclusão de conta do criador (deleteAccount); as duas vias
+      // usam Admin SDK, que ignora esta regra.
+      allow delete: if false;
+
+      // ─────────────── events/{eventId}/participants ───────────────
+      //
+      // Mirror EXATO de groups/{groupId}/members/{uid} — só o nome do
+      // papel muda ('participant' em vez de 'member'), mecanismo idêntico:
+      // dois ramos de create (criador junto do batch de criação via
+      // getAfter; aprovação do criador quando existe joinRequests/{uid}
+      // pendente), delete só do próprio uid e nunca do criador.
+      match /participants/{uid} {
+        allow read: if isSignedIn()
+          && (request.auth.uid == uid
+              || exists(/databases/$(database)/documents/events/$(eventId)/participants/$(request.auth.uid)));
+
+        allow create: if isSignedIn()
+          && request.resource.data.uid == uid
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.role in ['creator', 'participant']
+          && request.resource.data.keys().hasOnly(['uid', 'joinedAt', 'role'])
+          && (
+            (request.resource.data.role == 'creator'
+              && request.auth.uid == uid
+              && getAfter(/databases/$(database)/documents/events/$(eventId)).data.creatorId == uid)
+            ||
+            (request.resource.data.role == 'participant'
+              && get(/databases/$(database)/documents/events/$(eventId)).data.creatorId == request.auth.uid
+              && exists(/databases/$(database)/documents/events/$(eventId)/joinRequests/$(uid)))
+          );
+
+        allow update: if false; // sem trocar role/joinedAt depois de criado
+
+        allow delete: if isSignedIn() && request.auth.uid == uid && resource.data.role != 'creator';
+      }
+
+      // ─────────────── events/{eventId}/joinRequests ───────────────
+      //
+      // Mirror EXATO de groups/{groupId}/joinRequests/{uid}.
+      match /joinRequests/{uid} {
+        allow read: if isSignedIn()
+          && (request.auth.uid == uid
+              || request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.creatorId);
+
+        allow create: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.requestedAt == request.time
+          && request.resource.data.keys().hasOnly(['uid', 'requestedAt'])
+          && !exists(/databases/$(database)/documents/events/$(eventId)/participants/$(uid));
+
+        allow update: if false;
+
+        allow delete: if isSignedIn()
+          && (request.auth.uid == uid
+              || request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.creatorId);
+      }
+
+      // ─────────────── events/{eventId}/private/location ───────────────
+      //
+      // Decisão de produto (S125): local em TEXTO LIVRE, só legível por
+      // quem já foi APROVADO na lista de participantes ou é o criador
+      // (decisão 6 — criador nasce participante aprovado no mesmo batch,
+      // então "exists(participants/{uid})" já cobre os dois igualmente).
+      // Imutável após a criação (decisão 9) — allow update/delete: if
+      // false, sem tela de edição nesta sprint.
+      match /private/location {
+        allow read: if isSignedIn()
+          && (request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.creatorId
+              || exists(/databases/$(database)/documents/events/$(eventId)/participants/$(request.auth.uid)));
+
+        // getAfter (não get()) porque este create acontece no MESMO BATCH
+        // que a criação de events/{eventId} — o doc pai ainda não existe
+        // ANTES do batch, mesmo padrão já usado no ramo 'creator' de
+        // participants/{uid} acima e em groups/{groupId}/members/{uid}.
+        allow create: if isSignedIn()
+          && getAfter(/databases/$(database)/documents/events/$(eventId)).data.creatorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 300
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['text', 'createdAt']);
+
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
     // ───────────────────────── collection group reads (S124-A) ─────────────────────────
     //
     // CONTRAINTUITIVO — não apagar/consolidar isto achando que é duplicata
@@ -1522,6 +1690,15 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
     match /{path=**}/joinRequests/{requestUid} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // S125 — gêmea de members acima, pra events/{eventId}/participants/{uid}
+    // (listMyEvents usa collectionGroup('participants')). Nome de
+    // subcoleção NOVO no projeto ('participants' não colide com nenhuma
+    // regra recursiva existente — confirmado, ver rules-stamp linha 1) —
+    // por isso não dá pra reaproveitar a regra `members` acima.
+    match /{path=**}/participants/{participantUid} {
       allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
@@ -1624,10 +1801,21 @@ service cloud.firestore {
         && (!('groupName' in request.resource.data)
             || (request.resource.data.groupName is string
                 && request.resource.data.groupName.size() <= 120))
+        // S125 — denúncia de um evento (EventDetailScreen), mesmo mecanismo
+        // dos campos opcionais de groupId/groupName acima: eventId é o ID
+        // do doc events/{eventId}; reportedId, nesse caso, é o creatorId do
+        // evento (decidido pelo CLIENT em blockService.reportUser, decisão
+        // 8 — nunca um participante específico). eventName é cópia
+        // truncada, mesmo teto de groupName (120).
+        && (!('eventId' in request.resource.data) || request.resource.data.eventId is string)
+        && (!('eventName' in request.resource.data)
+            || (request.resource.data.eventName is string
+                && request.resource.data.eventName.size() <= 120))
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
               'matchId', 'messageId', 'messageText', 'messageImageUrl',
-              'momentoId', 'momentoText', 'momentoPhotoUrl', 'groupId', 'groupName']);
+              'momentoId', 'momentoText', 'momentoPhotoUrl', 'groupId', 'groupName',
+              'eventId', 'eventName']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que

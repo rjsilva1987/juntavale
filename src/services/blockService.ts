@@ -43,6 +43,10 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
 // (GroupDetailScreen/GroupChatScreen), mesmo molde dos dois acima. Quem
 // chama decide o reportedId (== creatorId do grupo) — esta função não
 // resolve isso sozinha.
+// S125 — eventContext: presente só quando a denúncia parte de um evento
+// (EventDetailScreen), mirror EXATO de groupContext — reportedId, nesse
+// caso, é sempre o creatorId do EVENTO (decisão 8: nunca um participante
+// específico), resolvido por quem chama, não por esta função.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
@@ -62,6 +66,10 @@ export const reportUser = async (
   groupContext?: {
     groupId: string;
     groupName: string;
+  },
+  eventContext?: {
+    eventId: string;
+    eventName: string;
   },
 ) => {
   await addDoc(collection(db, 'reports'), {
@@ -94,6 +102,12 @@ export const reportUser = async (
       ? {
           groupId: groupContext.groupId,
           groupName: groupContext.groupName,
+        }
+      : {}),
+    ...(eventContext
+      ? {
+          eventId: eventContext.eventId,
+          eventName: eventContext.eventName,
         }
       : {}),
   });

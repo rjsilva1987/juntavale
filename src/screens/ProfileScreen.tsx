@@ -1233,6 +1233,19 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         )}
 
+        {/* S125 — eventos: mesmo componente/estilo de "Grupos" logo acima,
+            dentro da guarda !isAdmin (evento é feature de usuário comum).
+            Sem aba nova na tab bar. */}
+        {!isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('Events')}
+          >
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Eventos</Text>
+          </AnimatedPressable>
+        )}
+
         {/* Usuários bloqueados */}
         {!isAdmin && (
           <AnimatedPressable

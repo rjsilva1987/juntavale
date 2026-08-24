@@ -359,6 +359,22 @@ export default function AdminReportDetailScreen({
                     </>
                   )}
 
+                  {/* S125 — presente só quando a denúncia partiu de um
+                      evento (EventDetailScreen). eventName é uma cópia
+                      truncada, não referência viva — o evento pode ter
+                      sido apagado depois (purge ~30 dias). Sem foto: evento
+                      não tem. */}
+                  {!!report.eventId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Evento denunciado</Text>
+                      {!!report.eventName && (
+                        <Text style={styles.fieldValue} selectable>
+                          {report.eventName}
+                        </Text>
+                      )}
+                    </>
+                  )}
+
                   <AnimatedPressable
                     style={[styles.actionBtn, isPending ? styles.resolveBtn : styles.reopenBtn]}
                     onPress={handleToggleStatus}
