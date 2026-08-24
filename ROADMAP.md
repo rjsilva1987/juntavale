@@ -170,10 +170,41 @@ Rules revisadas manualmente (sem dry-run de deploy). **NÃO deployado**
 por tipo/lint/revisão manual.
 
 ### S125 — Eventos / encontros
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** ABERTA · decisões tomadas · sem recon
 
 Alguém marca um encontro (ex.: happy hour) e quem topa entra numa lista de
-participantes. Mesmo custo de moderação da S124.
+participantes.
+
+**Decisões de produto tomadas (Raphael, 22/08/2026):**
+1. Só usuário VERIFICADO pode criar evento. Diferente da S124-A (grupo,
+   onde qualquer um cria): grupo é conversa, evento é encontro presencial.
+2. O evento é visível pra BASE INTEIRA.
+3. Horário sempre. Local em TEXTO LIVRE — sem mapa, sem coordenada, sem
+   endereço estruturado — e o campo do local só é visível para quem JÁ FOI
+   APROVADO na lista, nunca para quem apenas vê o evento. Motivo: com o
+   evento aberto à base inteira, local aberto significaria publicar a todos
+   os funcionários um lugar e uma hora onde uma pessoa identificada estará.
+4. Evento EXPIRA da lista de ativos quando a data passa, mas NÃO some na
+   hora: fica no histórico de quem participou por ~30 dias antes de ser
+   apagado. Motivo: denúncia sobre o que aconteceu num encontro precisa ter
+   o evento pra referenciar, e o `deleteAccount` precisa saber o que fazer
+   com evento passado. Mesmo desenho da S121: rule esconde por data,
+   function agendada limpa depois.
+5. Entrar na lista exige APROVAÇÃO de quem criou — mesmo molde do pedido de
+   entrada dos grupos (`onGroupJoinRequestCreated`, S124-A).
+
+**Pendência que NÃO é de código, resolver antes de ir pra produção:**
+A `privacidade.html` e os termos precisam de uma linha sobre encontros
+presenciais, deixando explícito que o JuntaVale não se responsabiliza pelo
+que ocorre fora do aplicativo.
+
+**Recon quando a sprint abrir:**
+1. Como a S124-A modelou grupo, pedido de entrada e expiração — evento é
+   quase o mesmo molde e deve reusar ao máximo.
+2. Como a rule sabe se o usuário é verificado (S76-B) — é o que trava a
+   criação.
+3. Como esconder um campo só de parte dos leitores: S109 (visibilidade por
+   campo) ou S135 (nome público x nome real) são os moldes.
 
 ### S127 — Marcos e selos
 **Status:** IMPLEMENTADA em 22/08/2026 (commit ccf8926) · rules deployadas · functions onUserProfileUpdated e tenDaysInAppCheck criadas · SEM teste em aparelho
