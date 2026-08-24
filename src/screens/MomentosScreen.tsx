@@ -45,7 +45,11 @@ export default function MomentosScreen() {
   const [feed, setFeed] = useState<MomentoWithId[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [composerVisible, setComposerVisible] = useState(false);
-  const [viewerMomento, setViewerMomento] = useState<MomentoWithId | null>(null);
+  // S141 — fila + índice em vez de item único: permite o avanço automático
+  // (MomentoViewerModal chama onAdvance ao terminar o timer de 5s) percorrer
+  // o restante do feed sem fechar o modal a cada item.
+  const [viewerQueue, setViewerQueue] = useState<MomentoWithId[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerIsOwn, setViewerIsOwn] = useState(false);
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, UserProfile | null>>({});
   const requestedUidsRef = useRef<Set<string>>(new Set());
@@ -103,15 +107,34 @@ export default function MomentosScreen() {
   const openMine = () => {
     if (!myMomento) return;
     setViewerIsOwn(true);
-    setViewerMomento(myMomento);
+    setViewerQueue([myMomento]);
+    setViewerIndex(0);
   };
 
   const openFeedItem = (item: MomentoWithId) => {
     setViewerIsOwn(false);
-    setViewerMomento(item);
+    setViewerQueue(visibleFeed);
+    const index = visibleFeed.findIndex((m) => m.id === item.id);
+    setViewerIndex(index === -1 ? 0 : index);
   };
 
-  const closeViewer = () => setViewerMomento(null);
+  const closeViewer = () => {
+    setViewerQueue([]);
+    setViewerIndex(0);
+  };
+
+  // S141 — chamado pelo MomentoViewerModal quando o timer de exibição
+  // termina naturalmente (ou o pause/resume termina). Fila de UM item
+  // (openMine) já fecha corretamente aqui, sem caso especial: o próximo
+  // índice sempre estoura viewerQueue.length quando não há mais itens.
+  const advanceViewer = () => {
+    const nextIndex = viewerIndex + 1;
+    if (nextIndex >= viewerQueue.length) {
+      closeViewer();
+      return;
+    }
+    setViewerIndex(nextIndex);
+  };
 
   const handleDeleteOwn = () => {
     if (!user || !myMomento) return;
@@ -133,10 +156,12 @@ export default function MomentosScreen() {
     ]);
   };
 
+  const currentViewerMomento = viewerQueue[viewerIndex] ?? null;
+
   const viewerAuthorProfile = viewerIsOwn
     ? undefined
-    : viewerMomento
-      ? authorProfiles[viewerMomento.authorId]
+    : currentViewerMomento
+      ? authorProfiles[currentViewerMomento.authorId]
       : undefined;
 
   return (
@@ -238,12 +263,13 @@ export default function MomentosScreen() {
       />
 
       <MomentoViewerModal
-        momento={viewerMomento}
+        momento={currentViewerMomento}
         authorProfile={viewerAuthorProfile}
-        visible={!!viewerMomento}
+        visible={!!currentViewerMomento}
         onClose={closeViewer}
         isOwnMomento={viewerIsOwn}
         onDeleteOwn={viewerIsOwn ? handleDeleteOwn : undefined}
+        onAdvance={advanceViewer}
       />
     </Animated.View>
   );

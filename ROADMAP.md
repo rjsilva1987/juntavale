@@ -459,7 +459,10 @@ Duas ressalvas ligadas, também achadas pela auditoria da S137:
 3. Quantas contas na base hoje têm `name` sem `nickname`.
 
 ### S141 — Visualizador de Momento: safe area e avanço automático
-**Status:** ABERTA · decisões tomadas · sem recon · ajuste da S121
+**Status:** IMPLEMENTADA, auditada (2 rodadas) · APROVADA · client puro
+(`MomentoViewerModal.tsx`, `MomentosScreen.tsx`), sem tocar
+`firestore.rules`/`momentoService.ts` · falta commit/push (Raphael) e teste
+em aparelho
 
 Testado em aparelho em 24/08/2026, com a S139 já corrigida (momento de
 terceiros carrega). Dois problemas no `MomentoViewerModal`:
@@ -488,6 +491,49 @@ terceiros carrega). Dois problemas no `MomentoViewerModal`:
    entra junto (é o indicador que torna os 5s legíveis pro usuário).
 4. Cuidado com timer e desmontagem: o timer precisa ser limpo ao fechar o
    modal e ao trocar de momento, senão vaza e avança sozinho depois.
+
+**Fix aplicado:**
+- Safe area: `<Modal>` monta como superfície nativa separada e o
+  `SafeAreaProvider` de topo (`App.tsx`) não a mede — por isso o
+  `SafeAreaView edges={['top']}` que já existia dentro do `<Modal>` não
+  recebia inset nenhum. Corrigido envolvendo o conteúdo do `<Modal>` com um
+  `<SafeAreaProvider>` PRÓPRIO, aninhado, mantendo o `SafeAreaView` como
+  estava.
+- Avanço automático: `MOMENTO_VIEW_DURATION_MS = 5000` +
+  `Animated.Value`/`Animated.timing` (NUNCA `setInterval`, que não está na
+  allowlist de globals do `eslint.config.js`) resetado por `momento.id`,
+  com `stopAnimation()` no cleanup do `useEffect`. Nova prop
+  `onAdvance: () => void` — o modal só dispara, quem decide avançar/fechar é
+  `MomentosScreen`. Pause ao segurar: `Pressable` na área de conteúdo (não
+  nos botões do cabeçalho) com `onPressIn`/`onPressOut` chamando
+  `stopAnimation`/`Animated.timing` com a duração restante. Barra de
+  progresso: `Animated.View` com `width` interpolado, track
+  `rgba(255,255,255,0.3)` + fill `theme.colors.primary` (mesmo padrão do
+  progress bar de upload em `ChatScreen.tsx`).
+- `MomentosScreen.tsx`: estado trocou de item único (`viewerMomento`) pra
+  fila + índice (`viewerQueue`/`viewerIndex`); `advanceViewer()` incrementa
+  o índice e fecha o viewer quando estoura o fim da fila. `openMine` usa
+  fila de 1 item só; `openFeedItem` usa `visibleFeed` (ordem já existente)
+  com `findIndex` por `id`.
+
+**Correção pós-auditoria (1ª rodada BLOQUEOU):** o timer não pausava com o
+`ReportModal` (denúncia) aberto — o `Pressable` de pause só cobre a área de
+CONTEÚDO (imagem/texto), e o botão de denunciar fica no cabeçalho, fora
+dele. Resultado: a denúncia podia ir pro alvo ERRADO (se `onAdvance`
+trocasse o `momento` durante o preenchimento) ou ser descartada em
+silêncio (se fosse o último item da fila e o viewer fechasse por trás do
+formulário). Fix: `pauseTimer()`/`resumeTimer()` extraídos de
+`handlePressIn`/`handlePressOut` (mesmo mecanismo, sem reinventar) e
+reaproveitados por um `useEffect` novo com dependência `[reportVisible]` —
+pausa quando o `ReportModal` abre, retoma quando fecha (cancelar ou
+enviar, os dois caminhos passam por `setReportVisible(false)`). Guard
+`reportEffectMountedRef` evita o efeito rodar redundantemente na
+montagem do componente (que já acontece com `momento === null`, `visible`
+falso). 2ª rodada de auditoria: APROVADO.
+
+Arquivos tocados: `MomentoViewerModal.tsx`, `MomentosScreen.tsx`. Nenhuma
+leitura/escrita nova no Firestore, `firestore.rules`/`momentoService.ts`
+intocados.
 
 ---
 
@@ -523,6 +569,20 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 
 **Testável no Expo Go agora:**
 
+- S141 — abrir momento próprio e de terceiro: o X, avatar e nome do
+  cabeçalho não podem mais ficar atrás da status bar (iOS notch/Dynamic
+  Island e Android com status bar translúcida).
+- S141 — deixar o momento parado 5s sem tocar: tem que avançar sozinho pro
+  próximo item da fila (ou fechar, se for o último) e a barra de progresso
+  precisa preencher visivelmente até o fim antes de avançar.
+- S141 — segurar o dedo na área da imagem/texto: a barra tem que PARAR de
+  encher; soltar retoma do ponto exato e completa no tempo restante (não
+  reinicia do zero).
+- S141 — segurar o dedo sobre os botões do cabeçalho (X, denunciar, apagar):
+  eles continuam tocáveis normalmente, sem pausar nem atrapalhar o toque.
+- S141 — abrir vários momentos do feed em sequência (sem fechar entre um e
+  outro) pra conferir que o avanço automático não vaza pro momento errado
+  depois de trocar de item várias vezes rápido.
 - S102-B — desfazer match de dentro da conversa; conferir o que acontece na
   tela do **outro** usuário que está com a conversa aberta na hora (risco de
   cair em `permission-denied` em vez de sair da tela); conferir se as
@@ -842,6 +902,15 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   tela quando o valor é `null`/`undefined` (visto em `SwipeScreen.tsx` e
   `LikesScreen.tsx` antes da S134). Renderizar condicionalmente:
   `{valor != null && <Text>, {valor}</Text>}`.
+- **`SafeAreaView` dentro de `<Modal>` nativo não recebe inset do
+  `SafeAreaProvider` de topo.** Descoberto na S141 no `MomentoViewerModal`:
+  um `<Modal>` do React Native monta como superfície nativa separada da
+  árvore do `App.tsx`, então o `SafeAreaProvider` de topo não a mede — um
+  `SafeAreaView` direto dentro do `Modal` recebe insets zerados (cabeçalho
+  sobrepõe a status bar). Fix: todo `SafeAreaView` usado DENTRO de um
+  `<Modal>` precisa de um `<SafeAreaProvider>` PRÓPRIO, aninhado dentro do
+  próprio `Modal`, envolvendo esse `SafeAreaView`. Vale para qualquer
+  `Modal` novo que precise respeitar safe area, não só o de Momentos.
 
 ## Baseline técnica
 
