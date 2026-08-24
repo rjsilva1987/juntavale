@@ -458,6 +458,37 @@ Duas ressalvas ligadas, também achadas pela auditoria da S137:
    nas lojas e nunca tocar no update.
 3. Quantas contas na base hoje têm `name` sem `nickname`.
 
+### S141 — Visualizador de Momento: safe area e avanço automático
+**Status:** ABERTA · decisões tomadas · sem recon · ajuste da S121
+
+Testado em aparelho em 24/08/2026, com a S139 já corrigida (momento de
+terceiros carrega). Dois problemas no `MomentoViewerModal`:
+
+1. O cabeçalho (avatar, nome, tempo restante, botão X) está colado no topo
+   absoluto da tela, SOBREPONDO a barra de status do sistema — na captura,
+   o nome fica em cima do relógio e o X ao lado do ícone de bateria. O X
+   fica praticamente inalcançável e não dá pra fechar o momento. Falta
+   respeitar a safe area; mesma correção serve iOS e Android.
+
+2. Não há avanço automático — o momento fica aberto indefinidamente.
+
+**Decisões de produto tomadas (Raphael, 24/08/2026):**
+- Duração de 5 SEGUNDOS, igual para momento de TEXTO e de FOTO.
+- Ao terminar os 5s, AVANÇA pro próximo momento da fila. Só FECHA o
+  visualizador quando terminar o último.
+- SEGURAR o dedo na tela PAUSA a contagem; soltar retoma.
+
+**Recon quando a sprint abrir:**
+1. Como o `MomentoViewerModal.tsx` monta o cabeçalho hoje e se já usa
+   `SafeAreaView`/`useSafeAreaInsets` em algum ponto — o resto do app pode
+   já ter um padrão a seguir.
+2. Como a lista de momentos chega ao viewer (ordem, índice atual) — o
+   avanço automático precisa saber qual é o próximo e qual é o último.
+3. Se existe barra de progresso no topo hoje; se não, decidir na sprint se
+   entra junto (é o indicador que torna os 5s legíveis pro usuário).
+4. Cuidado com timer e desmontagem: o timer precisa ser limpo ao fechar o
+   modal e ao trocar de momento, senão vaza e avança sozinho depois.
+
 ---
 
 ## Fechadas recentemente
