@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 24/08/2026
+**Última atualização:** 25/08/2026
 
 ---
 
@@ -461,7 +461,14 @@ no feed passa a ser responsabilidade exclusiva da query do client, que já
 filtra corretamente). Único arquivo tocado: `firestore.rules`.
 
 ### S140 — Bug: conta do build 14 quebra ao salvar perfil com nome editado
-**Status:** ABERTA · sem decisões · sem recon · achado da auditoria da S137
+**Status:** REAVALIADA (25/08/2026) — possivelmente obsoleta. A S138, no
+mesmo dia, tornou `name`/`nickname` imutáveis pelo dono em QUALQUER
+circunstância — o `allow update` do dono pode não precisar mais aceitar
+`name` nunca, o que eliminaria a causa desta sprint por um caminho
+diferente do previsto originalmente abaixo. Decisão de fechar de vez ou
+manter aberta fica PENDENTE — não decidida aqui, só registrada a
+reavaliação e a pergunta em aberto. Conteúdo original (causa raiz,
+ressalvas, recon) mantido abaixo sem alteração.
 
 A S137 corrigiu o `allow create` de `users/{uid}` pra aceitar `name` do
 cliente antigo (build 14 Android / 1.0.5 iOS), mas NÃO tocou no
@@ -962,6 +969,17 @@ listeners de doc único, não 1 query nova).
 
 **S99 — DESCARTADA.** Era filtro de distância social (não mostrar quem é da
 mesma agência/cidade). Decidido que não vamos fazer. Não repropor.
+
+---
+
+## 🚀 BUILD 15
+
+**Status:** GERADO com sucesso em 25/08/2026 via
+`eas build --platform android --profile production` — versionCode 15 /
+version 1.0.5, commit `e92cd1d`. Conteúdo em relação ao build 14: tudo de
+S101 até S146. Hoje no teste interno, aguardando promoção pra teste fechado
+e a bateria de testes do lote — que passa a ser a maior já feita no
+projeto (ver "Testes pendentes" abaixo, incluindo "Espera o build 15").
 
 ---
 
