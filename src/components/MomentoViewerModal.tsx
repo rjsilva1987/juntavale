@@ -86,8 +86,10 @@ export function MomentoViewerModal({
   // S143-C — se existe match com o autor. null = ainda carregando (mesmo
   // estado neutro do efeito abaixo antes da resposta chegar). Decide o
   // caminho do emoji rápido da MomentoReplyBar: true → vira comentário no
-  // chat (decisão 3); false OU null → vira curtida, nunca gasta o pedido
-  // por um toque de 1 emoji (decisão 4, "nunca por engano").
+  // chat (decisão 3); false → vira curtida; null → toque vira no-op
+  // (correção pós-teste de aparelho, handleEmojiPress abaixo), nunca gasta o
+  // pedido por um toque de 1 emoji antes de saber de verdade (decisão 4,
+  // "nunca por engano").
   const [hasMatch, setHasMatch] = useState<boolean | null>(null);
   // Lista nominal (decisão 6) só abre quando isOwnMomento; a barra de
   // resposta (decisão 5/6 da S143-C, substitui o antigo MomentoCommentModal)
@@ -246,13 +248,17 @@ export function MomentoViewerModal({
   };
 
   // S143-C — emoji rápido da MomentoReplyBar: com match vira comentário
-  // (decisão 3, mesmo caminho de handleSendText); sem match (ou hasMatch
-  // ainda não resolvido — null tratado como sem match por segurança, nunca
-  // gastar o único pedido por engano) vira curtida, reusando o MESMO padrão
-  // otimista de handleToggleLike acima, mas só pra frente: se já está
-  // curtido, no-op (decisão 4).
+  // (decisão 3, mesmo caminho de handleSendText); sem match vira curtida,
+  // reusando o MESMO padrão otimista de handleToggleLike acima, mas só pra
+  // frente: se já está curtido, no-op (decisão 4).
+  // S143-C (correção pós-teste de aparelho) — hasMatch === null (o
+  // Promise.all de findMatchWithUser/hasLikedMomento ainda não voltou, ver
+  // efeito acima) agora é NO-OP, não mais "trata como sem match": toque
+  // rápido demais (comum em teste de aparelho, mal o momento abre) não pode
+  // decidir curtida quando ainda não se sabe se existe match — só líquido é
+  // hasMatch === false pra ir pro caminho de curtida.
   const handleEmojiPress = async (emoji: string) => {
-    if (!user || !momento) return;
+    if (!user || !momento || hasMatch === null) return;
     if (hasMatch === true) {
       await handleSendText(emoji);
       return;

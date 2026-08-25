@@ -1,4 +1,10 @@
-// rules-stamp: S143-C (25/08/2026 — Momento: barra de resposta no viewer.
+// rules-stamp: S143-C (25/08/2026 — correção pós-teste de aparelho:
+// momentoRequests/{requestId} allow read ganha `resource != null` antes de
+// comparar resource.data.senderId/authorId — o getDoc de checagem prévia em
+// sendMomentoComment (momentoRequestService.ts) falhava com
+// permission-denied pra documento ainda inexistente (1º comentário/pedido a
+// um autor sem match), porque a rule dereferenciava resource.data com
+// resource == null.) + S143-C (25/08/2026 — Momento: barra de resposta no viewer.
 // momentoRequests/{requestId} allow create ganha 1 condição nova: nega se
 // o authorId do momento está no blockedUsers do PRÓPRIO remetente
 // [request.auth.uid] — débito registrado na S143-B, decisão 7. Nenhuma
@@ -2309,7 +2315,16 @@ service cloud.firestore {
     // matchAllowsPost (`blockedBy` do match), só ganhou checagem
     // client-side (momentoRequestService.ts) por UX.
     match /momentoRequests/{requestId} {
+      // S143-C (correção pós-teste de aparelho) — resource == null pra doc
+      // que ainda não existe (getDoc de checagem prévia em
+      // sendMomentoComment, momentoRequestService.ts, ANTES do primeiro
+      // pedido a um autor sem match). Sem o `resource != null` aqui,
+      // dereferenciar resource.data abaixo falha a avaliação da rule e o
+      // Firestore devolve permission-denied em vez de simplesmente "não
+      // existe" — quebrava TODO primeiro comentário/pedido (chip ou texto
+      // livre) a alguém ainda sem match.
       allow read: if isSignedIn()
+        && resource != null
         && (request.auth.uid == resource.data.senderId
             || request.auth.uid == resource.data.authorId);
 
