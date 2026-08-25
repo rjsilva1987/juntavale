@@ -1,4 +1,15 @@
-// rules-stamp: S143-C (25/08/2026 — verificação pós-redesenho: allow read
+// rules-stamp: S143-C (25/08/2026 — correção de semântica confirmada por
+// log de aparelho/TEMP-DIAG: allow get de momentoRequests/{requestId}
+// negava doc inexistente (`resource != null &&` fazia resource==null virar
+// o `&&` inteiro false), quando a semântica certa é PERMITIR get de doc
+// inexistente (devolve exists:false, nada a vazar) — o getDoc de checagem
+// prévia em sendMomentoComment (id determinístico
+// sender_author_timestamp) lê exatamente um doc assim antes do 1º pedido a
+// um autor, e os 3 caminhos (chip/texto/emoji) continuavam batendo
+// permission-denied nesse getDoc mesmo depois da correção anterior.
+// `resource == null` virou o primeiro ramo de um `||`, não mais parte de um
+// `&&` que negava tudo; só doc EXISTENTE cai na checagem de dono.) + S143-C
+// (25/08/2026 — verificação pós-redesenho: allow read
 // unificado de momentoRequests/{requestId} split em allow get + allow list
 // — mesma lição da S139 (momentos/{uid}): `resource != null` misturado ao
 // list era suspeito de derrubar as 2 queries novas desta sprint
@@ -2356,33 +2367,32 @@ service cloud.firestore {
     // decisão 3/4 (1 pedido por remetente por instância, resposta do autor
     // libera a thread) valem igual pros dois casos.
     match /momentoRequests/{requestId} {
-      // S143-C (correção pós-teste de aparelho) — resource == null pra doc
-      // que ainda não existe (getDoc de checagem prévia em
-      // sendMomentoComment, momentoRequestService.ts, ANTES do primeiro
-      // pedido a um autor sem match). Sem o `resource != null` aqui,
-      // dereferenciar resource.data abaixo falha a avaliação da rule e o
-      // Firestore devolve permission-denied em vez de simplesmente "não
-      // existe" — quebrava TODO primeiro comentário/pedido (chip ou texto
-      // livre) a alguém ainda sem match.
+      // S143-C (correção de semântica, causa confirmada por log de
+      // aparelho/TEMP-DIAG) — a versão anterior (`resource != null &&
+      // (dono)`) evitava o CRASH de dereferenciar resource.data num doc
+      // inexistente, mas trocou o erro por uma negação igualmente errada:
+      // `resource == null` fazia o `&&` inteiro virar false → nega. Só que
+      // o getDoc de checagem prévia em sendMomentoComment
+      // (momentoRequestService.ts) — pra um id determinístico
+      // sender_author_timestamp, ANTES do primeiro pedido a um dado autor —
+      // é exatamente uma leitura de doc que ainda NÃO EXISTE, e ISSO É
+      // LEGÍTIMO: os 3 caminhos (chip/texto/emoji) continuavam batendo
+      // permission-denied nesse getDoc mesmo depois do fix anterior. A
+      // semântica certa pra get: doc inexistente é PERMITIDO (devolve
+      // exists:false, sem nenhum dado real pra vazar — não há resource.data
+      // pra checar dono contra nada); só doc EXISTENTE cai na checagem de
+      // dono (senderId/authorId == auth.uid). `resource == null` vira o
+      // PRIMEIRO ramo do `||`, não mais um `&&` que nega tudo.
       // S143-C (verificação pós-redesenho) — allow read UNIFICADO (get +
       // list) split em allow get + allow list, mesma lição da S139
       // (momentos/{uid} acima): list (listenReceivedMomentoRequests,
       // listenSentMomentoRequests, momentoRequestService.ts — 2 queries
-      // de lista novas desta sprint) precisa que o Firestore PROVE
-      // estruturalmente que a condição vale pro conjunto de resultados,
-      // usando só os filtros da própria query; `resource != null` não é um
-      // padrão que o verificador de list reconhece como estruturalmente
-      // provável (list só itera doc que já existe, mas o guard foi escrito
-      // pensando em get de doc que pode não existir) — misturado ao list
-      // via allow read único, é suspeito de derrubar a query inteira com
-      // permission-denied, mesma classe de sintoma da S139. get continua
-      // com a guarda (getDoc de checagem prévia em sendMomentoComment lê
-      // um doc que pode legitimamente não existir); list não precisa dela
-      // (nunca itera doc inexistente) e ganha a condição sem o guard,
-      // igual ao que cada where() das duas queries já filtra.
+      // de lista novas desta sprint) nunca itera doc inexistente, então
+      // list não precisa (nem pode, pelo mesmo motivo de provabilidade
+      // estrutural já registrado) do ramo `resource == null` — só get.
       allow get: if isSignedIn()
-        && resource != null
-        && (resource.data.senderId == request.auth.uid
+        && (resource == null
+            || resource.data.senderId == request.auth.uid
             || resource.data.authorId == request.auth.uid);
 
       allow list: if isSignedIn()
