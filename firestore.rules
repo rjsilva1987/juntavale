@@ -1,4 +1,13 @@
-// rules-stamp: S143-C (25/08/2026 — correção de semântica confirmada por
+// rules-stamp: S138 (25/08/2026 — nome completo e apelido viram IMUTÁVEIS
+// pelo dono, a qualquer momento: users/{userId} allow update perde
+// `nickname` do hasOnly (sem trava condicional, sempre negado); ganha allow
+// update isolado pro admin [isAdmin() && affectedKeys().hasOnly(['nickname'])].
+// users/{userId}/private/legalName allow update do dono vira `if false`
+// (era condicional a !verified); ganha allow update isolado pro admin
+// [isAdmin() && affectedKeys().hasOnly(['name'])]. Única via de correção
+// agora é o admin, a partir de um chamado de suporte
+// (AdminSupportDetailScreen). Trava S76-B2 de age/birthDate (linha ~747, fora
+// de escopo desta sprint) intocada.) + S143-C (25/08/2026 — correção de semântica confirmada por
 // log de aparelho/TEMP-DIAG: allow get de momentoRequests/{requestId}
 // negava doc inexistente (`resource != null &&` fazia resource==null virar
 // o `&&` inteiro false), quando a semântica certa é PERMITIR get de doc
@@ -766,8 +775,14 @@ service cloud.firestore {
         // salvar o perfil depois do aniversário manda um `age` diferente do
         // gravado. Travar `age` faria esse save ser negado por inteiro.
         // Quem trava a identidade é o birthDate; o age precisa poder subir.
+        // S138 — `nickname` sai desta lista: deixa de ser gravável pelo
+        // dono em QUALQUER circunstância (não é mais condicional a
+        // verified, é sempre negado). Única via de correção agora é o
+        // admin, no allow update isolado logo abaixo (affectedKeys().hasOnly(
+        // ['nickname'])), a partir de um chamado de suporte
+        // (AdminSupportDetailScreen).
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-             ['nickname', 'age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
+             ['age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about',
               'aboutHidden', 'poll'])
@@ -781,6 +796,18 @@ service cloud.firestore {
         && isValidProfile(request.resource.data);
 
       allow delete: if isOwner(userId);
+
+      // S138 — via de escrita isolada pro admin corrigir SÓ o nickname, a
+      // partir de um chamado de suporte (AdminSupportDetailScreen). O dono
+      // não tem mais nenhuma via de alteração (nickname saiu do hasOnly do
+      // allow update acima); esta é a única forma de mudar o campo depois
+      // do cadastro. `request.resource.data.diff(resource.data).affectedKeys()`
+      // por extenso (não `affectedKeys()` solto) — mesmo molde usado em
+      // todo outro ponto deste arquivo (não existe helper bare nas Rules).
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname'])
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() > 0 && request.resource.data.nickname.size() <= 120;
 
       // ─────────────── users/{userId}/private ───────────────
       // Dois documentos com regras próprias (não um wildcard único), porque
@@ -852,11 +879,35 @@ service cloud.firestore {
         // cruzado, molde igual ao usado em pollVotes (linha ~590) e não o
         // "mesmo doc" que o antigo S76-B1 usava (lá o campo travado e o
         // campo `verified` estavam no mesmo documento).
-        allow update: if isOwner(userId)
-          && get(/databases/$(database)/documents/users/$(userId)).data.get('verified', false) != true
+        //
+        // S138 — trava S76-B1 acima SUBSTITUÍDA: nome real vira IMUTÁVEL
+        // pelo dono sempre, não mais condicional a verified (nem a
+        // pré-verificação segue liberada). `if false` — mesma trava do
+        // nickname no doc pai (ver users/{userId} allow update acima).
+        // Única via de correção agora é o admin, no allow update isolado
+        // logo abaixo, a partir de um chamado de suporte
+        // (AdminSupportDetailScreen).
+        allow update: if false;
+
+        // S138 — via de escrita isolada pro admin corrigir SÓ o name, mesmo
+        // molde do allow update isolado de nickname no doc pai (users/
+        // {userId} acima).
+        allow update: if isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 240;
+
+        // S138 (correção pós-auditoria) — allow create pro admin, paridade
+        // com o create-path do dono acima. Cobre conta legada cujo
+        // subdocumento private/legalName ainda não existe (comentário em
+        // firestoreService.ts confirma esse caso): sem este create, a via de
+        // correção do admin ficaria sem saída — allow update não vale pra
+        // doc inexistente.
+        allow create: if isAdmin()
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 240
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['name', 'createdAt']);
 
         allow delete: if false;
       }

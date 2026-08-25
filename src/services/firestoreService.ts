@@ -335,6 +335,31 @@ export const updateLegalName = async (uid: string, name: string): Promise<void> 
   await updateDoc(doc(db, 'users', uid, 'private', 'legalName'), { name });
 };
 
+// S138 — nickname e legalName ficam imutáveis pelo dono (rules negam sempre,
+// não é mais condicional a verified). A única via de correção passa a ser o
+// admin, a partir de um chamado de suporte (AdminSupportDetailScreen). As
+// duas funções abaixo usam a via de escrita nova das rules, isolada e
+// restrita a isAdmin() + affectedKeys().hasOnly(['nickname']) /
+// hasOnly(['name']) — nenhuma outra chave pode ser tocada na mesma escrita.
+export const adminUpdateUserNickname = async (uid: string, nickname: string): Promise<void> => {
+  await updateDoc(doc(db, 'users', uid), { nickname });
+};
+
+// S138 (correção pós-auditoria) — updateDoc cego quebrava com "no document
+// to update" em conta legada cujo private/legalName ainda não existe (ver
+// comentário de getLegalName acima). Checa existência primeiro e ramifica
+// create/update, mesmo molde de ProfileScreen.handleSave (createLegalName /
+// updateLegalName) e do allow create isolado do admin nas rules.
+export const adminUpdateUserLegalName = async (uid: string, name: string): Promise<void> => {
+  const ref = doc(db, 'users', uid, 'private', 'legalName');
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await updateDoc(ref, { name });
+  } else {
+    await setDoc(ref, { name, createdAt: serverTimestamp() });
+  }
+};
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const snap = await getDoc(doc(db, 'users', uid));
   return snap.exists() ? (snap.data() as UserProfile) : null;

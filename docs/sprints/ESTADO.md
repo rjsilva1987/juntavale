@@ -8,6 +8,25 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S138 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
+  nome completo (`legalName`) e apelido (`nickname`) viram IMUTÁVEIS pelo
+  usuário no app, sempre (inclusive pré-verificação) — única via de
+  correção é o admin, a partir de um chamado de suporte
+  (`AdminSupportDetailScreen`, ação nova "Editar nome/apelido", exceção
+  estreita à regra S135 de nunca mostrar `legalName` fora da verificação,
+  ver ROADMAP.md § "Decisões de produto que valem para o projeto inteiro").
+  `firestore.rules` alteradas: `nickname` sai do `hasOnly` livre do dono,
+  `private/legalName allow update` do dono vira `if false`; duas vias novas
+  isoladas pra admin (`isAdmin() && affectedKeys().hasOnly([...])`, com
+  validação de tipo/tamanho e `allow create` pro subdocumento que ainda não
+  existir). **EXIGE DEPLOY de rules**, nenhuma function afetada. Script de
+  migração `scripts/migrarNomeCompleto.js` (molde de `limpeza.js`,
+  dry-run/`--confirm`/`--project`) escrito, NÃO executado. Auditoria
+  bloqueou 1ª rodada (rules de admin sem validação de tipo/tamanho + sem
+  `allow create` pro `legalName`, e `nickname` incondicional no
+  `updateUserProfile` do `ProfileScreen` quebrava save de perfil inteiro
+  pra conta legada) — corrigido e APROVADO na 2ª rodada. Ver ROADMAP.md
+  § S138. SEM teste em aparelho.
 - S145 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
   aba Explorar (não-admin) ganha acesso a Grupos, Eventos e "Pedidos de
   conversa" via fileira de cards no topo do feed de Momentos, com badge
@@ -37,7 +56,6 @@ permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
-- S138 — nome/apelido imutáveis — decisões tomadas, sem recon.
 - S140 — bug: conta do build 14 quebra ao salvar perfil com nome editado —
   sem decisões, achado da auditoria da S137.
 - S142 — fluidez do chat (Android) — sem decisões, começa por RECON DE

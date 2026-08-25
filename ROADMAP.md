@@ -353,7 +353,11 @@ cabeçalho (foi a origem visível da S134).
    mostrar o nome REAL, senão o admin perde a referência pra conferir.
 
 ### S138 — Nome completo e apelido imutáveis, edição só via suporte
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** IMPLEMENTADA (25/08/2026) · auditoria APROVADA na 2ª rodada ·
+`firestore.rules` alteradas (EXIGE DEPLOY — nenhuma function afetada) ·
+script `scripts/migrarNomeCompleto.js` escrito, dry-run por padrão, NÃO
+executado (rodar contra dados reais é decisão do Raphael) · SEM teste em
+aparelho.
 
 Fecha o desenho iniciado na S135, que separou o apelido público do nome
 real mas deixou os dois editáveis pelo usuário.
@@ -1127,14 +1131,20 @@ continua na bateria geral.
 - **S135 — nome real do usuário nunca aparece fora da tela de verificação do
   admin.** Em TODO canto público (Descobrir, perfil, Curtidas, Conversas,
   pushes) e em toda tela de admin que NÃO seja a fila de verificação
-  (`AdminReportsScreen`/`AdminReportDetailScreen`/`MyReportsScreen`/
-  `AdminSupportDetailScreen`), o nome exibido é sempre o `nickname` ("como
-  quer ser chamado", via `getDisplayName` em `src/utils/profile.ts`) — nunca
-  o nome legal completo (`users/{uid}/private/legalName`, legível só pelo
-  dono e pelo admin nas rules). Só `AdminVerificationsScreen`/
-  `AdminVerificationDetailScreen` mostram o nome real, porque é a referência
-  que o revisor humano confere contra a selfie. Qualquer tela nova que
-  exiba nome de usuário segue essa mesma regra por padrão.
+  (`AdminReportsScreen`/`AdminReportDetailScreen`/`MyReportsScreen`), o nome
+  exibido é sempre o `nickname` ("como quer ser chamado", via
+  `getDisplayName` em `src/utils/profile.ts`) — nunca o nome legal completo
+  (`users/{uid}/private/legalName`, legível só pelo dono e pelo admin nas
+  rules). Só `AdminVerificationsScreen`/`AdminVerificationDetailScreen`
+  mostram o nome real, porque é a referência que o revisor humano confere
+  contra a selfie. Qualquer tela nova que exiba nome de usuário segue essa
+  mesma regra por padrão.
+  **Exceção estreita (S138):** `AdminSupportDetailScreen` também mostra o
+  nome legal completo, mas só dentro da ação "Editar nome/apelido" — é a
+  única tela onde o admin corrige `nickname`/`legalName` a partir de um
+  chamado de suporte (nome e apelido ficaram imutáveis pelo usuário nessa
+  sprint), e editar às cegas sem ver o valor atual não é viável. Fora dessa
+  ação, a tela segue mostrando só o `nickname`, como qualquer outra.
 
 ## Armadilhas do chat (valem pra qualquer sprint que mexa em ChatScreen/listenMessages)
 

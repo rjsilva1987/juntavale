@@ -222,6 +222,14 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 onChangeText={setNickname}
               />
 
+              {/* S138 — nome completo e apelido ficam imutáveis assim que
+                  definidos aqui no cadastro; a única forma de corrigir depois
+                  é abrindo um chamado no suporte. */}
+              <Text style={styles.immutableHint}>
+                Depois de criada a conta, nome completo e apelido só podem ser corrigidos através do
+                suporte.
+              </Text>
+
               <Text style={styles.label}>E-mail</Text>
               <TextInput
                 style={styles.input}
@@ -533,6 +541,13 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.textLight,
     marginTop: 4,
+  },
+  // S138 — aviso de imutabilidade pós-cadastro (nome completo/apelido).
+  immutableHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
+    marginBottom: theme.spacing.sm,
   },
 
   genderRow: {

@@ -128,13 +128,16 @@ const MIN_TAG_LENGTH = 2;
 // name<=60, bio<=500) — bug separado achado na recon, corrigido aqui. Os
 // números batem com o que as rules JÁ exigiam antes desta sprint (agora
 // viram só o "guarda de abuso" 4x maior — ver firestore.rules).
-const MAX_NAME_LENGTH = 60;
+// S138 — exportados (eram const local) pra AdminSupportDetailScreen validar
+// no client o mesmo teto, sem duplicar o número (formulário de suporte que
+// escreve nickname/legalName de terceiro).
+export const MAX_NAME_LENGTH = 60;
 const MAX_BIO_LENGTH = 500;
 // S135 — cap curto de propósito: nickname é o nome público exibido em
 // card/cabeçalho, e é justamente o campo que a S134 corrigiu pra não
 // truncar — um teto generoso feito reintroduziria o mesmo problema. Nome
 // completo (legalName) segue com o teto herdado de MAX_NAME_LENGTH acima.
-const MAX_NICKNAME_LENGTH = 30;
+export const MAX_NICKNAME_LENGTH = 30;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -352,7 +355,14 @@ export default function ProfileScreen() {
       // nunca pelos AboutRow acima.
       const aboutHiddenPatch = aboutHidden.length > 0 ? aboutHidden : deleteField();
       await updateUserProfile(user.uid, {
-        nickname,
+        // S138 (correção pós-auditoria) — nickname NÃO entra mais neste
+        // payload: o campo saiu do hasOnly do allow update geral do dono
+        // (ver firestore.rules), e reenviá-lo aqui faz a escrita INTEIRA
+        // ser negada em qualquer conta cujo doc ainda não tenha a chave
+        // gravada (legado), travando o save do resto do perfil. `nickname`
+        // (o state) continua usado só pra exibir o Field, que já é
+        // locked={true} — não é mais editável nem precisa ser regravado a
+        // cada save.
         // S76-B2 — grava a idade DERIVADA, não um número digitado. Salvar o
         // perfil assim reconcilia de quebra o `age` armazenado, que o build
         // antigo ainda lê direto. O fallback existe pra conta sem birthDate:
@@ -866,23 +876,25 @@ export default function ProfileScreen() {
         {!isAdmin &&
           (editing ? (
             <View style={styles.card}>
+              {/* S138 — nickname e nome completo viram imutáveis pelo app,
+                  a qualquer momento (não é mais condicional a verified): a
+                  única via de correção passa a ser um chamado no suporte
+                  (AdminSupportDetailScreen). */}
               <Field
                 label="Como quer ser chamado"
                 value={nickname}
                 onChange={setNickname}
                 maxLength={MAX_NICKNAME_LENGTH}
+                locked={true}
+                lockedHint="Não é possível alterar o apelido pelo app. Precisa corrigir? Fale com o suporte."
               />
               <Field
                 label="Nome completo"
                 value={legalNameInput}
                 onChange={setLegalNameInput}
                 maxLength={MAX_NAME_LENGTH}
-                locked={!!profile?.verified}
-                lockedHint={
-                  profile?.verified
-                    ? 'Não é possível alterar o nome depois que o perfil é verificado. Precisa corrigir? Fale com o suporte.'
-                    : 'Visível só pra você e pro time de verificação.'
-                }
+                locked={true}
+                lockedHint="Não é possível alterar o nome completo pelo app. Precisa corrigir? Fale com o suporte."
               />
               <Field
                 label="Idade"
