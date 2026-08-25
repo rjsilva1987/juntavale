@@ -1,11 +1,12 @@
-// S138 — Copia o `nickname` de cada users/{uid} pra
-// users/{uid}/private/legalName.name, em TODA a base existente. Decisão já
-// tomada por Raphael ("copiar, em toda a base existente"): sobrescreve
-// incondicionalmente, sem checar se private/legalName.name já tinha um
-// valor diferente (nome real digitado no cadastro/verificação) — depois
-// desta sprint, nickname e legalName são os dois travados pelas mesmas
-// rules, e a decisão de produto foi igualar o conteúdo dos dois na base
-// legada em vez de preservar o que já existia.
+// S138 — Copia o `nickname` (ou, na ausência dele, o `name`) de cada
+// users/{uid} pra users/{uid}/private/legalName.name, na base existente que
+// ainda não tenha um legalName.name válido.
+// S138-correção: a versão original desta sprint sobrescrevia
+// incondicionalmente e só olhava `nickname`. A correção passou a: (1) usar
+// `name` como origem quando não há `nickname`; (2) NUNCA sobrescrever um
+// private/legalName.name que já exista como string não-vazia — preserva
+// tanto migrações anteriores quanto nome real digitado no
+// cadastro/verificação, em vez de igualar incondicionalmente.
 // Não usa functions/src/scripts/migrateNicknames.js como base: aquele
 // script não segue o molde dry-run/--confirm/--project deste aqui (scripts/
 // limpeza.js) e não é tocado por esta sprint.
@@ -45,20 +46,21 @@ function requireServiceAccount() {
   return require('../serviceAccountKey.json');
 }
 
-// set(..., { merge: true }) em vez de update(): private/legalName pode não
-// existir ainda pra boa parte da base (subdocumento só nasce no cadastro ou
-// na 1ª edição de perfil via ProfileScreen) — update() falharia com "no
-// document to update" nesses casos. merge:true também preserva `createdAt`
-// quando o doc já existe, e cria o doc só com `name` quando não existe
-// (sem inventar um createdAt que não teria significado real).
-async function writeLegalNameInBatches(db, entries, confirm) {
+// set(...) sem merge: só é chamado (main()) para uids cujo
+// private/legalName ainda não tem `name` válido — já checado antes desta
+// função. O doc final tem que ter exatamente { name, createdAt }, batendo
+// com keys().hasOnly(['name','createdAt']) das rules; merge:true não é
+// necessário aqui porque não há nada útil pra preservar num doc que não
+// tinha `name` válido, e createdAt é sempre gravado via serverTimestamp()
+// neste passo (doc novo ou doc existente sem name válido).
+async function writeLegalNameInBatches(admin, db, entries, confirm) {
   for (let i = 0; i < entries.length; i += USERS_BATCH_LIMIT) {
     const slice = entries.slice(i, i + USERS_BATCH_LIMIT);
     if (!confirm) continue;
     const batch = db.batch();
-    for (const { uid, nickname } of slice) {
+    for (const { uid, value } of slice) {
       const ref = db.collection('users').doc(uid).collection('private').doc('legalName');
-      batch.set(ref, { name: nickname }, { merge: true });
+      batch.set(ref, { name: value, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     }
     await batch.commit();
   }
@@ -105,27 +107,74 @@ async function main() {
   const usersSnap = await db.collection('users').get();
   console.log(`users/{uid} encontrados: ${usersSnap.size}`);
 
+  // Origem: nickname primeiro; na ausência dele (não-string ou vazio), cai
+  // pra name; se nenhum dos dois existir, não há nada a copiar.
   const entries = [];
-  let semNickname = 0;
+  const accounts = [];
+  let semNicknameSemName = 0;
   for (const doc of usersSnap.docs) {
     const nickname = doc.data().nickname;
-    if (typeof nickname !== 'string' || nickname.length === 0) {
-      semNickname += 1;
+    const name = doc.data().name;
+    let value = null;
+    let source = null;
+    if (typeof nickname === 'string' && nickname.length > 0) {
+      value = nickname;
+      source = 'nickname';
+    } else if (typeof name === 'string' && name.length > 0) {
+      value = name;
+      source = 'name';
+    }
+    if (value === null) {
+      semNicknameSemName += 1;
+      accounts.push({ uid: doc.id, source: '-', value: '-', motivo: 'sem nickname e sem name' });
       continue;
     }
-    entries.push({ uid: doc.id, nickname });
+    const account = { uid: doc.id, source, value, motivo: null };
+    accounts.push(account);
+    entries.push({ uid: doc.id, value, source, account });
   }
 
-  console.log(`Com nickname (serão migrados): ${entries.length}`);
-  console.log(`Sem nickname (pulados, nada a copiar): ${semNickname}`);
+  console.log(`Candidatos (com nickname ou name): ${entries.length}`);
+  console.log(`Sem nickname e sem name (pulados, nada a copiar): ${semNicknameSemName}`);
+
+  // Idempotência/não-destruição (S138-correção): não sobrescreve quem já
+  // tem private/legalName.name válido — nem migração anterior, nem nome
+  // real digitado no cadastro/verificação.
+  const toWrite = [];
+  let jaMigrado = 0;
+  for (const entry of entries) {
+    const legalRef = db.collection('users').doc(entry.uid).collection('private').doc('legalName');
+    const legalSnap = await legalRef.get();
+    const existingName = legalSnap.exists ? legalSnap.data().name : undefined;
+    if (typeof existingName === 'string' && existingName.length > 0) {
+      jaMigrado += 1;
+      entry.account.source = '-';
+      entry.account.value = '-';
+      entry.account.motivo = 'já migrado, pulado';
+      continue;
+    }
+    toWrite.push(entry);
+  }
+
+  console.log(`Já migrado (private/legalName.name já preenchido, pulados): ${jaMigrado}`);
+  console.log(`Serão migrados (escrita nova): ${toWrite.length}`);
+
+  console.log('');
+  console.log('Detalhe por conta:');
+  for (const row of accounts) {
+    const uidShort = `${row.uid.slice(0, 8)}...`;
+    const motivoSuffix = row.motivo ? ` (${row.motivo})` : '';
+    console.log(`  ${uidShort} | origem: ${row.source} | valor: ${row.value}${motivoSuffix}`);
+  }
 
   if (!confirm) {
+    console.log('');
     console.log('Dry-run: 0 escritos. Rode de novo com --confirm para escrever de fato.');
     return;
   }
 
-  await writeLegalNameInBatches(db, entries, confirm);
-  console.log(`Escritos: ${entries.length} doc(s) de private/legalName.`);
+  await writeLegalNameInBatches(admin, db, toWrite, confirm);
+  console.log(`Escritos: ${toWrite.length} doc(s) de private/legalName.`);
 }
 
 if (require.main === module) {

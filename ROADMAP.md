@@ -355,8 +355,11 @@ cabeçalho (foi a origem visível da S134).
 ### S138 — Nome completo e apelido imutáveis, edição só via suporte
 **Status:** IMPLEMENTADA (25/08/2026) · auditoria APROVADA na 2ª rodada ·
 `firestore.rules` alteradas (EXIGE DEPLOY — nenhuma function afetada) ·
-script `scripts/migrarNomeCompleto.js` escrito, dry-run por padrão, NÃO
-executado (rodar contra dados reais é decisão do Raphael) · SEM teste em
+script `scripts/migrarNomeCompleto.js` corrigido (25/08/2026: critério de
+origem passou a espelhar o fallback `nickname ?? name` do `getDisplayName`,
+com idempotência contra `legalName` já migrado e relatório de dry-run por
+conta; auditoria APROVADA) — dry-run por padrão, NÃO executado com
+`--confirm` (rodar contra dados reais é decisão do Raphael) · SEM teste em
 aparelho.
 
 Fecha o desenho iniciado na S135, que separou o apelido público do nome

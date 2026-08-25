@@ -36,8 +36,13 @@ permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
   bloqueou 1ª rodada (rules de admin sem validação de tipo/tamanho + sem
   `allow create` pro `legalName`, e `nickname` incondicional no
   `updateUserProfile` do `ProfileScreen` quebrava save de perfil inteiro
-  pra conta legada) — corrigido e APROVADO na 2ª rodada. Ver ROADMAP.md
-  § S138. SEM teste em aparelho.
+  pra conta legada) — corrigido e APROVADO na 2ª rodada. Correção adicional
+  (25/08/2026): dry-run real zerava (base legada sem `nickname`) porque o
+  script só olhava `nickname`; critério corrigido pra espelhar o fallback
+  `nickname ?? name` do `getDisplayName`, com idempotência (não sobrescreve
+  `legalName` já migrado) e relatório de dry-run por conta — auditoria
+  APROVADA, script ainda NÃO rodado com `--confirm`. Ver ROADMAP.md § S138.
+  SEM teste em aparelho.
 - S138-B — FECHADA em código (25/08/2026), auditoria APROVADA sem
   ressalvas, pendente de commit do Raphael: copy do RegisterScreen ganha
   helper curto por campo explicando o papel de nome completo (interno) e
