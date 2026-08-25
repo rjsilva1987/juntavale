@@ -1250,6 +1250,16 @@ continua na bateria geral.
   autenticado"). Qualquer collection nova consultada por `list`/listener
   com regra de leitura que dependa de `request.time` cai na mesma
   armadilha.
+  **Reincidência confirmada na S125 (fix S125-A, 25/08/2026):**
+  `events/{eventId}` tinha o mesmo desenho — `allow read` único com
+  `resource.data.startsAt > request.time` dentro de um OR — e
+  `listDiscoverableEvents` (`collection('events').where('startsAt','>',
+  now)`) sempre voltava `permission-denied`, mesmo a query já filtrando
+  corretamente. Mesma correção: `allow get` mantém a condição de data;
+  `allow list` vira só `isSignedIn()`. Toda collection nova com campo de
+  expiração/agendamento (`expiresAt`, `startsAt`, `purgeAt`...) consultada
+  por `list` precisa nascer já com get/list separados — não esperar o bug
+  aparecer de novo pra lembrar da lição.
 
 ## Padrões de UI que valem para o projeto inteiro
 

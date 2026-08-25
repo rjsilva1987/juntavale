@@ -1,4 +1,12 @@
-// rules-stamp: S138 (25/08/2026 — nome completo e apelido viram IMUTÁVEIS
+// rules-stamp: S125-A (25/08/2026 — permission-denied persistente na
+// EventsScreen depois do deploy da S125: allow read UNIFICADO (get + list)
+// de events/{eventId} split em allow get + allow list, mesma lição da S139
+// (momentos/{uid}) — `resource.data.startsAt > request.time` dentro do OR
+// derrubava o list INTEIRO de listDiscoverableEvents (eventService.ts),
+// que o Firestore não consegue provar estruturalmente pra uma query. get
+// mantém a condição de data/dono/participante; list vira só isSignedIn(),
+// mesmo padrão de groups/{groupId} — filtragem de data e de "já sou
+// participante" delegada inteiramente à query do client.) + S138 (25/08/2026 — nome completo e apelido viram IMUTÁVEIS
 // pelo dono, a qualquer momento: users/{userId} allow update perde
 // `nickname` do hasOnly (sem trava condicional, sempre negado); ganha allow
 // update isolado pro admin [isAdmin() && affectedKeys().hasOnly(['nickname'])].
@@ -1741,10 +1749,29 @@ service cloud.firestore {
     // de name/description de grupo (120/2000) — spec pede copiar, não
     // inventar número novo.
     match /events/{eventId} {
-      allow read: if isSignedIn()
+      // allow read UNIFICADO (get + list) split em allow get + allow list,
+      // mesma lição da S139 (momentos/{uid}, linha ~2299): o Firestore não
+      // consegue provar estruturalmente uma condição dependente de
+      // request.time pro conjunto de resultados de uma query, então nega o
+      // list INTEIRO com permission-denied — mesmo quando a query do client
+      // já filtra por data. Causa raiz do permission-denied da EventsScreen
+      // (S125) em listDiscoverableEvents (eventService.ts), que faz
+      // collection('events').where('startsAt','>',now): a rule unificada
+      // tinha `resource.data.startsAt > request.time` no meio de um OR, e
+      // isso bastava pra derrubar o list inteiro.
+      allow get: if isSignedIn()
         && (resource.data.startsAt > request.time
             || request.auth.uid == resource.data.creatorId
             || exists(/databases/$(database)/documents/events/$(eventId)/participants/$(request.auth.uid)));
+
+      // list (só listDiscoverableEvents hoje): SEM condição de tempo nem de
+      // dono/participante — mesmo padrão de "Leitura ampla pra qualquer
+      // autenticado" já usado em groups/{groupId} (linha ~1525) e
+      // momentos/{uid} (list) acima. A query já filtra startsAt > now do
+      // lado do client (eventService.ts) e já exclui eventos onde o uid é
+      // participante (filter local pós-listMyEvents) — não repetir aqui,
+      // pelo mesmo motivo de improvabilidade estrutural.
+      allow list: if isSignedIn();
 
       allow create: if isSignedIn()
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
