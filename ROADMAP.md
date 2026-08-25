@@ -675,6 +675,47 @@ produto e deve parar no portão.
 3. Como o chat identifica a origem de uma mensagem (a S129-A fez citação
    de mensagem) — a resposta ao momento precisa mostrar a que ele se refere.
 
+### S143-C — Momento: barra de resposta no viewer (chips + emojis + campo)
+**Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S143-B
+(deployada) · SÓ COMEÇA depois da bateria de testes do lote.
+
+Escopo: SÓ camada de UI por cima do encanamento da S143-B — nenhuma
+coleção nova, nenhuma function nova, nenhuma mudança de rules (exceto se
+a correção do débito de `blockedBy` exigir, ver abaixo).
+
+**Decisões tomadas (Raphael, 25/08/2026):**
+- Barra fixa no rodapé do `MomentoViewerModal` (referência: resposta de
+  story do Instagram/Facebook): campo "Enviar mensagem...", 2-3 emojis
+  rápidos e 2-3 chips de sugestão.
+- Chips: catálogo ESTÁTICO de respostas curtas, sorteio a cada exibição,
+  sem IA lendo conteúdo. Textos do catálogo passam pelo Raphael antes de
+  fixar (portão de produto).
+- Chip, emoji e texto enviam TODOS pelo caminho de comentário da S143-B:
+  com match → chat com `momentoRef`; sem match → pedido (respeitando 1
+  pedido por remetente por instância e as demais regras já implementadas).
+- A barra convive com os gestos da S143-A/S141: campo focado ou teclado
+  aberto pausa o timer de auto-avanço (mesma guarda `anyOverlayVisible`
+  da correção da 2ª rodada da S143-B) e não conflita com toque-nos-lados.
+- O botão/modal de comentário atual (`MomentoCommentModal`) é substituído
+  pela barra ou passa a ser aberto por ela — decidir na implementação pelo
+  que ficar mais limpo, sem manter dois caminhos de envio.
+- Aproveitar a sprint pra quitar o débito da S143-B: o caminho via match
+  passa a filtrar `blockedBy` antes de enviar (mesma checagem do caminho
+  sem match).
+
+**Portão de produto registrado pra recon levantar:**
+- Sem match, emoji rápido de 1 toque consome o ÚNICO pedido permitido
+  daquela pessoa naquele momento. Opções a apresentar: (a) aceitar assim;
+  (b) emojis rápidos só aparecem quando já há match ou pedido aceito;
+  (c) emoji rápido vira curtida em vez de comentário. NÃO decidir
+  autonomamente.
+
+**Notas:**
+- Débito que FICA de fora (segue registrado): curtidas coladas quando o
+  autor apaga/republica manualmente — só a expiração limpa.
+- Itens de teste da S143-B ainda pendentes de aparelho valem como
+  pré-requisito desta sprint.
+
 ### S144 — Infraestrutura: reduzir custo de token por sprint
 **Status:** partes A e C FECHADAS (commits 3dd5ad9 e f679098) · parte B
 revertida (commit fa757f5) — a refazer · parte D é regra, não código · 4

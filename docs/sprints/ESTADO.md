@@ -4,12 +4,14 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 25/08/2026
-**Commit atual:** 6ea6c89 — feat(momentos): navegar por toque nos lados no
-viewer (S143-A, IMPLEMENTADA, aprovada na 3ª auditoria, SEM teste em
-aparelho). S143-B (curtir e comentar momento) IMPLEMENTADA em código nesta
-sessão, aprovada na 2ª auditoria, ainda SEM commit/deploy — ver ROADMAP.md.
+**Commit atual:** df08ee7 — feat(momentos): curtir e comentar momento sem
+match (S143-B, FECHADA em código e DEPLOYADA, aprovada na 2ª auditoria,
+SEM teste em aparelho) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S143-C — barra de resposta no viewer do momento (chips + emojis +
+  campo): ABERTA, decisões tomadas, sem recon, bloqueada até a bateria de
+  testes em aparelho da S143-B — ver ROADMAP.md.
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
 
