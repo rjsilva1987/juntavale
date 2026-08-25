@@ -75,13 +75,22 @@ permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
   histórico completo (design revogado + decisões novas).
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
+- S142 — PARCIALMENTE IMPLEMENTADA (25/08/2026), pendente de commit do
+  Raphael: item 3 (rolagem/indicador "↓ Nova mensagem" na `ChatScreen`,
+  decisão de produto fechada por Raphael no mesmo dia) fechado em código e
+  auditado (3 rodadas, 2 correções, APROVADO na 3ª) — único arquivo tocado
+  `src/screens/ChatScreen.tsx`, client puro, sem rules/functions. Itens 1,
+  2, 4 e 5 (envio otimista, teclado, paginação, "digitando…") tiveram só
+  RECON DE DIAGNÓSTICO concluída, nenhum bug de código encontrado, sem
+  alteração — seguem em aberto pra decisão futura. Ver ROADMAP.md § S142.
+  SEM teste em aparelho.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
 - S140 — bug: conta do build 14 quebra ao salvar perfil com nome editado —
-  sem decisões, achado da auditoria da S137.
-- S142 — fluidez do chat (Android) — sem decisões, começa por RECON DE
-  DIAGNÓSTICO.
+  REAVALIADA (25/08/2026): a S138 pode ter eliminado a causa por outro
+  caminho (`name`/`nickname` imutáveis pelo dono); decisão de fechar ou
+  manter aberta ainda PENDENTE, ver ROADMAP.md § S140.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de

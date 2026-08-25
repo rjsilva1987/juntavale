@@ -554,6 +554,22 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // visibleMessages (ver scrollToMessage e o useEffect que consome este
   // estado). null = nenhum salto pendente.
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
+  // S142 — indicador flutuante "nova mensagem abaixo": true quando uma
+  // mensagem do OUTRO lado chega enquanto isNearBottomRef.current é false
+  // (usuário rolado pra cima lendo histórico). Nesse caso o scroll NÃO é
+  // arrastado (ver o callback do listener abaixo) e markMatchRead fica
+  // pendente até o usuário voltar ao fim por qualquer via — toque no
+  // indicador (handleReturnToBottom) ou rolagem manual (handleMessagesScroll).
+  // Resetado por geração igual aos demais estados desta tela (ver efeito de
+  // dados abaixo).
+  const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  // S142 (correção) — espelha hasNewMessageBelow pra ser lido dentro do
+  // useFocusEffect sem re-render, mesmo padrão de isNearBottomRef logo abaixo:
+  // navegar pra MatchProfile/Verification e voltar reganha foco na mesma
+  // geração sem passar por handleMessagesScroll/handleReturnToBottom, então o
+  // useFocusEffect precisa checar o indicador pendente por ref, não por
+  // closure do state.
+  const hasNewMessageBelowRef = useRef(false);
   // Defesa em profundidade: MatchesScreen já barra a navegação pra cá se
   // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
   // (deep link, MatchProfile, etc.) — a garantia real continua sendo a rule
@@ -664,6 +680,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     setOlderCursor(null);
     setHasOlderMessages(false);
     isNearBottomRef.current = true;
+    setHasNewMessageBelow(false);
+    hasNewMessageBelowRef.current = false;
 
     // S101 (correção, RODADA 2) — a leitura da âncora começa AQUI e fica
     // guardada na ref JUNTO da geração desta abertura: o markMatchRead do
@@ -702,10 +720,22 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           windowIdsRef.current = new Set(msgs.map((m) => m.id));
           setMessages(msgs);
           setLoading(false);
-          if (isOwnNewMessage || isNearBottomRef.current) {
+          // S142 — "está vendo o fim" vale tanto pra mensagem própria quanto
+          // pra já estar perto do fim quando a mensagem do outro lado chega.
+          // Só nesse caso o scroll desce E markMatchRead é chamado; senão
+          // (mensagem do outro lado, usuário rolado pra cima) acende o
+          // indicador flutuante e adia a leitura pro retorno ao fim (ver
+          // handleReturnToBottom/handleMessagesScroll).
+          const isViewingBottom = isOwnNewMessage || isNearBottomRef.current;
+          if (isViewingBottom) {
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+            setHasNewMessageBelow(false);
+            hasNewMessageBelowRef.current = false;
+          } else {
+            setHasNewMessageBelow(true);
+            hasNewMessageBelowRef.current = true;
           }
-          if (isFocusedRef.current && uid) {
+          if (isViewingBottom && isFocusedRef.current && uid) {
             markMatchRead(matchId, uid).catch(() => {});
           }
         },
@@ -741,7 +771,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       // markMatchRead.
       const anchor = anchorPromiseRef.current;
       const generation = chatGenerationRef.current;
-      if (anchor && anchor.generation === generation) {
+      // S142 (correção) — refoco (ex.: voltar de MatchProfile/Verification na
+      // mesma stack, sem desmontar) NÃO deve marcar como lido enquanto o
+      // indicador "Nova mensagem" estiver pendente: o usuário ainda não voltou
+      // ao fim da lista, só saiu e voltou pra mesma geração.
+      if (anchor && anchor.generation === generation && !hasNewMessageBelowRef.current) {
         anchor.promise
           .then(() => {
             if (uid) markMatchRead(matchId, uid).catch(() => {});
@@ -784,11 +818,35 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   }, [loadingOlder, olderCursor, matchId]);
 
   // S101 — gate do scroll automático (ver isNearBottomRef).
-  const handleMessagesScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
-  }, []);
+  // S142 — além de atualizar o gate, detecta a transição false→true (usuário
+  // voltou ao fim rolando manualmente, sem tocar no indicador) e replica o
+  // mesmo efeito de handleReturnToBottom: limpa o indicador e dispara a
+  // leitura que tinha ficado pendente.
+  const handleMessagesScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      const wasNearBottom = isNearBottomRef.current;
+      const isNearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
+      isNearBottomRef.current = isNearBottom;
+      if (!wasNearBottom && isNearBottom && hasNewMessageBelow) {
+        setHasNewMessageBelow(false);
+        hasNewMessageBelowRef.current = false;
+        if (uid) markMatchRead(matchId, uid).catch(() => {});
+      }
+    },
+    [hasNewMessageBelow, matchId, uid],
+  );
+
+  // S142 — toque no indicador flutuante "nova mensagem": desce até o fim,
+  // some com o indicador e dispara a leitura que tinha ficado pendente (ver
+  // decisão 3 acima, no callback do listener).
+  const handleReturnToBottom = useCallback(() => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+    setHasNewMessageBelow(false);
+    hasNewMessageBelowRef.current = false;
+    if (uid) markMatchRead(matchId, uid).catch(() => {});
+  }, [matchId, uid]);
 
   useEffect(() => {
     const unsub = listenReactions(matchId, setReactions);
@@ -1269,73 +1327,99 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          {loading ? (
-            <View style={styles.messagesList}>
-              {SKELETON_PATTERN.map((isMe, i) => (
-                <View key={i} style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-                  {!isMe && <SkeletonPlaceholder width={30} height={30} borderRadius={15} />}
-                  <SkeletonPlaceholder
-                    width={isMe ? 160 : 200}
-                    height={40}
-                    borderRadius={theme.borderRadius.lg}
-                  />
-                </View>
-              ))}
-            </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={visibleMessages}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.messagesList}
-              renderItem={renderMessage}
-              onScroll={handleMessagesScroll}
-              scrollEventThrottle={16}
-              // S101 — sem isto, prefixar uma página antiga empurra o
-              // conteúdo visível pra baixo e a leitura "pula". minIndexForVisible
-              // 0 faz o RN compensar o offset pelo tamanho do que entrou acima,
-              // mantendo na tela exatamente a mensagem que o usuário estava lendo.
-              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-              // S129-A — workaround padrão de RN pra scrollToIndex numa lista
-              // de altura variável (sem getItemLayout aqui): se o índice ainda
-              // não tiver layout medido, tenta de novo num timeout curto.
-              onScrollToIndexFailed={(info) => {
-                setTimeout(() => {
-                  flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
-                }, 100);
-              }}
-              // S101 — página anterior só sob toque (decisão de produto:
-              // nada de auto-load ao chegar perto do topo).
-              ListHeaderComponent={
-                hasOlderMessages ? (
-                  <View style={styles.loadOlderWrap}>
-                    {loadingOlder ? (
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                    ) : (
-                      <AnimatedPressable
-                        style={styles.loadOlderBtn}
-                        onPress={handleLoadOlderMessages}
-                      >
-                        <Ionicons
-                          name="arrow-up-circle-outline"
-                          size={16}
-                          color={theme.colors.primary}
-                        />
-                        <Text style={styles.loadOlderText}>Carregar mensagens anteriores</Text>
-                      </AnimatedPressable>
-                    )}
+          <View style={styles.messagesWrap}>
+            {loading ? (
+              <View style={styles.messagesList}>
+                {SKELETON_PATTERN.map((isMe, i) => (
+                  <View
+                    key={i}
+                    style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}
+                  >
+                    {!isMe && <SkeletonPlaceholder width={30} height={30} borderRadius={15} />}
+                    <SkeletonPlaceholder
+                      width={isMe ? 160 : 200}
+                      height={40}
+                      borderRadius={theme.borderRadius.lg}
+                    />
                   </View>
-                ) : null
-              }
-              ListEmptyComponent={
-                <EmptyState
-                  icon="chatbubble-ellipses-outline"
-                  title="Comece uma conversa!"
-                  subtitle={`Vocês fizeram match! Diga olá para ${otherName}`}
-                />
-              }
-            />
-          )}
+                ))}
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={visibleMessages}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.messagesList}
+                renderItem={renderMessage}
+                onScroll={handleMessagesScroll}
+                scrollEventThrottle={16}
+                // S101 — sem isto, prefixar uma página antiga empurra o
+                // conteúdo visível pra baixo e a leitura "pula". minIndexForVisible
+                // 0 faz o RN compensar o offset pelo tamanho do que entrou acima,
+                // mantendo na tela exatamente a mensagem que o usuário estava lendo.
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+                // S129-A — workaround padrão de RN pra scrollToIndex numa lista
+                // de altura variável (sem getItemLayout aqui): se o índice ainda
+                // não tiver layout medido, tenta de novo num timeout curto.
+                onScrollToIndexFailed={(info) => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                  }, 100);
+                }}
+                // S101 — página anterior só sob toque (decisão de produto:
+                // nada de auto-load ao chegar perto do topo).
+                ListHeaderComponent={
+                  hasOlderMessages ? (
+                    <View style={styles.loadOlderWrap}>
+                      {loadingOlder ? (
+                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                      ) : (
+                        <AnimatedPressable
+                          style={styles.loadOlderBtn}
+                          onPress={handleLoadOlderMessages}
+                        >
+                          <Ionicons
+                            name="arrow-up-circle-outline"
+                            size={16}
+                            color={theme.colors.primary}
+                          />
+                          <Text style={styles.loadOlderText}>Carregar mensagens anteriores</Text>
+                        </AnimatedPressable>
+                      )}
+                    </View>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  <EmptyState
+                    icon="chatbubble-ellipses-outline"
+                    title="Comece uma conversa!"
+                    subtitle={`Vocês fizeram match! Diga olá para ${otherName}`}
+                  />
+                }
+              />
+            )}
+            {/* S142 — indicador flutuante "nova mensagem", mesmo molde visual do
+                botão "carregar mensagens anteriores" (AnimatedPressable +
+                Ionicons + theme.colors.primary), ancorado embaixo (acima do
+                composer) em vez de no topo. Sem contador — só o aviso fixo.
+                pointerEvents box-none no wrap pra não bloquear o scroll da
+                lista na área vazia ao redor do botão. */}
+            {hasNewMessageBelow && (
+              <View style={styles.newMessageIndicatorWrap} pointerEvents="box-none">
+                <AnimatedPressable
+                  style={styles.newMessageIndicatorBtn}
+                  onPress={handleReturnToBottom}
+                >
+                  <Ionicons
+                    name="arrow-down-circle-outline"
+                    size={16}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.newMessageIndicatorText}>Nova mensagem</Text>
+                </AnimatedPressable>
+              </View>
+            )}
+          </View>
 
           {/* Upload progress */}
           {uploadProgress !== null && (
@@ -1749,6 +1833,37 @@ const styles = StyleSheet.create({
   headerStatus: { fontSize: theme.fontSize.xs, color: theme.colors.like },
 
   messagesList: { padding: theme.spacing.md, gap: 10, flexGrow: 1 },
+
+  // S142 — container relativo da FlatList, âncora de posicionamento do
+  // indicador flutuante "nova mensagem" abaixo (position: absolute nele).
+  messagesWrap: { flex: 1, position: 'relative' },
+
+  // S142 — indicador flutuante "nova mensagem", ancorado embaixo da lista
+  // (acima do composer). Mesmo molde visual de loadOlderBtn/loadOlderText
+  // logo abaixo (texto azul sobre surface, regra de ouro do tema).
+  newMessageIndicatorWrap: {
+    position: 'absolute',
+    bottom: theme.spacing.sm,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  newMessageIndicatorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 0.5,
+    borderColor: theme.colors.border,
+  },
+  newMessageIndicatorText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
 
   // S101 — cabeçalho "carregar mais" da lista de mensagens. Texto azul sobre
   // surface (nunca branco sobre amarelo, regra de ouro do tema).

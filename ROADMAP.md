@@ -573,18 +573,34 @@ leitura/escrita nova no Firestore, `firestore.rules`/`momentoService.ts`
 intocados.
 
 ### S142 — Fluidez do chat, com foco no Android
-**Status:** ABERTA · sem decisões · sem recon · começa por RECON DE DIAGNÓSTICO
+**Status:** PARCIALMENTE IMPLEMENTADA (25/08/2026) — item 3 (rolagem/indicador
+"↓ nova mensagem") fechado em código e auditado adversarialmente (3 rodadas,
+2 correções, APROVADO na 3ª), client puro, único arquivo tocado
+`src/screens/ChatScreen.tsx`, sem `firestore.rules`/Cloud Functions, SEM
+teste em aparelho. Itens 1, 2, 4 e 5 (envio otimista, teclado, paginação,
+"digitando…") tiveram RECON DE DIAGNÓSTICO concluída nesta rodada (ver
+abaixo) mas SEM alteração de código — seguem em aberto pra decisão/sprint
+futura.
 
 Relatado por Raphael em 24/08/2026, testando em aparelho: o chat "ainda tem
 umas quebras" e não está tão fluido quanto o WhatsApp. E, comparando os dois
 sistemas, **no iPhone a fluidez está melhor que no Android** — mesmo código,
 comportamento diferente.
 
-**Esta sprint COMEÇA por diagnóstico, não por correção.** O sintoma está
-descrito de forma genérica e o terreno não foi mapeado; implementar sem
-recon aqui é chutar.
+**Decisão de produto fechada (Raphael, 25/08/2026) — item 3 (rolagem):**
+- Abrir a `ChatScreen` SEMPRE rola pro fim (mensagem mais recente).
+- Com a tela em FOCO e o usuário rolado pra cima no histórico, mensagem nova
+  chegando NÃO arrasta — mostra indicador "↓ Nova mensagem" (padrão
+  WhatsApp, sem contador). Tocar no indicador rola até o fim e ele some.
+- Escopo explícito: só a `ChatScreen` em foco — não a lista de conversas, e
+  não cobre app em background/outra tela (isso é a S122, já resolvida).
 
-**Candidatos a investigar, em ordem de impacto provável:**
+**Esta sprint COMEÇOU por diagnóstico.** O sintoma estava descrito de forma
+genérica e o terreno não tinha sido mapeado; os itens 1, 2, 4 e 5 abaixo
+continuam sem decisão de produto até uma próxima rodada decidir o que fazer
+com cada achado.
+
+**Candidatos investigados, em ordem de impacto provável:**
 1. ENVIO OTIMISTA — se a bolha só aparece depois que o Firestore confirma,
    é a maior fonte de sensação de travamento, sobretudo em rede ruim. O
    WhatsApp desenha na hora com o tique de "enviando". Encaixa nos três
@@ -596,27 +612,78 @@ recon aqui é chutar.
    `android:windowSoftInputMode` no manifesto muda tudo — forte suspeita
    pra diferença relatada entre os dois sistemas.
 3. ROLAGEM ao chegar mensagem nova — não arrastar à força quem está lendo
-   histórico; mostrar "↓ nova mensagem" como o WhatsApp.
+   histórico; mostrar "↓ nova mensagem" como o WhatsApp. **IMPLEMENTADO
+   nesta rodada, ver "Fix aplicado" abaixo.**
 4. PAGINAÇÃO do histórico — carregar tudo de uma vez trava a abertura da
    conversa; carregar aos poucos ao rolar pra cima sem perder posição.
 5. "DIGITANDO…" — a presença da S79-C2 já existe, então é barato e dá
    sensação de vida.
 
-**Recon quando a sprint abrir:**
-1. Como o `ChatScreen.tsx` renderiza a lista hoje: FlatList invertida?
-   `keyExtractor` estável? há `React.memo` no MessageBubble? quantos
-   listeners ativos por conversa?
-2. Se o envio é otimista ou espera o servidor.
-3. Como o teclado é tratado, e o que difere entre iOS e Android nesse
-   ponto — incluindo `app.json`/manifesto Android.
-4. Se há paginação do histórico ou carga total.
-5. Medir antes de mexer: quantas mensagens existem numa conversa de teste
-   e a partir de quantas a lista engasga.
+**Recon concluída (25/08/2026):**
+1. `ChatScreen.tsx` renderiza a lista com `FlatList` **NÃO invertida**
+   (mais antiga no topo, mais recente embaixo — diferente do padrão
+   `inverted` do WhatsApp), `keyExtractor={(item) => item.id}`,
+   `maintainVisibleContentPosition={{ minIndexForVisible: 0 }}` (compensa
+   prepend de histórico sem "pular"). Sem `onEndReached`/`onStartReached`
+   por decisão de produto já registrada em comentário no código ("nada de
+   auto-load ao chegar perto do topo").
+2. Envio otimista: NÃO há array/estado local de eco manual — `sendMessage`
+   (`firestoreService.ts`) só faz `addDoc` com `serverTimestamp()`; o
+   "otimismo" percebido vem do próprio SDK do Firestore (write local
+   aplicado ao cache antes do ack do servidor), mecanismo que só funciona
+   porque a query usa cursor (ver "Armadilhas do chat"). Nenhum bug
+   encontrado; se a sensação de travamento persistir, é candidato a medir
+   em aparelho antes de mexer, não a corrigir às cegas.
+3. Rolagem — ver "Fix aplicado" abaixo.
+4. Paginação (S101) — `listenMessages`/`loadOlderMessages`
+   (`firestoreService.ts`) usam estados separados (`messages` vs.
+   `olderMessages`, mesclados só na renderização); prepend de página antiga
+   nunca dispara o callback de `listenMessages`, então NÃO HÁ CONFLITO
+   entre a paginação por cursor e a rolagem/indicador do item 3 — confirmado
+   nesta recon.
+5. "Digitando…" já existe e funciona: `useTypingIndicator.ts` (debounce
+   1200ms, throttle 2000ms, TTL 5s), renderizado em `ChatScreen.tsx`. Nada
+   a fazer aqui por enquanto.
+6. Teclado (item 2) — `KeyboardAvoidingView` hoje usa
+   `behavior={Platform.OS === 'ios' ? 'padding' : 'height'}`,
+   `keyboardVerticalOffset={0}`; Android sem tratamento adicional. Não dá
+   pra confirmar só lendo código se há salto/sobreposição — exige teste em
+   aparelho Android real, ainda não feito.
+
+**Fix aplicado (item 3 — rolagem/indicador "nova mensagem"):**
+- Novo estado `hasNewMessageBelow` (+ ref espelho `hasNewMessageBelowRef`,
+  necessária porque o `useFocusEffect` de marcar como lida — pré-existente
+  da S101 — precisa ler o valor sem depender de closure de state),
+  resetados por geração (`chatGenerationRef`) igual aos demais estados da
+  tela.
+- No listener de tempo real: mensagem do outro lado + usuário não perto do
+  fim → liga o indicador, não rola. Mensagem própria OU já perto do fim →
+  rola pro fim, limpa o indicador (se estava ligado) e marca como lida.
+- `markMatchRead` deixou de disparar incondicionalmente no refoco da tela
+  (`useFocusEffect`, mecanismo da S101) quando o indicador está pendente —
+  1ª correção da auditoria: navegar pra `MatchProfile`/`Verification` e
+  voltar (push na mesma stack, sem desmontar `ChatScreen`) marcava como
+  lida por baixo do indicador ainda visível; agora exige
+  `!hasNewMessageBelowRef.current` além da checagem de geração já
+  existente.
+- Indicador ficava preso na tela ao enviar mensagem própria com o indicador
+  já ligado por uma mensagem anterior do outro lado — 2ª correção da
+  auditoria: o ramo que rola pro fim (mensagem própria ou já perto do fim)
+  agora sempre limpa o indicador, não só quando é mensagem do outro lado.
+- Indicador visual: pill flutuante "Nova mensagem" reaproveitando o mesmo
+  molde visual do botão "carregar mensagens anteriores" já existente
+  (`AnimatedPressable`/Pressable + `Ionicons` + `theme.colors.primary`),
+  sem contador numérico, ancorado acima do composer.
+- "Abrir a tela sempre rola pro fim": já funcionava antes desta sprint
+  (default `isNearBottomRef.current = true` por geração no mount) — sem
+  necessidade de código novo para esse ponto específico, só confirmado.
 
 **Nota:** a diferença iOS x Android pode não ser só do chat — pode ser
 característica geral do aparelho de teste (modelo, versão do Android) ou do
-Expo Go. A recon deve dizer se o problema é do ChatScreen ou do app inteiro
-antes de qualquer correção.
+Expo Go. Segue sem confirmação; itens 1, 2 e 4 (envio otimista, teclado,
+paginação) não tiveram nenhum bug de código encontrado nesta recon — se a
+sensação de travamento persistir depois do build 15, o próximo passo é medir
+em aparelho Android real antes de mexer em código de novo.
 
 ### S143-A — Momento: navegar por toque nos lados
 **Status:** IMPLEMENTADA em 25/08/2026, APROVADA na 3ª auditoria (2 rodadas
