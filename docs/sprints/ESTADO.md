@@ -9,9 +9,6 @@ match (S143-B, FECHADA em código e DEPLOYADA, aprovada na 2ª auditoria,
 SEM teste em aparelho) — ver ROADMAP.md.
 
 ## Sprints em andamento
-- S143-C — barra de resposta no viewer do momento (chips + emojis +
-  campo): ABERTA, decisões tomadas, sem recon, bloqueada até a bateria de
-  testes em aparelho da S143-B — ver ROADMAP.md.
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
 

@@ -130,8 +130,27 @@ export const sendMomentoComment = async (
     throw new Error('Comentário inválido.');
   }
 
+  // S143-C (débito da S143-B, decisão 7) — checa o `blockedUsers` do
+  // PRÓPRIO remetente ANTES de qualquer findMatchWithUser/setDoc/sendMessage.
+  // Cobre os dois sentidos de bloqueio (eu bloqueei OU ele me bloqueou): a
+  // Cloud Function onBlockCreated propaga o uid do outro lado pros dois
+  // perfis (ver comentário em firestore.rules), então o array do PRÓPRIO
+  // usuário já basta — não precisa ler o perfil do autor.
+  const myProfileSnap = await getDoc(doc(db, 'users', uid));
+  const blockedUsers = (myProfileSnap.data()?.blockedUsers ?? []) as string[];
+  if (blockedUsers.includes(momento.authorId)) {
+    throw new Error('Não é possível enviar — bloqueio ativo entre vocês.');
+  }
+
   const match = await findMatchWithUser(uid, momento.authorId);
   if (match) {
+    // S143-C — melhoria de UX (débito da S143-B, decisão 7): o servidor já
+    // nega via matchAllowsPost (firestore.rules) se `blockedBy` não está
+    // vazio, mas sem esta checagem client-side o usuário veria um
+    // permission-denied cru em vez de uma mensagem amigável.
+    if ((match.blockedBy ?? []).length > 0) {
+      throw new Error('Não é possível enviar — bloqueio ativo entre vocês.');
+    }
     await sendMessage(
       match.id,
       uid,

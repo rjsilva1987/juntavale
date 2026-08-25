@@ -1,4 +1,9 @@
-// rules-stamp: S143-B (25/08/2026 — Momento: curtir e comentar. Nova
+// rules-stamp: S143-C (25/08/2026 — Momento: barra de resposta no viewer.
+// momentoRequests/{requestId} allow create ganha 1 condição nova: nega se
+// o authorId do momento está no blockedUsers do PRÓPRIO remetente
+// [request.auth.uid] — débito registrado na S143-B, decisão 7. Nenhuma
+// outra rule mudou (matches/{matchId}/messages já protegido via
+// matchAllowsPost).) + S143-B (25/08/2026 — Momento: curtir e comentar. Nova
 // subcoleção momentos/{authorUid}/likes/{likerUid} [create isSignedIn() &&
 // likerUid==auth.uid && likerUid!=authorUid, hasOnly(['likerUid',
 // 'createdAt']), delete só do dono do like, update sempre false — molde de
@@ -2292,6 +2297,17 @@ service cloud.firestore {
     // instante do pedido (decisão 7/8), não referência viva — sobrevive à
     // expiração do momento original (decisão 8: expireMomentos NUNCA apaga
     // momentoRequests).
+    // S143-C (débito registrado na S143-B, decisão 7) — allow create ganha
+    // mais uma condição: nega se `request.resource.data.authorId` (autor do
+    // momento) está no `blockedUsers` do PRÓPRIO remetente
+    // (get(.../users/$(request.auth.uid))). Só o array do remetente
+    // importa — a Cloud Function onBlockCreated (functions/src/chat.ts)
+    // propaga o uid do outro lado pros DOIS perfis quando um bloqueio é
+    // criado, então "eu bloqueei" e "ele me bloqueou" já caem no mesmo
+    // array. O caminho COM match (matches/{matchId}/messages) não precisou
+    // de mudança de rule nesta sprint — já é protegido no servidor via
+    // matchAllowsPost (`blockedBy` do match), só ganhou checagem
+    // client-side (momentoRequestService.ts) por UX.
     match /momentoRequests/{requestId} {
       allow read: if isSignedIn()
         && (request.auth.uid == resource.data.senderId
@@ -2301,6 +2317,11 @@ service cloud.firestore {
         && request.auth.uid == request.resource.data.senderId
         && request.resource.data.senderId != request.resource.data.authorId
         && request.resource.data.authorId is string
+        // S143-C (débito da S143-B, decisão 7) — nega o pedido se o autor
+        // do momento está no `blockedUsers` do PRÓPRIO remetente (cobre os
+        // dois sentidos de bloqueio, ver comentário do bloco acima).
+        && !(request.resource.data.authorId in
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('blockedUsers', []))
         // "mesmo limite de tamanho de texto de mensagem de chat" (decisão do
         // escopo) — 2000, mesmo teto de matches/{matchId}/messages.text acima.
         && request.resource.data.text is string

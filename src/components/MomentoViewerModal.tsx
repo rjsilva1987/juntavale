@@ -8,20 +8,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Modal, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { MomentoCommentModal } from '@/components/MomentoCommentModal';
 import { MomentoLikersModal } from '@/components/MomentoLikersModal';
+import { MomentoReplyBar } from '@/components/MomentoReplyBar';
 import { ReportModal } from '@/components/ReportModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportReason, reportUser } from '@/services/blockService';
-import { UserProfile } from '@/services/firestoreService';
+import { findMatchWithUser, UserProfile } from '@/services/firestoreService';
+import { sendMomentoComment } from '@/services/momentoRequestService';
 import {
   hasLikedMomento,
   likeMomento,
@@ -72,10 +83,24 @@ export function MomentoViewerModal({
   // handleTogglePhotoLike em MatchProfileScreen.tsx.
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
-  // Lista nominal (decisão 6) só abre quando isOwnMomento; comentar (decisão
-  // 2/5) só quando !isOwnMomento — ver o footer de ações abaixo.
+  // S143-C — se existe match com o autor. null = ainda carregando (mesmo
+  // estado neutro do efeito abaixo antes da resposta chegar). Decide o
+  // caminho do emoji rápido da MomentoReplyBar: true → vira comentário no
+  // chat (decisão 3); false OU null → vira curtida, nunca gasta o pedido
+  // por um toque de 1 emoji (decisão 4, "nunca por engano").
+  const [hasMatch, setHasMatch] = useState<boolean | null>(null);
+  // Lista nominal (decisão 6) só abre quando isOwnMomento; a barra de
+  // resposta (decisão 5/6 da S143-C, substitui o antigo MomentoCommentModal)
+  // só quando !isOwnMomento — ver o footer de ações e a MomentoReplyBar
+  // abaixo.
   const [likersVisible, setLikersVisible] = useState(false);
-  const [commentVisible, setCommentVisible] = useState(false);
+  // S143-C — true enquanto o TextInput da MomentoReplyBar está focado;
+  // entra no anyOverlayVisible abaixo pra pausar o timer de auto-avanço
+  // igual aos outros overlays (mesmo raciocínio do antigo commentVisible).
+  const [replyBarFocused, setReplyBarFocused] = useState(false);
+  // S143-C — true enquanto handleSendText/handleEmojiPress (via comentário)
+  // está em voo; passado pra MomentoReplyBar como `submitting`.
+  const [replySubmitting, setReplySubmitting] = useState(false);
   // S143-A — largura da área de conteúdo, medida via onLayout, mesmo padrão
   // de photoAreaWidth em MatchProfileScreen.tsx. Usada só pra decidir metade
   // esquerda (volta) x metade direita (avança) do tap.
@@ -132,18 +157,32 @@ export function MomentoViewerModal({
   // (troca de item na fila do feed, ver MomentosScreen.openFeedItem). Não se
   // aplica ao próprio momento (decisão 9): liked fica sempre false ali, sem
   // nem chamar o service (a rule negaria mesmo — likerUid != authorId).
+  // S143-C — estendido pra também buscar hasMatch em paralelo (mesma
+  // guarda, mesmo reset pro estado neutro quando não se aplica): o emoji
+  // rápido da MomentoReplyBar precisa saber ANTES do toque se o caminho é
+  // comentário (match) ou curtida (sem match), decisão 3/4.
   useEffect(() => {
     if (!momento || isOwnMomento || !user) {
       setLiked(false);
+      setHasMatch(null);
       return undefined;
     }
     let cancelled = false;
-    hasLikedMomento(momento.authorId, user.uid)
-      .then((value) => {
-        if (!cancelled) setLiked(value);
+    Promise.all([
+      hasLikedMomento(momento.authorId, user.uid),
+      findMatchWithUser(user.uid, momento.authorId),
+    ])
+      .then(([likedValue, match]) => {
+        if (!cancelled) {
+          setLiked(likedValue);
+          setHasMatch(!!match);
+        }
       })
       .catch(() => {
-        if (!cancelled) setLiked(false);
+        if (!cancelled) {
+          setLiked(false);
+          setHasMatch(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -168,6 +207,66 @@ export function MomentoViewerModal({
       setLiked(!next);
     } finally {
       setLikeBusy(false);
+    }
+  };
+
+  // S143-C — chip tocado ou texto do campo enviado: SEMPRE vai por
+  // sendMomentoComment (decisão 5), com match → mensagem no chat, sem
+  // match → pedido (momentoRequests). Mesmo tratamento de resultado/erro
+  // que estava em MomentoCommentModal.handleSend (removido nesta sprint —
+  // a barra substitui o modal, não convivem os dois caminhos, decisão 6).
+  const handleSendText = async (text: string) => {
+    if (!user || !momento) return;
+    setReplySubmitting(true);
+    try {
+      const result = await sendMomentoComment(user.uid, momento, text);
+      if (result.via === 'match') {
+        Alert.alert('Comentário enviado', 'Sua mensagem foi enviada na conversa.');
+      } else if (result.status === 'pending') {
+        Alert.alert(
+          'Pedido enviado',
+          'Vocês ainda não têm match — avisamos o autor do momento. Assim que ele responder, a conversa libera aqui.',
+        );
+      } else if (result.status === 'answered') {
+        Alert.alert('Mensagem enviada', 'Sua mensagem foi enviada na conversa deste pedido.');
+      } else {
+        Alert.alert(
+          'Pedido recusado',
+          'O autor já recusou um pedido de conversa pra este momento.',
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Não foi possível enviar',
+        error instanceof Error ? error.message : 'Tente novamente em instantes.',
+      );
+    } finally {
+      setReplySubmitting(false);
+    }
+  };
+
+  // S143-C — emoji rápido da MomentoReplyBar: com match vira comentário
+  // (decisão 3, mesmo caminho de handleSendText); sem match (ou hasMatch
+  // ainda não resolvido — null tratado como sem match por segurança, nunca
+  // gastar o único pedido por engano) vira curtida, reusando o MESMO padrão
+  // otimista de handleToggleLike acima, mas só pra frente: se já está
+  // curtido, no-op (decisão 4).
+  const handleEmojiPress = async (emoji: string) => {
+    if (!user || !momento) return;
+    if (hasMatch === true) {
+      await handleSendText(emoji);
+      return;
+    }
+    if (!liked && !likeBusy) {
+      setLiked(true);
+      setLikeBusy(true);
+      try {
+        await likeMomento(momento.authorId, user.uid);
+      } catch {
+        setLiked(false);
+      } finally {
+        setLikeBusy(false);
+      }
     }
   };
 
@@ -235,10 +334,15 @@ export function MomentoViewerModal({
   // de CONTEÚDO). Sem isto, o timer seguia rodando por trás
   // do formulário de denúncia e podia trocar/fechar o `momento` enquanto o
   // usuário ainda estava denunciando (ver ROADMAP.md S141).
-  // S143-B — CommentModal e LikersModal são o mesmo caso (também siblings,
-  // fora do contentTapGesture): sem entrar aqui, o timer avançava o
-  // `momento` por trás do modal de comentário/curtidores aberto.
-  const anyOverlayVisible = reportVisible || commentVisible || likersVisible;
+  // S143-B — LikersModal é o mesmo caso (também sibling, fora do
+  // contentTapGesture): sem entrar aqui, o timer avançava o `momento` por
+  // trás do modal de curtidores aberto.
+  // S143-C — commentVisible removido (MomentoCommentModal foi deletado,
+  // decisão 6); replyBarFocused entra no lugar — o TextInput da
+  // MomentoReplyBar não é um Modal sibling, é parte do próprio SafeAreaView,
+  // mas precisa da MESMA pausa: sem isso o timer avançava o `momento` por
+  // trás do usuário digitando.
+  const anyOverlayVisible = reportVisible || likersVisible || replyBarFocused;
 
   useEffect(() => {
     if (!reportEffectMountedRef.current) {
@@ -290,7 +394,12 @@ export function MomentoViewerModal({
             provider próprio. */}
         <GestureHandlerRootView style={styles.gestureRoot}>
           <SafeAreaProvider>
-            <SafeAreaView style={styles.container} edges={['top']}>
+            {/* S143-C — sem `edges`, padrão de tela com input fixo no
+                rodapé (ChatScreen.tsx:1223), agora que a MomentoReplyBar
+                mora aqui dentro. A ausência da prop cobre TODOS os lados
+                (não menos que o `edges={['top']}` anterior), então o header
+                continua recebendo o inset de topo normalmente. */}
+            <SafeAreaView style={styles.container}>
               <View style={styles.header}>
                 <View style={styles.headerLeft}>
                   {!isOwnMomento && authorProfile?.photoURL ? (
@@ -328,67 +437,88 @@ export function MomentoViewerModal({
                 <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
               </View>
 
-              <GestureDetector gesture={contentTapGesture}>
-                <View
-                  style={styles.content}
-                  onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}
-                >
-                  {momento ? (
-                    momento.type === 'text' ? (
-                      <Text style={styles.momentoText}>{momento.text}</Text>
-                    ) : momento.type === 'photo' && momento.photoUrl ? (
-                      <Image
-                        source={{ uri: momento.photoUrl }}
-                        style={styles.momentoPhoto}
-                        contentFit="contain"
-                        placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                      />
-                    ) : null
-                  ) : null}
-                </View>
-              </GestureDetector>
+              {/* S143-C — KeyboardAvoidingView envolvendo conteúdo +
+                  footer + barra de resposta (não a tela inteira: header e
+                  progressTrack ficam de fora de propósito, mesmo raciocínio
+                  do comentário acima sobre "usar o bom senso" sem quebrar o
+                  layout existente). Mesmo padrão de behavior que
+                  MomentoCommentModal.tsx usava antes de ser removido nesta
+                  sprint (Platform.OS === 'ios' ? 'padding' : 'height').
+                  Fica DENTRO do GestureHandlerRootView já existente — só
+                  uma View de layout, não interfere no GestureDetector do
+                  conteúdo abaixo. */}
+              <KeyboardAvoidingView
+                style={styles.keyboardArea}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              >
+                <GestureDetector gesture={contentTapGesture}>
+                  <View
+                    style={styles.content}
+                    onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}
+                  >
+                    {momento ? (
+                      momento.type === 'text' ? (
+                        <Text style={styles.momentoText}>{momento.text}</Text>
+                      ) : momento.type === 'photo' && momento.photoUrl ? (
+                        <Image
+                          source={{ uri: momento.photoUrl }}
+                          style={styles.momentoPhoto}
+                          contentFit="contain"
+                          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                        />
+                      ) : null
+                    ) : null}
+                  </View>
+                </GestureDetector>
 
-              {/* S143-B — footer de ações FORA do GestureDetector acima de
-                  propósito: um Pressable filho da View gesticulada
-                  competiria com o LongPress (pause/resume) e o Tap
-                  (navegação) da S143-A, exatamente o que o escopo desta
-                  sprint proíbe. Curtir/comentar só existem pro momento de
-                  OUTRA pessoa (decisão 9); o contador aparece sempre
-                  (qualquer visualizador), mas só é tocável (abre a lista
-                  nominal, decisão 6) quando isOwnMomento. */}
-              <View style={styles.actionsRow}>
-                {!isOwnMomento && (
-                  <AnimatedPressable
-                    style={styles.actionBtn}
-                    onPress={handleToggleLike}
-                    disabled={likeBusy}
-                  >
-                    <Ionicons
-                      name={liked ? 'heart' : 'heart-outline'}
-                      size={26}
-                      color={liked ? theme.colors.error : theme.colors.white}
-                    />
-                  </AnimatedPressable>
-                )}
-                {isOwnMomento ? (
-                  <AnimatedPressable
-                    style={styles.actionBtn}
-                    onPress={() => setLikersVisible(true)}
-                  >
+                {/* S143-B — footer de ações FORA do GestureDetector acima de
+                    propósito: um Pressable filho da View gesticulada
+                    competiria com o LongPress (pause/resume) e o Tap
+                    (navegação) da S143-A, exatamente o que o escopo desta
+                    sprint proíbe. Curtir só existe pro momento de OUTRA
+                    pessoa (decisão 9); o contador aparece sempre (qualquer
+                    visualizador), mas só é tocável (abre a lista nominal,
+                    decisão 6) quando isOwnMomento.
+                    S143-C — o botão de comentário (chatbubble) saiu daqui:
+                    a MomentoReplyBar abaixo substitui por completo o antigo
+                    MomentoCommentModal (decisão 6), não convivem os dois
+                    caminhos de envio. */}
+                <View style={styles.actionsRow}>
+                  {!isOwnMomento && (
+                    <AnimatedPressable
+                      style={styles.actionBtn}
+                      onPress={handleToggleLike}
+                      disabled={likeBusy}
+                    >
+                      <Ionicons
+                        name={liked ? 'heart' : 'heart-outline'}
+                        size={26}
+                        color={liked ? theme.colors.error : theme.colors.white}
+                      />
+                    </AnimatedPressable>
+                  )}
+                  {isOwnMomento ? (
+                    <AnimatedPressable
+                      style={styles.actionBtn}
+                      onPress={() => setLikersVisible(true)}
+                    >
+                      <Text style={styles.likeCount}>{momento?.likesCount ?? 0} curtidas</Text>
+                    </AnimatedPressable>
+                  ) : (
                     <Text style={styles.likeCount}>{momento?.likesCount ?? 0} curtidas</Text>
-                  </AnimatedPressable>
-                ) : (
-                  <Text style={styles.likeCount}>{momento?.likesCount ?? 0} curtidas</Text>
-                )}
+                  )}
+                </View>
+
                 {!isOwnMomento && (
-                  <AnimatedPressable
-                    style={styles.actionBtn}
-                    onPress={() => setCommentVisible(true)}
-                  >
-                    <Ionicons name="chatbubble-outline" size={24} color={theme.colors.white} />
-                  </AnimatedPressable>
+                  <MomentoReplyBar
+                    momentoId={momento?.id ?? null}
+                    onSendText={handleSendText}
+                    onEmojiPress={handleEmojiPress}
+                    onFocusChange={setReplyBarFocused}
+                    submitting={replySubmitting}
+                  />
                 )}
-              </View>
+              </KeyboardAvoidingView>
             </SafeAreaView>
           </SafeAreaProvider>
         </GestureHandlerRootView>
@@ -408,14 +538,6 @@ export function MomentoViewerModal({
           visible={likersVisible}
           authorUid={momento?.authorId ?? null}
           onClose={() => setLikersVisible(false)}
-        />
-      )}
-
-      {!isOwnMomento && (
-        <MomentoCommentModal
-          visible={commentVisible}
-          momento={momento}
-          onClose={() => setCommentVisible(false)}
         />
       )}
     </>
@@ -455,6 +577,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
+  // S143-C — envolve content + actionsRow + MomentoReplyBar dentro do
+  // KeyboardAvoidingView (ver comentário no JSX); flex: 1 pra ocupar o
+  // mesmo espaço vertical que `content` sozinho ocupava antes.
+  keyboardArea: { flex: 1 },
   progressFill: { height: '100%', backgroundColor: theme.colors.primary },
   content: {
     flex: 1,
