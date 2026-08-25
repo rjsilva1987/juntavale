@@ -89,8 +89,28 @@ MANUAL). Se rodou no AUTOMATICO, inclua logo em seguida a secao "Decisoes
 tomadas no automatico", uma linha por decisao — o que foi escolhido e por
 que; se nenhum portao precisou de decisao, diga isso em vez de omitir a
 secao. Depois, resuma em ate 10 linhas: o que mudou, o que a auditoria
-pegou, o que falta testar em aparelho. Depois imprima os comandos git — e
-SO isso, voce nunca os executa:
+pegou, o que falta testar em aparelho.
+
+PASSO OBRIGATORIO — REESCREVER O STATUS NO ROADMAP.md: antes de imprimir
+qualquer comando git, reescreva a linha **Status:** da sprint no
+ROADMAP.md para o estado FINAL. Isso vale sempre, inclusive quando a
+sprint terminou sem alterar codigo (caso "nada a fazer") — nao pule este
+passo so porque nao houve implementacao. O status final deve conter,
+quando aplicavel:
+- IMPLEMENTADA (ou FECHADA, ou ENCERRADA SEM ALTERACAO) e a data;
+- se exige deploy de rules/functions e o nome das functions afetadas, ou
+  se e client puro e nao exige deploy;
+- se ja foi testada em aparelho ou nao — o padrao e "SEM teste em
+  aparelho", ja que o /sprint nunca testa.
+O status NAO pode ficar descrevendo uma fase intermediaria ("aguardando
+auditoria", "EM CORRECAO", "fix aplicado, nao deployado") depois que a
+sprint terminou — estados intermediarios so valem ENQUANTO a sprint esta
+rodando. Essa reescrita e so uma edicao de arquivo: nao e um commit, nao e
+git de escrita, e nao muda a regra de que o commit e sempre do Raphael —
+ela so entra no `git add` do bloco de comandos abaixo, junto com o resto
+da sprint.
+
+Depois imprima os comandos git — e SO isso, voce nunca os executa:
 
 ```powershell
 $root = git rev-parse --show-toplevel 2>$null
