@@ -19,9 +19,19 @@ aparentes hoje são só de tipo/utilitário, sem leitura/escrita:
 `ChatScreen.tsx` importa `Timestamp`, `ProfileScreen.tsx` importa
 `deleteField`.
 
-`functions/src/` — hoje UM arquivo só, `index.ts` (~1929 linhas), sem
-subpastas de domínio (S144-C, quando feita, vai quebrar isso — atualizar
-esta seção quando acontecer).
+`functions/src/` — quebrado por domínio desde S144-C. `index.ts` é só
+reexport nomeado das 31 Cloud Functions do projeto (nenhuma lógica).
+Arquivos de domínio: `chat.ts` (matches/mensagens/bloqueios/unmatch),
+`admin.ts` (verificação, suporte, denúncias, cadastro de testador),
+`account.ts` (`deleteAccount`), `perfil.ts` (fundador, enquete de perfil,
+marcos/selos), `momentos.ts` (`expireMomentos`), `grupos.ts` (expiração e
+fluxo de grupos), `eventos.ts` (expiração e fluxo de eventos),
+`agendadas.ts` (as 3 scheduled functions de reengajamento/prompt).
+`shared/index.ts` é o único lugar que chama `initializeApp()` e declara
+`GMAIL_APP_PASSWORD` (`defineSecret`); concentra `db`/`bucket`/`expo`/
+`REGION`/`ADMIN_UID(S)`/`isAdminUid`/`getPushToken`/`getUserBasicInfo`/
+`sendExpoNotifications` — todo arquivo de domínio importa daqui, nunca
+reinstancia esses singletons.
 
 ## Collections do Firestore
 

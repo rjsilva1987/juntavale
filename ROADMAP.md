@@ -661,15 +661,8 @@ entradas mais recentes e mover o histórico pro FIM do arquivo (ou pro
 ⚠️ A regra da casa de atualizar o carimbo a cada sprint de rules CONTINUA
 valendo — o que muda é onde o histórico antigo mora.
 
-**S144-C — Quebrar o `functions/src/index.ts` em módulos**
-São 27 functions num arquivo só, e o pacote já está em ~94 KB. Quem mexe
-em uma function carrega todas. Quebrar por domínio (chat, momentos,
-grupos, eventos, admin, agendadas) e reexportar do `index.ts`.
-Ganho extra: o erro "Cannot determine backend specification. Timeout after
-10000" apareceu TRÊS vezes em 22/08, sempre na primeira function de cada
-lote de deploy — é o CLI carregando o arquivo inteiro dentro de 10s.
-⚠️ Os nomes exportados NÃO podem mudar, senão o deploy recria as functions
-em vez de atualizar.
+**S144-C — Quebrar o `functions/src/index.ts` em módulos** · FEITA (ver
+tabela "Fechadas recentemente")
 
 **S144-D — Política de sprint pequena**
 Sprints grandes custam desproporcionalmente mais: S124-A saiu com 2441
@@ -678,7 +671,7 @@ Adotar como regra da casa: quando a recon indicar que a sprint passa de
 ~500 linhas ou ~8 arquivos, QUEBRAR em partes antes de implementar — como
 já foi feito com S124-A/B e S143-A/B.
 
-**Ordem sugerida:** A, depois C, depois B. A parte D é regra, não código —
+**Ordem sugerida:** A e C feitas. Falta B. A parte D é regra, não código —
 entra no `CLAUDE.md` ou no arquivo do `/sprint`.
 
 ---
@@ -687,6 +680,7 @@ entra no `CLAUDE.md` ou no arquivo do `/sprint`.
 
 | Sprint | O que era |
 |---|---|
+| S144-C | Quebrou `functions/src/index.ts` (1929 linhas, 31 Cloud Functions) em módulos por domínio: `chat.ts`, `admin.ts`, `account.ts`, `perfil.ts`, `momentos.ts`, `grupos.ts`, `eventos.ts`, `agendadas.ts` + `shared/index.ts` (único lugar com `initializeApp()` e `defineSecret('GMAIL_APP_PASSWORD')`). `index.ts` final é só reexport nomeado. Confirmado: os 31 nomes exportados no runtime são exatamente os mesmos de antes, sem renomear/aninhar nada — nenhum deploy foi feito nesta sprint. `ARQUITETURA.md` atualizado com a estrutura nova. |
 | S134 | Bug: idade some quando o nome é longo — nome e idade viravam UMA string dentro de `Text numberOfLines={1}`; nome comprido truncava a string inteira e cortava a idade junto. Corrigido nos 5 arquivos onde isso ocorria (`MatchProfileScreen.tsx`, `SwipeScreen.tsx`/`ProfileCard`, `ProfileSheet.tsx`, `LikesScreen.tsx`, `AdminVerificationsScreen.tsx`): nome e idade agora são DOIS `Text` dentro de um `View` (`nameAgeGroup`/`likerNameAgeGroup`) — só o `Text` do nome tem `numberOfLines`+`flexShrink`, o `Text` da idade (`nameAge`/`likerNameAge`) nunca encolhe e só renderiza com guard `displayAge != null`. De caminho, corrigido bug lateral em `SwipeScreen.tsx` e `LikesScreen.tsx`: antes exibiam literalmente `"Nome, null"` quando `displayAge` era `null` (concatenação direta sem guard); agora não renderizam o trecho da idade nesse caso. Client puro, sem rules/functions. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S132 | Enquete visível e votável fora do Descobrir — agora aparece também no perfil do match (MatchProfileScreen), não só no card do Descobrir (ProfileSheet) — commit `a326077`. Client puro. **Fechada em código, ainda SEM teste em aparelho.** |
 | S102-B | Desfazer match de dentro da conversa — commit `5b6c49f`. Function `unmatch` (onCall, southamerica-east1) **já deployada em 21/08**. **Fechada em código, ainda SEM teste.** |
