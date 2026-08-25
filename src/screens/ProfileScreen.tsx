@@ -65,6 +65,7 @@ import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActiveMatches, MatchWithProfile } from '@/hooks/useActiveMatches';
 import { useLikers } from '@/hooks/useLikers';
+import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
 import { RootStackParamList } from '@/navigation';
 import {
   updateUserProfile,
@@ -81,7 +82,6 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
-import { listenReceivedMomentoRequests } from '@/services/momentoRequestService';
 import { getDisplayAge } from '@/utils/birthDate';
 import { getDisplayName } from '@/utils/profile';
 import { countCodePoints } from '@/utils/text';
@@ -150,8 +150,10 @@ export default function ProfileScreen() {
   // AsyncStorage dedicado (diferença de propósito: aqui é sempre "tem algo
   // te esperando" — pedido RECEBIDO pendente —, não "alguém respondeu desde
   // a última vez que você olhou"). Acende sempre que houver pelo menos 1
-  // pedido recebido pending.
-  const [pendingMomentoRequests, setPendingMomentoRequests] = useState(0);
+  // pedido recebido pending. S145 — lógica extraída pro hook
+  // usePendingMomentoRequests (também usado pelo badge da aba Explorar e
+  // pelo card "Pedidos" em MomentosScreen).
+  const pendingMomentoRequests = usePendingMomentoRequests();
   const [editing, setEditing] = useState(false);
   // S135 — "como quer ser chamado", nome público exibido em card/cabeçalho.
   // Fallback pro `name` legado: conta que ainda não passou pela migração
@@ -178,16 +180,6 @@ export default function ProfileScreen() {
         // existe" (createLegalName), que é o comportamento seguro.
         console.error('[ProfileScreen] getLegalName falhou:', err);
       });
-  }, [user]);
-  // S143-B — conta de pedidos de conversa RECEBIDOS ainda pendentes (você é
-  // o autor do momento comentado) — acende o ponto da linha "Pedidos de
-  // conversa" abaixo.
-  useEffect(() => {
-    if (!user) return;
-    const unsub = listenReceivedMomentoRequests(user.uid, (requests) => {
-      setPendingMomentoRequests(requests.filter((r) => r.status === 'pending').length);
-    });
-    return unsub;
   }, [user]);
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
   const displayAge = getDisplayAge(profile);
@@ -1238,32 +1230,6 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         )}
 
-        {/* S124-A — grupos: mesmo componente/estilo de "Usuários
-            bloqueados" logo abaixo, dentro da guarda !isAdmin (grupos é
-            feature de usuário comum). Sem aba nova na tab bar. */}
-        {!isAdmin && (
-          <AnimatedPressable
-            style={styles.blockedUsersBtn}
-            onPress={() => navigation.navigate('Groups')}
-          >
-            <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.blockedUsersText}>Grupos</Text>
-          </AnimatedPressable>
-        )}
-
-        {/* S125 — eventos: mesmo componente/estilo de "Grupos" logo acima,
-            dentro da guarda !isAdmin (evento é feature de usuário comum).
-            Sem aba nova na tab bar. */}
-        {!isAdmin && (
-          <AnimatedPressable
-            style={styles.blockedUsersBtn}
-            onPress={() => navigation.navigate('Events')}
-          >
-            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.blockedUsersText}>Eventos</Text>
-          </AnimatedPressable>
-        )}
-
         {/* Usuários bloqueados */}
         {!isAdmin && (
           <AnimatedPressable
@@ -1369,19 +1335,24 @@ export default function ProfileScreen() {
         {/* S143-B — "Pedidos de conversa" (momentoRequests, decisão 2: comentar
             um momento de quem ainda não é match), mesmo padrão das duas linhas
             acima. Fica fora da guarda !isAdmin: o admin também pode comentar
-            momentos de outras pessoas normalmente. */}
-        <AnimatedPressable
-          style={styles.blockedUsersBtn}
-          onPress={() => navigation.navigate('MomentoRequests')}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={20}
-            color={theme.colors.textSecondary}
-          />
-          <Text style={styles.blockedUsersText}>Pedidos de conversa</Text>
-          {pendingMomentoRequests > 0 && <View style={styles.verificationAlertDot} />}
-        </AnimatedPressable>
+            momentos de outras pessoas normalmente.
+            S145 — agora dentro da guarda isAdmin: quem não é admin passa a
+            acessar pela aba Explorar (card "Pedidos" em MomentosScreen); o
+            admin continua entrando por aqui. */}
+        {isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('MomentoRequests')}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
+            <Text style={styles.blockedUsersText}>Pedidos de conversa</Text>
+            {pendingMomentoRequests > 0 && <View style={styles.verificationAlertDot} />}
+          </AnimatedPressable>
+        )}
 
         {/* S95 — Painel Admin removido: Verificações/Suporte viraram abas
             próprias do admin (ver navigation/index.tsx MainTabs), os botões

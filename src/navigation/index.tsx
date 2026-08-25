@@ -19,6 +19,7 @@ import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
 import { usePresenceHeartbeat } from '@/hooks/usePresenceHeartbeat';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { linking } from '@/linking';
@@ -98,17 +99,19 @@ export type RootStackParamList = {
   };
   MatchesGrid: undefined;
   BlockedUsers: undefined;
-  // S124-A — grupos: sem aba nova (o app já tem 5), entrada via item de menu
-  // na ProfileScreen. GroupChat leva groupName por param (mesmo padrão de
-  // Chat acima) pra não depender de listenGroup resolver antes de montar o
-  // cabeçalho.
+  // S124-A — grupos: sem aba própria (Stack puro). GroupChat leva groupName
+  // por param (mesmo padrão de Chat acima) pra não depender de listenGroup
+  // resolver antes de montar o cabeçalho. S145 — entrada agora é pela aba
+  // Explorar (card "Grupos" em MomentosScreen), antes era item de menu na
+  // ProfileScreen.
   Groups: undefined;
   CreateGroup: undefined;
   GroupDetail: { groupId: string };
   GroupChat: { groupId: string; groupName: string };
-  // S125 — eventos: mesmo padrão de grupos acima, sem aba nova, entrada via
-  // item de menu na ProfileScreen. Sem chat de evento nesta sprint
-  // (decisão 10), por isso não há um "EventChat" equivalente a GroupChat.
+  // S125 — eventos: mesmo padrão de grupos acima, sem aba própria. Sem chat
+  // de evento nesta sprint (decisão 10), por isso não há um "EventChat"
+  // equivalente a GroupChat. S145 — entrada agora é pela aba Explorar (card
+  // "Eventos" em MomentosScreen), antes era item de menu na ProfileScreen.
   Events: undefined;
   CreateEvent: undefined;
   EventDetail: { eventId: string };
@@ -117,10 +120,12 @@ export type RootStackParamList = {
   SupportThread: { ticketId: string };
   MyReports: undefined;
   ReportThread: { reportId: string };
-  // S143-B — pedido de conversa sem match (decisão 2), entrada via item de
-  // menu na ProfileScreen, mesmo padrão de MyReports/MyTickets acima.
-  // MomentoRequestChat é uma tela SEPARADA do Chat (matches/{matchId}) de
-  // propósito — decisão 4, nenhuma feature de match se aplica aqui.
+  // S143-B — pedido de conversa sem match (decisão 2), mesmo padrão de
+  // MyReports/MyTickets acima. MomentoRequestChat é uma tela SEPARADA do
+  // Chat (matches/{matchId}) de propósito — decisão 4, nenhuma feature de
+  // match se aplica aqui. S145 — entrada não-admin agora é pela aba
+  // Explorar (card "Pedidos" em MomentosScreen); admin continua entrando
+  // pelo item de menu na ProfileScreen.
   MomentoRequests: undefined;
   MomentoRequestChat: { requestId: string };
   Verification: undefined;
@@ -170,6 +175,10 @@ function MainTabs() {
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
   const { showAlert: showReportAlert } = useReportAlert();
+  // S145 — badge (dot) da aba Explorar: mesmo hook usado no ponto de aviso
+  // "Pedidos de conversa" da ProfileScreen (agora só admin), aqui alimenta
+  // o tabBarBadge do Tab.Screen "Explorar" abaixo.
+  const pendingMomentoRequestsCount = usePendingMomentoRequests();
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.
@@ -272,7 +281,13 @@ function MainTabs() {
               </ErrorBoundary>
             )}
           </Tab.Screen>
-          <Tab.Screen name="Explorar">
+          <Tab.Screen
+            name="Explorar"
+            options={{
+              tabBarBadge: pendingMomentoRequestsCount > 0 ? ' ' : undefined,
+              tabBarBadgeStyle: { backgroundColor: theme.colors.error },
+            }}
+          >
             {() => (
               <ErrorBoundary>
                 <MomentosScreen />

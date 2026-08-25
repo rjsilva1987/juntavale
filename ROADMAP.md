@@ -804,6 +804,53 @@ entra no `CLAUDE.md` ou no arquivo do `/sprint`.
 
 ---
 
+### S145 — Aba Explorar ganha Grupos, Eventos e Pedidos de conversa
+**Status:** IMPLEMENTADA em 25/08/2026 · auditoria APROVADA · client puro,
+sem rules/functions, sem deploy · SEM teste em aparelho
+
+Escopo definido por Raphael (25/08/2026): além do feed de Momentos que já
+existe, a aba "Explorar" passa a dar acesso a Grupos (S124-A), Eventos
+(S125) e "Pedidos de conversa" (`MomentoRequestsScreen`, S143-B/C), hoje
+só alcançáveis via item de menu na `ProfileScreen`. Motivo: teste manual
+de 25/08 mostrou que sem um jeito de o autor descobrir que tem um pedido
+pendente, ele nunca vê o pedido — recomendação validada é badge (dot) na
+aba Explorar quando houver pedido de Momento pendente.
+
+**Decisões tomadas nesta sprint (automático, 25/08/2026):**
+- Trilha completa (mexe em navegação/múltiplos arquivos, não é troca de
+  ≤15 linhas).
+- Grupos e Eventos: entrada MUDA de `ProfileScreen` pra dentro da aba
+  Explorar (`MomentosScreen`) — REMOVIDA de `ProfileScreen`, não
+  duplicada. Os dois itens já eram exclusivos de não-admin lá, e a aba
+  Explorar também só existe pra não-admin — relocação 1:1, sem perda de
+  acesso.
+- "Pedidos de conversa": não-admin passa a acessar pela aba Explorar
+  (novo); `ProfileScreen` mantém a entrada só pro ADMIN (guarda muda de
+  "sem guarda" pra `isAdmin &&`) — porque admin não vê a aba Explorar e
+  hoje também usa esse recurso (decisão da S143-B: "admin também pode
+  comentar momentos de outras pessoas normalmente").
+- Badge da aba Explorar é DOT (`tabBarBadge: ' '`), não numérico — mesmo
+  molde já usado na aba Perfil (verificação/suporte/denúncia) e
+  consistente com o pontinho que já existe hoje ao lado de "Pedidos de
+  conversa" na `ProfileScreen`.
+- Contagem de pedidos pendentes extraída pra hook novo
+  (`usePendingMomentoRequests`), reusado em 3 pontos (badge da tab,
+  card em Explorar, entrada do admin na ProfileScreen) em vez de
+  duplicar a mesma subscription.
+- Composição visual da Explorar: SEM sub-abas internas. `MomentosScreen`
+  ganha uma fileira horizontal de 3 acessos rápidos (Grupos/Eventos/
+  Pedidos de conversa) no topo do feed — Momentos continua sendo o
+  conteúdo principal da aba.
+
+**Recon feita (25/08/2026):** confirmado que `firestore.rules` já permite
+a query usada pela contagem de pendentes (`allow list` de
+`momentoRequests` por `authorId`, sem índice composto) — sprint é client
+puro, sem rules/functions novas. Único ponto de navegação pra
+`MomentoRequestsScreen` hoje é `ProfileScreen.tsx:1375`; nenhum outro
+deep link/notificação existente.
+
+---
+
 ## Fechadas recentemente
 
 | Sprint | O que era |
@@ -987,6 +1034,19 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   confirmar que não há avanço/retrocesso duplo por corrida entre o
   `resumeTimer()` do toque anterior e o `useEffect([momento?.id])` disparado
   pela navegação em si.
+- S145 — aba Explorar (não-admin): fileira nova de 3 cards (Grupos/Eventos/
+  Pedidos) aparece ACIMA do card "Criar momento"/momento próprio; tocar em
+  cada um navega pra `GroupsScreen`/`EventsScreen`/`MomentoRequestsScreen`
+  normalmente (telas de destino intocadas nesta sprint).
+- S145 — com um pedido de Momento pendente recebido (conta A é autora do
+  momento comentado): a aba Explorar mostra o dot vermelho na PRÓPRIA aba
+  (tab bar) e também ao lado do card "Pedidos"; responder/recusar o pedido
+  (`MomentoRequestsScreen`) apaga os dois dots.
+- S145 — conta ADMIN: "Grupos"/"Eventos" NÃO aparecem mais em `ProfileScreen`
+  (relocados); "Pedidos de conversa" continua aparecendo lá (guarda virou
+  `isAdmin &&`), com o mesmo pontinho de antes quando há pedido pendente.
+  Admin não tem aba Explorar, então o teste do dot da tab (item acima) não
+  se aplica a ele.
 - S139 — **depois que Raphael fizer o deploy das rules corrigidas**: com a
   conta A publicando um momento ativo, abrir a aba de Momentos com a conta
   B e conferir que o momento de A aparece (sem `permission-denied` no

@@ -8,6 +8,15 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S145 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
+  aba Explorar (não-admin) ganha acesso a Grupos, Eventos e "Pedidos de
+  conversa" via fileira de cards no topo do feed de Momentos, com badge
+  (dot) na própria aba quando há pedido de Momento pendente
+  (`usePendingMomentoRequests`, novo hook reusado em 3 pontos). Grupos e
+  Eventos saíram do menu da ProfileScreen (relocados); "Pedidos de
+  conversa" na ProfileScreen ficou só pro admin (aba Explorar não existe
+  pra admin). Client puro, sem rules/functions, auditoria APROVADA. Ver
+  ROADMAP.md § S145. SEM teste em aparelho.
 - S143-C — FECHADA e TESTADA em aparelho (25/08/2026): responder a um
   Momento (emoji, chip, texto) é INDEPENDENTE de match — sempre pedido
   (`momentoRequests`), nunca mensagem direta em

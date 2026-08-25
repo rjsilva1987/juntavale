@@ -3,6 +3,8 @@
 // S121 — aba "Explorar": momentos (story de 24h) da base inteira, mais o
 // momento do próprio usuário no topo.
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +18,8 @@ import { MomentoViewerModal } from '@/components/MomentoViewerModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
+import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   deleteMyMomento,
@@ -39,7 +43,14 @@ function formatTimeRemaining(expiresAt: MomentoWithId['expiresAt']): string {
 }
 
 export default function MomentosScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
+  // S145 — Grupos/Eventos/Pedidos de conversa passam a ter entrada aqui
+  // (fileira nova acima de mySection, ver ListHeaderComponent abaixo), antes
+  // eram itens de menu na ProfileScreen. Mesmo hook do badge da própria aba
+  // (navigation/index.tsx) e do ponto de aviso que sobrou na ProfileScreen
+  // (agora só admin).
+  const pendingMomentoRequests = usePendingMomentoRequests();
   // undefined = ainda carregando, null = sem momento ativo.
   const [myMomento, setMyMomento] = useState<MomentoWithId | null | undefined>(undefined);
   const [feed, setFeed] = useState<MomentoWithId[]>([]);
@@ -185,35 +196,73 @@ export default function MomentosScreen() {
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            <View style={styles.mySection}>
-              {myMomento === undefined ? (
-                <ActivityIndicator color={theme.colors.primary} style={styles.myLoading} />
-              ) : myMomento === null ? (
+            <>
+              {/* S145 — Grupos/Eventos/Pedidos de conversa: mesmo vocabulário
+                  visual (ícone/cor) dos itens equivalentes que existiam na
+                  ProfileScreen (agora removidos de lá, exceto Pedidos que
+                  ficou só pro admin), aqui em formato de card compacto
+                  lado a lado, já que são 3 entradas. */}
+              <View style={styles.exploreRow}>
                 <AnimatedPressable
-                  style={styles.createBtn}
-                  onPress={() => setComposerVisible(true)}
+                  style={styles.exploreCard}
+                  onPress={() => navigation.navigate('Groups')}
                 >
-                  <Ionicons name="add-circle-outline" size={22} color={theme.colors.primary} />
-                  <Text style={styles.createBtnText}>Criar momento</Text>
+                  <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
+                  <Text style={styles.exploreCardText}>Grupos</Text>
                 </AnimatedPressable>
-              ) : (
-                <AnimatedPressable style={styles.myCard} onPress={openMine}>
-                  {myMomento.type === 'photo' && myMomento.photoUrl ? (
-                    <Image
-                      source={{ uri: myMomento.photoUrl }}
-                      style={styles.myCardImage}
-                      contentFit="cover"
-                      placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                    />
-                  ) : (
-                    <Text style={styles.myCardText} numberOfLines={3}>
-                      {myMomento.text}
+                <AnimatedPressable
+                  style={styles.exploreCard}
+                  onPress={() => navigation.navigate('Events')}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+                  <Text style={styles.exploreCardText}>Eventos</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  style={styles.exploreCard}
+                  onPress={() => navigation.navigate('MomentoRequests')}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={20}
+                    color={theme.colors.textSecondary}
+                  />
+                  <Text style={styles.exploreCardText}>Pedidos</Text>
+                  {pendingMomentoRequests > 0 && <View style={styles.pendingDot} />}
+                </AnimatedPressable>
+              </View>
+
+              <View style={styles.mySection}>
+                {myMomento === undefined ? (
+                  <ActivityIndicator color={theme.colors.primary} style={styles.myLoading} />
+                ) : myMomento === null ? (
+                  <AnimatedPressable
+                    style={styles.createBtn}
+                    onPress={() => setComposerVisible(true)}
+                  >
+                    <Ionicons name="add-circle-outline" size={22} color={theme.colors.primary} />
+                    <Text style={styles.createBtnText}>Criar momento</Text>
+                  </AnimatedPressable>
+                ) : (
+                  <AnimatedPressable style={styles.myCard} onPress={openMine}>
+                    {myMomento.type === 'photo' && myMomento.photoUrl ? (
+                      <Image
+                        source={{ uri: myMomento.photoUrl }}
+                        style={styles.myCardImage}
+                        contentFit="cover"
+                        placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                      />
+                    ) : (
+                      <Text style={styles.myCardText} numberOfLines={3}>
+                        {myMomento.text}
+                      </Text>
+                    )}
+                    <Text style={styles.myCardTime}>
+                      {formatTimeRemaining(myMomento.expiresAt)}
                     </Text>
-                  )}
-                  <Text style={styles.myCardTime}>{formatTimeRemaining(myMomento.expiresAt)}</Text>
-                </AnimatedPressable>
-              )}
-            </View>
+                  </AnimatedPressable>
+                )}
+              </View>
+            </>
           }
           ListEmptyComponent={
             feedLoading ? null : (
@@ -297,6 +346,29 @@ const styles = StyleSheet.create({
 
   listContent: { padding: theme.spacing.md, gap: 12 },
   columnWrapper: { gap: 12 },
+
+  // S145 — fileira Grupos/Eventos/Pedidos de conversa, mesmos tokens já
+  // usados no resto do arquivo (surface/border/lg em feedCard acima) — sem
+  // amarelo (secondary) de fundo, regra de ouro do tema.
+  exploreRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  exploreCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: theme.spacing.sm,
+  },
+  exploreCardText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  // Mesmo valor exato do verificationAlertDot de ProfileScreen.tsx (não
+  // compartilham StyleSheet neste projeto).
+  pendingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.error },
 
   mySection: { marginBottom: 12 },
   myLoading: { marginVertical: theme.spacing.md },
