@@ -6,13 +6,12 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 **Atualizado:** 25/08/2026
 **Commit atual:** 6ea6c89 — feat(momentos): navegar por toque nos lados no
 viewer (S143-A, IMPLEMENTADA, aprovada na 3ª auditoria, SEM teste em
-aparelho)
+aparelho). S143-B (curtir e comentar momento) IMPLEMENTADA em código nesta
+sessão, aprovada na 2ª auditoria, ainda SEM commit/deploy — ver ROADMAP.md.
 
 ## Sprints em andamento
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
-- S143-B — curtir e comentar momento: ABERTA, decisões tomadas, sem
-  recon, DEPENDE da S143-A (já implementada).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

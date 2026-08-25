@@ -230,6 +230,20 @@ export interface MessageReplyTo {
   senderId: string;
 }
 
+// S143-B — referência truncada a um MOMENTO (não uma mensagem), no molde de
+// MessageReplyTo acima: dá contexto de "isso é resposta a qual momento" no
+// caso A (comentar um momento de quem já é match) — decisão 5/7. authorId é
+// o uid do autor do momento (== doc id de momentos/{uid}); createdAt é o
+// createdAt ORIGINAL do momento, não o desta mensagem. Cópia, não referência
+// viva: sobrevive à expiração do momento original.
+export interface MomentoRef {
+  authorId: string;
+  createdAt: Timestamp;
+  type: 'text' | 'photo';
+  text?: string;
+  photoUrl?: string;
+}
+
 export interface Message {
   id: string;
   text: string;
@@ -238,6 +252,9 @@ export interface Message {
   imageUrl?: string;
   location?: { latitude: number; longitude: number };
   replyTo?: MessageReplyTo;
+  // S143-B — presente só quando a mensagem nasceu de um comentário a um
+  // momento (caso A: sender já tinha match com o autor do momento).
+  momentoRef?: MomentoRef;
   // S85-B — presente só em mensagem apagada "pros dois" (lápide). Nesse
   // caso text/imageUrl/location/replyTo ficam ausentes por construção (ver
   // firestore.rules e deleteMessageForEveryone abaixo).
@@ -907,6 +924,22 @@ export const getMatchById = async (matchId: string): Promise<Match | null> => {
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as Match) : null;
 };
 
+// S143-B — usado por momentoRequestService.sendMomentoComment pra decidir
+// entre o caso A (já tem match, manda mensagem normal com momentoRef) e o
+// caso B (sem match, cria um momentoRequests/{...} pendente) — decisão 5.
+// Não existe query direta "match entre uid1 e uid2" (o id do doc não segue
+// ordem canônica de uids, ver onBlockCreated em functions/src/chat.ts, que
+// checa as duas ordens por isso) — busca todos os matches do usuário atual
+// (mesma query de getMatches) e filtra client-side pelo outro uid, mesmo
+// raciocínio de useActiveMatches.
+export const findMatchWithUser = async (uid: string, otherUid: string): Promise<Match | null> => {
+  const snap = await getDocs(
+    query(collection(db, 'matches'), where('users', 'array-contains', uid)),
+  );
+  const found = snap.docs.find((d) => (d.data().users as string[]).includes(otherUid));
+  return found ? ({ id: found.id, ...found.data() } as Match) : null;
+};
+
 // S102-B — desfaz um match definitivamente (Cloud Function apaga o doc, as
 // subcoleções e as imagens de chat no Storage; ver functions/src/index.ts).
 export const unmatch = async (matchId: string): Promise<void> => {
@@ -923,6 +956,11 @@ export const sendMessage = async (
   imageUrl?: string,
   location?: { latitude: number; longitude: number },
   replyTo?: MessageReplyTo,
+  // S143-B — caso A de "comentar um momento": mensagem normal aqui, com
+  // referência truncada ao momento original (decisão 5/7). Parâmetro novo
+  // no FIM da assinatura de propósito — nenhum call site existente (que só
+  // passa até replyTo) precisa mudar.
+  momentoRef?: MomentoRef,
 ) => {
   const msgRef = collection(db, 'matches', matchId, 'messages');
   await addDoc(msgRef, {
@@ -932,6 +970,7 @@ export const sendMessage = async (
     ...(imageUrl ? { imageUrl } : {}),
     ...(location ? { location } : {}),
     ...(replyTo ? { replyTo } : {}),
+    ...(momentoRef ? { momentoRef } : {}),
   });
   // lastMessage do doc do match é escrito pela Cloud Function onMessageCreated
   // (Admin SDK), não aqui — ver firestore.rules e a interface LastMessage.

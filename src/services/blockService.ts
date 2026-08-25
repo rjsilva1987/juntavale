@@ -47,6 +47,15 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
 // (EventDetailScreen), mirror EXATO de groupContext — reportedId, nesse
 // caso, é sempre o creatorId do EVENTO (decisão 8: nunca um participante
 // específico), resolvido por quem chama, não por esta função.
+// S143-B — momentoRequestContext: presente só quando a denúncia parte de
+// uma mensagem/pedido dentro de um momentoRequests/{requestId}
+// (MomentoRequestChatScreen/MomentoRequestsScreen), sem match. Ao contrário
+// de messageContext/momentoContext acima, aqui não há um campo de texto
+// dedicado (ex.: "momentoRequestText") — o conteúdo denunciado já é texto
+// puro da própria mensagem/pedido, sem novo teto pra inventar (escopo desta
+// sprint). momentoRequestSenderId é o senderId ORIGINAL do pedido — dá
+// contexto de qual dos dois papéis (autor ou remetente) era o senderId,
+// já que reportedId sozinho não diz isso.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
@@ -70,6 +79,10 @@ export const reportUser = async (
   eventContext?: {
     eventId: string;
     eventName: string;
+  },
+  momentoRequestContext?: {
+    momentoRequestId: string;
+    momentoRequestSenderId: string;
   },
 ) => {
   await addDoc(collection(db, 'reports'), {
@@ -108,6 +121,12 @@ export const reportUser = async (
       ? {
           eventId: eventContext.eventId,
           eventName: eventContext.eventName,
+        }
+      : {}),
+    ...(momentoRequestContext
+      ? {
+          momentoRequestId: momentoRequestContext.momentoRequestId,
+          momentoRequestSenderId: momentoRequestContext.momentoRequestSenderId,
         }
       : {}),
   });

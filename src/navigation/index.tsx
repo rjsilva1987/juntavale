@@ -44,6 +44,8 @@ import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
 import MatchProfileScreen from '@/screens/MatchProfileScreen';
+import MomentoRequestChatScreen from '@/screens/MomentoRequestChatScreen';
+import MomentoRequestsScreen from '@/screens/MomentoRequestsScreen';
 import MomentosScreen from '@/screens/MomentosScreen';
 import MyReportsScreen from '@/screens/MyReportsScreen';
 import MyTicketsScreen from '@/screens/MyTicketsScreen';
@@ -115,6 +117,12 @@ export type RootStackParamList = {
   SupportThread: { ticketId: string };
   MyReports: undefined;
   ReportThread: { reportId: string };
+  // S143-B — pedido de conversa sem match (decisão 2), entrada via item de
+  // menu na ProfileScreen, mesmo padrão de MyReports/MyTickets acima.
+  // MomentoRequestChat é uma tela SEPARADA do Chat (matches/{matchId}) de
+  // propósito — decisão 4, nenhuma feature de match se aplica aqui.
+  MomentoRequests: undefined;
+  MomentoRequestChat: { requestId: string };
   Verification: undefined;
   AdminVerificationDetail: { uid: string };
   AdminSupportDetail: { ticketId: string };
@@ -397,6 +405,10 @@ export default function Navigation() {
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />
             <Stack.Screen name="MyReports" component={MyReportsScreen} />
             <Stack.Screen name="ReportThread" component={ReportThreadScreen} />
+            {/* S143-B — pedidos de conversa sem match: mesmo bloco de
+                MyReports/ReportThread acima. */}
+            <Stack.Screen name="MomentoRequests" component={MomentoRequestsScreen} />
+            <Stack.Screen name="MomentoRequestChat" component={MomentoRequestChatScreen} />
             {/* S95 — AdminVerifications/AdminSupport viraram Tab.Screen (ver
                 MainTabs); só as telas de DETALHE seguem no Stack, e só pro
                 admin — pra quem não é admin elas não têm como ser abertas

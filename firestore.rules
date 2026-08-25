@@ -1,4 +1,25 @@
-// rules-stamp: S139 (24/08/2026 — correção de bug em produção: momento de
+// rules-stamp: S143-B (25/08/2026 — Momento: curtir e comentar. Nova
+// subcoleção momentos/{authorUid}/likes/{likerUid} [create isSignedIn() &&
+// likerUid==auth.uid && likerUid!=authorUid, hasOnly(['likerUid',
+// 'createdAt']), delete só do dono do like, update sempre false — molde de
+// users/{ownerUid}/photoLikes, mas leitura restrita ao próprio liker OU ao
+// autor (decisão 1: não anônima, mas também não aberta à base inteira)];
+// matches/{matchId}/messages ganha momentoRef opcional [map: authorId
+// string, createdAt timestamp, type, text<=400 opcional, photoUrl opcional
+// — cópia truncada, molde de replyTo] no hasOnly; nova coleção raiz
+// momentoRequests/{authorId}_{senderId}_{momentoCreatedAtMillis} [pedido de
+// conversa sem match, molde Instagram — create só com
+// auth.uid==senderId!=authorId, momentoSnapshot [type/text<=400
+// opcional/photoUrl opcional/createdAt], status nasce 'pending'; id
+// determinístico por instância do momento garante no máximo 1 pedido por
+// remetente por instância via semântica nativa create/update do Firestore;
+// update só do authorId, única transição pending->answered|declined,
+// affectedKeys().hasOnly(['status']); subcoleção messages só escrevível
+// quando o status do pai já é 'answered', texto puro (sem imagem/
+// localização/reação/edição — decisão 4: nenhuma feature de match se
+// aplica), NUNCA cria nada em matches/] + reports/{reportId} ganha 2 campos
+// opcionais novos — momentoRequestId/momentoRequestSenderId, mesmo molde
+// dos já existentes) + S139 (24/08/2026 — correção de bug em produção: momento de
 // terceiros não carregava (permission-denied) na base inteira. Causa:
 // allow read de momentos/{uid} tinha uma condição única (resource.data.
 // expiresAt > request.time) valendo pra get() e list(); pra uma query/
@@ -305,6 +326,12 @@ service cloud.firestore {
     // subcollection support/{ticketId}/messages (S38).
     function getTicket(ticketId) {
       return get(/databases/$(database)/documents/support/$(ticketId)).data;
+    }
+
+    // S143-B — evita repetir o texto do get() de momentoRequests/{requestId}
+    // nas regras da subcollection momentoRequests/{requestId}/messages.
+    function getMomentoRequest(requestId) {
+      return get(/databases/$(database)/documents/momentoRequests/$(requestId)).data;
     }
 
     // Recebe o match já lido (getMatch chamado 1x pelo caller) em vez de
@@ -1245,12 +1272,32 @@ service cloud.firestore {
                && request.resource.data.replyTo.senderId is string
                && request.resource.data.replyTo.text is string
                && request.resource.data.replyTo.text.size() <= 400))
+          // S143-B — momentoRef: mesmo molde de replyTo acima, mas apontando
+          // pra um MOMENTO (não uma mensagem) — decisão 5, comentar um
+          // momento de quem já é match manda mensagem normal aqui, com essa
+          // referência truncada pra dar contexto (decisão 7), já que o
+          // momento original pode expirar depois. authorId é o uid do autor
+          // do momento (== doc id de momentos/{uid}); createdAt é o
+          // createdAt ORIGINAL do momento (timestamp, não precisa ser
+          // request.time — é cópia, não carimbo desta escrita).
+          && (!('momentoRef' in request.resource.data) ||
+              (request.resource.data.momentoRef is map
+               && request.resource.data.momentoRef.authorId is string
+               && request.resource.data.momentoRef.createdAt is timestamp
+               && request.resource.data.momentoRef.type in ['text', 'photo']
+               && (!('text' in request.resource.data.momentoRef)
+                   || (request.resource.data.momentoRef.text is string
+                       && request.resource.data.momentoRef.text.size() <= 400))
+               && (!('photoUrl' in request.resource.data.momentoRef)
+                   || request.resource.data.momentoRef.photoUrl is string)
+               && request.resource.data.momentoRef.keys()
+                    .hasOnly(['authorId', 'createdAt', 'type', 'text', 'photoUrl'])))
           // mensagem precisa ter algum conteúdo: texto OU foto OU localização
           && (request.resource.data.text.size() > 0
               || 'imageUrl' in request.resource.data
               || 'location' in request.resource.data)
           && request.resource.data.keys().hasOnly(
-               ['text', 'senderId', 'createdAt', 'imageUrl', 'location', 'replyTo']);
+               ['text', 'senderId', 'createdAt', 'imageUrl', 'location', 'replyTo', 'momentoRef']);
 
         // S85-B — "apagar pros dois": vira lápide, nunca deleta o doc (por
         // isso allow delete continua false, separado). Update só transforma
@@ -1868,11 +1915,24 @@ service cloud.firestore {
         && (!('eventName' in request.resource.data)
             || (request.resource.data.eventName is string
                 && request.resource.data.eventName.size() <= 120))
+        // S143-B — denúncia dentro de um pedido de conversa sem match
+        // (momentoRequests/{requestId}, MomentoRequestChatScreen), mesmo
+        // mecanismo dos campos opcionais acima: momentoRequestId é o ID do
+        // doc momentoRequests/{requestId}; momentoRequestSenderId é o
+        // senderId ORIGINAL do pedido (contexto de qual dos dois papéis —
+        // autor ou remetente — era o senderId, já que reportedId sozinho
+        // não diz isso). Sem campo de texto adicional aqui de propósito —
+        // o conteúdo denunciado já é o texto puro da própria mensagem/
+        // pedido, sem novo teto pra inventar.
+        && (!('momentoRequestId' in request.resource.data)
+            || request.resource.data.momentoRequestId is string)
+        && (!('momentoRequestSenderId' in request.resource.data)
+            || request.resource.data.momentoRequestSenderId is string)
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
               'matchId', 'messageId', 'messageText', 'messageImageUrl',
               'momentoId', 'momentoText', 'momentoPhotoUrl', 'groupId', 'groupName',
-              'eventId', 'eventName']);
+              'eventId', 'eventName', 'momentoRequestId', 'momentoRequestSenderId']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que
@@ -2181,6 +2241,128 @@ service cloud.firestore {
              ['authorId', 'type', 'text', 'photoUrl', 'createdAt', 'expiresAt']);
 
       allow delete: if isOwner(uid);
+
+      // ─────────── momentos/{uid}/likes/{likerUid} (S143-B) ───────────
+      //
+      // Curtir momento fica ABERTO À BASE INTEIRA (momento é público,
+      // decisão 1) — sem exigir match, mesma audiência do momento em si.
+      // NÃO é anônima: o autor lista nome/vale de quem curtiu (decisão 6,
+      // NUNCA legalName — isso é regra de UI, ver MomentoViewerModal.tsx),
+      // mas ao contrário de users/{ownerUid}/photoLikes acima a leitura NÃO
+      // é aberta a qualquer autenticado — só o próprio liker (pra saber se
+      // já curtiu) ou o autor (lista completa). Doc id == likerUid (1
+      // curtida por pessoa por momento) — permite setDoc/deleteDoc diretos,
+      // sem query prévia, mesmo padrão de photoLikes. Ninguém curte o
+      // próprio momento (decisão 9: likerUid != uid, comparado com o
+      // uid do PATH — uid aqui é sempre o mesmo doc pai
+      // momentos/{uid}, nunca muda de identidade dentro deste match).
+      match /likes/{likerUid} {
+        allow read: if isSignedIn()
+          && (request.auth.uid == likerUid || request.auth.uid == uid);
+
+        allow create: if isSignedIn()
+          && request.auth.uid == likerUid
+          && likerUid != uid
+          && request.resource.data.likerUid == likerUid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['likerUid', 'createdAt']);
+
+        allow update: if false;
+        allow delete: if isSignedIn() && resource.data.likerUid == request.auth.uid;
+      }
+    }
+
+    // ───────────── momentoRequests/{authorId}_{senderId}_{momentoCreatedAtMillis} (S143-B) ─────────────
+    //
+    // Comentar/responder um momento de alguém SEM match cria um "pedido"
+    // (decisão 2, molde Instagram: fica pendente até o autor responder,
+    // ignorar ou recusar). Doc id determinístico
+    // `${authorId}_${senderId}_${momentoCreatedAtMillis}` (momentoCreatedAtMillis
+    // = createdAt do momento ORIGINAL em milissegundos) — a semântica
+    // NATIVA de create vs update do Firestore já garante no máximo 1 pedido
+    // por remetente por INSTÂNCIA do momento (decisão 3): uma vez que o doc
+    // exista (pending, answered OU declined), uma segunda tentativa de
+    // create no MESMO id vira update aos olhos do Firestore, e só o
+    // authorId pode fazer update (ver allow update abaixo) — o mesmo
+    // senderId nunca consegue recriar/reenviar pro mesmo trio
+    // author/sender/instância, mesmo depois de recusado. Isso é
+    // intencional (o client evita a tentativa em vão checando o doc antes,
+    // ver momentoRequestService.ts), não precisa de checagem extra de
+    // exists() aqui. momentoSnapshot é CÓPIA truncada do momento no
+    // instante do pedido (decisão 7/8), não referência viva — sobrevive à
+    // expiração do momento original (decisão 8: expireMomentos NUNCA apaga
+    // momentoRequests).
+    match /momentoRequests/{requestId} {
+      allow read: if isSignedIn()
+        && (request.auth.uid == resource.data.senderId
+            || request.auth.uid == resource.data.authorId);
+
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.senderId
+        && request.resource.data.senderId != request.resource.data.authorId
+        && request.resource.data.authorId is string
+        // "mesmo limite de tamanho de texto de mensagem de chat" (decisão do
+        // escopo) — 2000, mesmo teto de matches/{matchId}/messages.text acima.
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.momentoSnapshot is map
+        && request.resource.data.momentoSnapshot.type in ['text', 'photo']
+        && request.resource.data.momentoSnapshot.createdAt is timestamp
+        // 400 = mesmo teto de momentoRef.text (matches/{matchId}/messages,
+        // acima) — mesma cópia truncada, mesmo guarda de abuso.
+        && (!('text' in request.resource.data.momentoSnapshot)
+            || (request.resource.data.momentoSnapshot.text is string
+                && request.resource.data.momentoSnapshot.text.size() <= 400))
+        && (!('photoUrl' in request.resource.data.momentoSnapshot)
+            || request.resource.data.momentoSnapshot.photoUrl is string)
+        && request.resource.data.momentoSnapshot.keys()
+             .hasOnly(['type', 'text', 'photoUrl', 'createdAt'])
+        && request.resource.data.keys().hasOnly(
+             ['authorId', 'senderId', 'text', 'momentoSnapshot', 'status', 'createdAt']);
+
+      // Só o autor decide o desfecho (responder ou recusar) — decisão 4:
+      // isso NUNCA cria um match, só abre a subcoleção messages abaixo pra
+      // esta thread isolada. Única transição permitida é pending->answered
+      // ou pending->declined; affectedKeys().hasOnly(['status']) garante
+      // que nenhum outro campo (inclusive momentoSnapshot/text) é reescrito
+      // por essa via, mesmo padrão do update de reports/{reportId} (S96-A).
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.authorId
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['answered', 'declined']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+
+      allow delete: if false;
+
+      // ─────────── momentoRequests/{requestId}/messages (S143-B) ───────────
+      //
+      // Só escrevível quando o pedido PAI já foi respondido (status ==
+      // 'answered') — decisão 4: chat isolado a estes dois uids específicos
+      // (senderId/authorId do pedido pai), SEM nenhuma feature de match
+      // (sem imagem/localização/reação/edição/apagar/typing/bloqueio/
+      // unmatch — o primeiro comentário já vive em
+      // momentoRequests/{requestId}.text, aqui só as mensagens SEGUINTES).
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+          && (request.auth.uid == getMomentoRequest(requestId).senderId
+              || request.auth.uid == getMomentoRequest(requestId).authorId);
+
+        allow create: if isSignedIn()
+          && getMomentoRequest(requestId).status == 'answered'
+          && (request.auth.uid == getMomentoRequest(requestId).senderId
+              || request.auth.uid == getMomentoRequest(requestId).authorId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'createdAt']);
+
+        allow update, delete: if false;
+      }
     }
 
     // ───────────────────────── deny by default ─────────────────────────

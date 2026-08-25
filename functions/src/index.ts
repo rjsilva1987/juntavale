@@ -26,7 +26,13 @@ export {
   onUserProfileUpdated,
   tenDaysInAppCheck,
 } from './perfil';
-export { expireMomentos } from './momentos';
+export {
+  expireMomentos,
+  onMomentoLikeCreated,
+  onMomentoLikeDeleted,
+  onMomentoRequestCreated,
+  onMomentoRequestUpdated,
+} from './momentos';
 export {
   expireGroups,
   onGroupJoinRequestCreated,

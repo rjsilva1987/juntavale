@@ -620,7 +620,30 @@ timer dos 5s precisa reiniciar a cada navegação manual.
    (o último já fecha, pela decisão da S141).
 
 ### S143-B — Momento: curtir e comentar
-**Status:** ABERTA · decisões tomadas · sem recon · DEPENDE da S143-A
+**Status:** IMPLEMENTADA em 25/08/2026, APROVADA na 2ª auditoria (1 rodada
+de correção). Exige deploy de `firestore.rules` (novas subcoleções
+`momentos/{uid}/likes` e `momentoRequests`, campo opcional `momentoRef` em
+`matches/{matchId}/messages`) e das Cloud Functions `expireMomentos`
+(alterada) e `onMomentoLikeCreated`/`onMomentoLikeDeleted`/
+`onMomentoRequestCreated`/`onMomentoRequestUpdated` (novas). SEM teste em
+aparelho. Decisões de produto tomadas no portão desta sprint (além das já
+registradas abaixo, de 24/08): comentar sem match cria um "pedido" tipo
+Instagram (fica pendente até o autor responder, ignorar ou denunciar; 1
+pedido pendente por remetente por instância do momento); curtir fica
+aberto à base inteira (coerente com a visibilidade pública do momento,
+S121); responder ao pedido NÃO cria um match completo — só libera uma
+conversa isolada (`momentoRequests/{id}/messages`), sem tocar em
+`matches/`. A 1ª auditoria bloqueou por dois defeitos, ambos corrigidos e
+confirmados na 2ª: variável `authorUid` indefinida nas rules de
+`momentos/{uid}/likes` (quebrava a curtida por completo — o path pai
+vincula `uid`, não `authorUid`) e o timer de auto-avanço do
+`MomentoViewerModal` não pausava para os modais novos de comentário/lista
+de curtidores, reincidindo no bug que a S141 já tinha corrigido pro
+`ReportModal`. Ressalvas não bloqueantes registradas para debitar depois:
+curtidas de um momento antigo podem ficar coladas quando o autor republica
+ou apaga manualmente (só a expiração natural de 24h limpa a subcoleção
+`likes`); o caminho "via match" do comentário não filtra `blockedBy` antes
+de tentar enviar.
 
 Curtir o momento e responder a ele, no modelo dos stories do Instagram.
 

@@ -344,6 +344,28 @@ function MessageBubble({
                 </View>
               </Pressable>
             )}
+            {/* S143-B — momentoRef: comentário a um momento de quem já é
+                match (caso A, decisão 5), mesmo vocabulário visual da
+                citação acima (replyQuoteBox/replyQuoteName/replyQuoteText).
+                Sem onPress/Pressable de propósito: o momento original pode
+                já ter expirado (24h), não há "mensagem original" pra
+                pular — momentoRef já É a cópia truncada (decisão 7). */}
+            {item.momentoRef && (
+              <View style={styles.replyQuoteBox}>
+                <Text
+                  style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+                  numberOfLines={1}
+                >
+                  Respondendo ao momento
+                </Text>
+                <Text
+                  style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+                  numberOfLines={2}
+                >
+                  {item.momentoRef.type === 'photo' ? '📷 Foto' : item.momentoRef.text}
+                </Text>
+              </View>
+            )}
             {/* S85-B — lápide: mensagem apagada pros dois. Guarda antes do
                 ternário de imagem/localização/texto — uma mensagem apagada
                 não tem reação nem toque longo (o Text da lápide não recebe

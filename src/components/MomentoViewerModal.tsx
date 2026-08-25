@@ -14,13 +14,20 @@ import { runOnJS } from 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { MomentoCommentModal } from '@/components/MomentoCommentModal';
+import { MomentoLikersModal } from '@/components/MomentoLikersModal';
 import { ReportModal } from '@/components/ReportModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportReason, reportUser } from '@/services/blockService';
 import { UserProfile } from '@/services/firestoreService';
-import { MomentoWithId } from '@/services/momentoService';
+import {
+  hasLikedMomento,
+  likeMomento,
+  MomentoWithId,
+  unlikeMomento,
+} from '@/services/momentoService';
 import { getDisplayName } from '@/utils/profile';
 
 // S141 — duração fixa de exibição de cada momento antes do avanço
@@ -59,6 +66,16 @@ export function MomentoViewerModal({
 }: MomentoViewerModalProps) {
   const { user } = useAuth();
   const [reportVisible, setReportVisible] = useState(false);
+  // S143-B — curtir/descurtir (decisão 1/9): liked só é relevante pra
+  // momento de OUTRA pessoa (ninguém curte o próprio). likeBusy trava o
+  // toque duplo enquanto o toggle está em voo — mesmo padrão de
+  // handleTogglePhotoLike em MatchProfileScreen.tsx.
+  const [liked, setLiked] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  // Lista nominal (decisão 6) só abre quando isOwnMomento; comentar (decisão
+  // 2/5) só quando !isOwnMomento — ver o footer de ações abaixo.
+  const [likersVisible, setLikersVisible] = useState(false);
+  const [commentVisible, setCommentVisible] = useState(false);
   // S143-A — largura da área de conteúdo, medida via onLayout, mesmo padrão
   // de photoAreaWidth em MatchProfileScreen.tsx. Usada só pra decidir metade
   // esquerda (volta) x metade direita (avança) do tap.
@@ -67,12 +84,14 @@ export function MomentoViewerModal({
   // Fração (0 a 1) já percorrida no momento do pause — só serve pra calcular
   // a duração restante no resume, não precisa disparar re-render.
   const pausedFractionRef = useRef(0);
-  // S141 — o useEffect de [reportVisible] abaixo dispara também na
-  // montagem (reportVisible nasce false). Sem este guard, ele chamaria
+  // S141 — o useEffect de [anyOverlayVisible] abaixo dispara também na
+  // montagem (todos os overlays nascem false). Sem este guard, ele chamaria
   // resumeTimer() redundantemente por cima do timer que o efeito de
   // [momento?.id] já iniciou sozinho — inofensivo (Animated para a
   // animação anterior com finished:false antes de reiniciar), mas
   // desnecessário. O guard limita o efeito a reagir só a transições reais.
+  // S143-B — generalizado de reportVisible sozinho pra cobrir também
+  // commentVisible e likersVisible (mesmo bug do S141, novos modais).
   const reportEffectMountedRef = useRef(false);
 
   useEffect(() => {
@@ -107,6 +126,49 @@ export function MomentoViewerModal({
     }).start(({ finished }) => {
       if (finished) onAdvance();
     });
+  };
+
+  // S143-B — busca se o usuário já curtiu ESTE momento sempre que ele muda
+  // (troca de item na fila do feed, ver MomentosScreen.openFeedItem). Não se
+  // aplica ao próprio momento (decisão 9): liked fica sempre false ali, sem
+  // nem chamar o service (a rule negaria mesmo — likerUid != authorId).
+  useEffect(() => {
+    if (!momento || isOwnMomento || !user) {
+      setLiked(false);
+      return undefined;
+    }
+    let cancelled = false;
+    hasLikedMomento(momento.authorId, user.uid)
+      .then((value) => {
+        if (!cancelled) setLiked(value);
+      })
+      .catch(() => {
+        if (!cancelled) setLiked(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [momento, isOwnMomento, user]);
+
+  // Otimista: liked muda na hora, reverte só se o toggle falhar de verdade
+  // (corrida tratada como sucesso silencioso dentro de likeMomento/
+  // unlikeMomento — não chega a cair no catch abaixo nesse caso).
+  const handleToggleLike = async () => {
+    if (!user || !momento || isOwnMomento || likeBusy) return;
+    const next = !liked;
+    setLiked(next);
+    setLikeBusy(true);
+    try {
+      if (next) {
+        await likeMomento(momento.authorId, user.uid);
+      } else {
+        await unlikeMomento(momento.authorId, user.uid);
+      }
+    } catch {
+      setLiked(!next);
+    } finally {
+      setLikeBusy(false);
+    }
   };
 
   // S143-A — toque na metade esquerda da área de conteúdo volta um momento,
@@ -173,18 +235,23 @@ export function MomentoViewerModal({
   // de CONTEÚDO). Sem isto, o timer seguia rodando por trás
   // do formulário de denúncia e podia trocar/fechar o `momento` enquanto o
   // usuário ainda estava denunciando (ver ROADMAP.md S141).
+  // S143-B — CommentModal e LikersModal são o mesmo caso (também siblings,
+  // fora do contentTapGesture): sem entrar aqui, o timer avançava o
+  // `momento` por trás do modal de comentário/curtidores aberto.
+  const anyOverlayVisible = reportVisible || commentVisible || likersVisible;
+
   useEffect(() => {
     if (!reportEffectMountedRef.current) {
       reportEffectMountedRef.current = true;
       return;
     }
-    if (reportVisible) {
+    if (anyOverlayVisible) {
       pauseTimer();
     } else {
       resumeTimer();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportVisible]);
+  }, [anyOverlayVisible]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -280,6 +347,48 @@ export function MomentoViewerModal({
                   ) : null}
                 </View>
               </GestureDetector>
+
+              {/* S143-B — footer de ações FORA do GestureDetector acima de
+                  propósito: um Pressable filho da View gesticulada
+                  competiria com o LongPress (pause/resume) e o Tap
+                  (navegação) da S143-A, exatamente o que o escopo desta
+                  sprint proíbe. Curtir/comentar só existem pro momento de
+                  OUTRA pessoa (decisão 9); o contador aparece sempre
+                  (qualquer visualizador), mas só é tocável (abre a lista
+                  nominal, decisão 6) quando isOwnMomento. */}
+              <View style={styles.actionsRow}>
+                {!isOwnMomento && (
+                  <AnimatedPressable
+                    style={styles.actionBtn}
+                    onPress={handleToggleLike}
+                    disabled={likeBusy}
+                  >
+                    <Ionicons
+                      name={liked ? 'heart' : 'heart-outline'}
+                      size={26}
+                      color={liked ? theme.colors.error : theme.colors.white}
+                    />
+                  </AnimatedPressable>
+                )}
+                {isOwnMomento ? (
+                  <AnimatedPressable
+                    style={styles.actionBtn}
+                    onPress={() => setLikersVisible(true)}
+                  >
+                    <Text style={styles.likeCount}>{momento?.likesCount ?? 0} curtidas</Text>
+                  </AnimatedPressable>
+                ) : (
+                  <Text style={styles.likeCount}>{momento?.likesCount ?? 0} curtidas</Text>
+                )}
+                {!isOwnMomento && (
+                  <AnimatedPressable
+                    style={styles.actionBtn}
+                    onPress={() => setCommentVisible(true)}
+                  >
+                    <Ionicons name="chatbubble-outline" size={24} color={theme.colors.white} />
+                  </AnimatedPressable>
+                )}
+              </View>
             </SafeAreaView>
           </SafeAreaProvider>
         </GestureHandlerRootView>
@@ -291,6 +400,22 @@ export function MomentoViewerModal({
           onClose={() => setReportVisible(false)}
           onSubmit={handleReport}
           title="Denunciar momento"
+        />
+      )}
+
+      {isOwnMomento && (
+        <MomentoLikersModal
+          visible={likersVisible}
+          authorUid={momento?.authorId ?? null}
+          onClose={() => setLikersVisible(false)}
+        />
+      )}
+
+      {!isOwnMomento && (
+        <MomentoCommentModal
+          visible={commentVisible}
+          momento={momento}
+          onClose={() => setCommentVisible(false)}
         />
       )}
     </>
@@ -344,4 +469,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   momentoPhoto: { width: '100%', height: '100%' },
+  // S143-B — footer de curtir/comentar, FORA do content gesticulado acima
+  // (ver comentário no JSX). rgba preto, mesmo precedente de overlay já
+  // usado em progressTrack/myCardTime (MomentosScreen.tsx) — theme.ts não
+  // tem token de overlay dedicado.
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', padding: 6 },
+  likeCount: { fontSize: theme.fontSize.sm, fontWeight: '700', color: theme.colors.white },
 });

@@ -81,6 +81,7 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
+import { listenReceivedMomentoRequests } from '@/services/momentoRequestService';
 import { getDisplayAge } from '@/utils/birthDate';
 import { getDisplayName } from '@/utils/profile';
 import { countCodePoints } from '@/utils/text';
@@ -144,6 +145,13 @@ export default function ProfileScreen() {
   const { showAlert: showVerificationAlert } = useVerificationAlert();
   const { showAlert: showSupportAlert } = useSupportAlert();
   const { showAlert: showReportAlert } = useReportAlert();
+  // S143-B — ponto de aviso na linha "Pedidos de conversa", mesmo padrão
+  // visual dos pontos acima (verificationAlertDot), mas SEM contexto/
+  // AsyncStorage dedicado (diferença de propósito: aqui é sempre "tem algo
+  // te esperando" — pedido RECEBIDO pendente —, não "alguém respondeu desde
+  // a última vez que você olhou"). Acende sempre que houver pelo menos 1
+  // pedido recebido pending.
+  const [pendingMomentoRequests, setPendingMomentoRequests] = useState(0);
   const [editing, setEditing] = useState(false);
   // S135 — "como quer ser chamado", nome público exibido em card/cabeçalho.
   // Fallback pro `name` legado: conta que ainda não passou pela migração
@@ -170,6 +178,16 @@ export default function ProfileScreen() {
         // existe" (createLegalName), que é o comportamento seguro.
         console.error('[ProfileScreen] getLegalName falhou:', err);
       });
+  }, [user]);
+  // S143-B — conta de pedidos de conversa RECEBIDOS ainda pendentes (você é
+  // o autor do momento comentado) — acende o ponto da linha "Pedidos de
+  // conversa" abaixo.
+  useEffect(() => {
+    if (!user) return;
+    const unsub = listenReceivedMomentoRequests(user.uid, (requests) => {
+      setPendingMomentoRequests(requests.filter((r) => r.status === 'pending').length);
+    });
+    return unsub;
   }, [user]);
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
   const displayAge = getDisplayAge(profile);
@@ -1347,6 +1365,23 @@ export default function ProfileScreen() {
             {showReportAlert && <View style={styles.verificationAlertDot} />}
           </AnimatedPressable>
         )}
+
+        {/* S143-B — "Pedidos de conversa" (momentoRequests, decisão 2: comentar
+            um momento de quem ainda não é match), mesmo padrão das duas linhas
+            acima. Fica fora da guarda !isAdmin: o admin também pode comentar
+            momentos de outras pessoas normalmente. */}
+        <AnimatedPressable
+          style={styles.blockedUsersBtn}
+          onPress={() => navigation.navigate('MomentoRequests')}
+        >
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={20}
+            color={theme.colors.textSecondary}
+          />
+          <Text style={styles.blockedUsersText}>Pedidos de conversa</Text>
+          {pendingMomentoRequests > 0 && <View style={styles.verificationAlertDot} />}
+        </AnimatedPressable>
 
         {/* S95 — Painel Admin removido: Verificações/Suporte viraram abas
             próprias do admin (ver navigation/index.tsx MainTabs), os botões
