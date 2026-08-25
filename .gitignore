@@ -52,5 +52,8 @@ serviceAccountKey.json
 
 .firebase/
 
-# relatorios de sprint, nao versionados
-docs/
+# relatorios de sprint, nao versionados (exceto ESTADO.md, ver abaixo)
+docs/*
+!docs/sprints/
+docs/sprints/*
+!docs/sprints/ESTADO.md
