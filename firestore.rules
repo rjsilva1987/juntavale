@@ -1,6 +1,25 @@
-// rules-stamp: S143-C (25/08/2026 — correção pós-teste de aparelho:
-// momentoRequests/{requestId} allow read ganha `resource != null` antes de
-// comparar resource.data.senderId/authorId — o getDoc de checagem prévia em
+// rules-stamp: S143-C (25/08/2026 — verificação pós-redesenho: allow read
+// unificado de momentoRequests/{requestId} split em allow get + allow list
+// — mesma lição da S139 (momentos/{uid}): `resource != null` misturado ao
+// list era suspeito de derrubar as 2 queries novas desta sprint
+// (listenReceivedMomentoRequests/listenSentMomentoRequests,
+// momentoRequestService.ts) com permission-denied. get mantém a guarda
+// (getDoc de doc que pode não existir); list ganha a condição sem ela
+// (nunca itera doc inexistente). Nenhum índice composto necessário — as
+// duas queries são where() de campo único, sem orderBy.) + S143-C (25/08/2026 — redesenho por decisão de produto:
+// responder um Momento virou INDEPENDENTE de match, revoga o roteamento por
+// match desta sprint. Bloco momentoRequests/{requestId} inteiro endurecido
+// defensivamente contra a classe "get()/get() indireto em doc que pode não
+// existir lança erro e derruba a rule com permission-denied em vez de
+// negar": allow create ganha `exists()` antes do get() de
+// users/{request.auth.uid}.blockedUsers (doc do próprio remetente pode não
+// existir ainda); nova função momentoRequestExists(requestId), exigida
+// antes de QUALQUER getMomentoRequest(requestId) em messages/{messageId}
+// (allow read e allow create) — getMomentoRequest usa get() puro sobre o
+// pai, que lança se o requestId não corresponder a doc nenhum.) + S143-C
+// (25/08/2026 — correção pós-teste de aparelho: momentoRequests/{requestId}
+// allow read ganha `resource != null` antes de comparar
+// resource.data.senderId/authorId — o getDoc de checagem prévia em
 // sendMomentoComment (momentoRequestService.ts) falhava com
 // permission-denied pra documento ainda inexistente (1º comentário/pedido a
 // um autor sem match), porque a rule dereferenciava resource.data com
@@ -343,6 +362,20 @@ service cloud.firestore {
     // nas regras da subcollection momentoRequests/{requestId}/messages.
     function getMomentoRequest(requestId) {
       return get(/databases/$(database)/documents/momentoRequests/$(requestId)).data;
+    }
+
+    // S143-C (revisão pós-teste de aparelho — endurecimento defensivo) —
+    // exists() nunca lança erro pra doc ausente (ao contrário de get(), que
+    // lança e derruba a rule inteira com permission-denied — a mesma classe
+    // de bug do resource == null já corrigida no allow read de
+    // momentoRequests/{requestId} abaixo). getMomentoRequest() acima usa
+    // get() direto: todo call site dele em messages/{messageId} abaixo
+    // PRECISA checar momentoRequestExists(requestId) antes, senão uma
+    // tentativa de ler/criar mensagem sob um requestId que não existe (bug
+    // de client, id forjado, ou corrida de exclusão) quebra a avaliação em
+    // vez de simplesmente negar.
+    function momentoRequestExists(requestId) {
+      return exists(/databases/$(database)/documents/momentoRequests/$(requestId));
     }
 
     // Recebe o match já lido (getMatch chamado 1x pelo caller) em vez de
@@ -2310,10 +2343,18 @@ service cloud.firestore {
     // importa — a Cloud Function onBlockCreated (functions/src/chat.ts)
     // propaga o uid do outro lado pros DOIS perfis quando um bloqueio é
     // criado, então "eu bloqueei" e "ele me bloqueou" já caem no mesmo
-    // array. O caminho COM match (matches/{matchId}/messages) não precisou
-    // de mudança de rule nesta sprint — já é protegido no servidor via
-    // matchAllowsPost (`blockedBy` do match), só ganhou checagem
-    // client-side (momentoRequestService.ts) por UX.
+    // array.
+    // S143-C (revisão pós-teste de aparelho, 25/08/2026 — decisão de
+    // produto do Raphael, revoga o roteamento por match desta sprint):
+    // responder um Momento agora é SEMPRE por aqui, independente de match —
+    // o client não consulta match nenhum antes de chamar sendMomentoComment
+    // (momentoRequestService.ts). Quem já é match e conversa via Momento
+    // ganha uma thread SEPARADA do chat do match (momentoRequests, não
+    // matches/{matchId}/messages) — não precisou de mudança de rule pra
+    // isso, é só o client não tentar mais o caminho match. A regra deste
+    // bloco não distingue "tinha match" de "não tinha": nunca distinguiu,
+    // decisão 3/4 (1 pedido por remetente por instância, resposta do autor
+    // libera a thread) valem igual pros dois casos.
     match /momentoRequests/{requestId} {
       // S143-C (correção pós-teste de aparelho) — resource == null pra doc
       // que ainda não existe (getDoc de checagem prévia em
@@ -2323,10 +2364,30 @@ service cloud.firestore {
       // Firestore devolve permission-denied em vez de simplesmente "não
       // existe" — quebrava TODO primeiro comentário/pedido (chip ou texto
       // livre) a alguém ainda sem match.
-      allow read: if isSignedIn()
+      // S143-C (verificação pós-redesenho) — allow read UNIFICADO (get +
+      // list) split em allow get + allow list, mesma lição da S139
+      // (momentos/{uid} acima): list (listenReceivedMomentoRequests,
+      // listenSentMomentoRequests, momentoRequestService.ts — 2 queries
+      // de lista novas desta sprint) precisa que o Firestore PROVE
+      // estruturalmente que a condição vale pro conjunto de resultados,
+      // usando só os filtros da própria query; `resource != null` não é um
+      // padrão que o verificador de list reconhece como estruturalmente
+      // provável (list só itera doc que já existe, mas o guard foi escrito
+      // pensando em get de doc que pode não existir) — misturado ao list
+      // via allow read único, é suspeito de derrubar a query inteira com
+      // permission-denied, mesma classe de sintoma da S139. get continua
+      // com a guarda (getDoc de checagem prévia em sendMomentoComment lê
+      // um doc que pode legitimamente não existir); list não precisa dela
+      // (nunca itera doc inexistente) e ganha a condição sem o guard,
+      // igual ao que cada where() das duas queries já filtra.
+      allow get: if isSignedIn()
         && resource != null
-        && (request.auth.uid == resource.data.senderId
-            || request.auth.uid == resource.data.authorId);
+        && (resource.data.senderId == request.auth.uid
+            || resource.data.authorId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (resource.data.senderId == request.auth.uid
+            || resource.data.authorId == request.auth.uid);
 
       allow create: if isSignedIn()
         && request.auth.uid == request.resource.data.senderId
@@ -2335,8 +2396,19 @@ service cloud.firestore {
         // S143-C (débito da S143-B, decisão 7) — nega o pedido se o autor
         // do momento está no `blockedUsers` do PRÓPRIO remetente (cobre os
         // dois sentidos de bloqueio, ver comentário do bloco acima).
-        && !(request.resource.data.authorId in
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('blockedUsers', []))
+        // S143-C (revisão pós-teste de aparelho — endurecimento defensivo)
+        // — exists() ANTES do get(): sem isso, uma conta autenticada sem
+        // doc em users/{uid} ainda (janela entre criar a conta no Auth e o
+        // 1º setDoc do cadastro, ou qualquer outra inconsistência) faz
+        // get(...).data quebrar a avaliação inteira com permission-denied
+        // em vez de simplesmente não ter nada em blockedUsers pra checar —
+        // mesma classe de bug do resource == null no allow read acima,
+        // suspeito vivo do permission-denied ainda sem causa confirmada no
+        // teste de aparelho (ver instrumentação TEMP-DIAG S143-C).
+        && (!exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            || !(request.resource.data.authorId in
+                 get(/databases/$(database)/documents/users/$(request.auth.uid))
+                   .data.get('blockedUsers', [])))
         // "mesmo limite de tamanho de texto de mensagem de chat" (decisão do
         // escopo) — 2000, mesmo teto de matches/{matchId}/messages.text acima.
         && request.resource.data.text is string
@@ -2382,11 +2454,21 @@ service cloud.firestore {
       // unmatch — o primeiro comentário já vive em
       // momentoRequests/{requestId}.text, aqui só as mensagens SEGUINTES).
       match /messages/{messageId} {
+        // S143-C (revisão pós-teste de aparelho — endurecimento defensivo)
+        // — momentoRequestExists(requestId) ANTES de qualquer
+        // getMomentoRequest(requestId): getMomentoRequest usa get() puro,
+        // que lança erro (não devolve null) pra um requestId sem doc
+        // correspondente, derrubando a rule inteira com permission-denied
+        // em vez de negar normalmente. Sem este guard, forjar/errar um
+        // requestId (ou uma corrida rara) quebraria a leitura/escrita da
+        // subcoleção inteira em vez de simplesmente negar.
         allow read: if isSignedIn()
+          && momentoRequestExists(requestId)
           && (request.auth.uid == getMomentoRequest(requestId).senderId
               || request.auth.uid == getMomentoRequest(requestId).authorId);
 
         allow create: if isSignedIn()
+          && momentoRequestExists(requestId)
           && getMomentoRequest(requestId).status == 'answered'
           && (request.auth.uid == getMomentoRequest(requestId).senderId
               || request.auth.uid == getMomentoRequest(requestId).authorId)

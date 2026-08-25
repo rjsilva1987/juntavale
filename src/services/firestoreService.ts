@@ -924,22 +924,6 @@ export const getMatchById = async (matchId: string): Promise<Match | null> => {
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as Match) : null;
 };
 
-// S143-B — usado por momentoRequestService.sendMomentoComment pra decidir
-// entre o caso A (já tem match, manda mensagem normal com momentoRef) e o
-// caso B (sem match, cria um momentoRequests/{...} pendente) — decisão 5.
-// Não existe query direta "match entre uid1 e uid2" (o id do doc não segue
-// ordem canônica de uids, ver onBlockCreated em functions/src/chat.ts, que
-// checa as duas ordens por isso) — busca todos os matches do usuário atual
-// (mesma query de getMatches) e filtra client-side pelo outro uid, mesmo
-// raciocínio de useActiveMatches.
-export const findMatchWithUser = async (uid: string, otherUid: string): Promise<Match | null> => {
-  const snap = await getDocs(
-    query(collection(db, 'matches'), where('users', 'array-contains', uid)),
-  );
-  const found = snap.docs.find((d) => (d.data().users as string[]).includes(otherUid));
-  return found ? ({ id: found.id, ...found.data() } as Match) : null;
-};
-
 // S102-B — desfaz um match definitivamente (Cloud Function apaga o doc, as
 // subcoleções e as imagens de chat no Storage; ver functions/src/index.ts).
 export const unmatch = async (matchId: string): Promise<void> => {

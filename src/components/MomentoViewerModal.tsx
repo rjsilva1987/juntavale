@@ -31,7 +31,7 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReportReason, reportUser } from '@/services/blockService';
-import { findMatchWithUser, UserProfile } from '@/services/firestoreService';
+import { UserProfile } from '@/services/firestoreService';
 import { sendMomentoComment } from '@/services/momentoRequestService';
 import {
   hasLikedMomento,
@@ -83,14 +83,6 @@ export function MomentoViewerModal({
   // handleTogglePhotoLike em MatchProfileScreen.tsx.
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
-  // S143-C — se existe match com o autor. null = ainda carregando (mesmo
-  // estado neutro do efeito abaixo antes da resposta chegar). Decide o
-  // caminho do emoji rápido da MomentoReplyBar: true → vira comentário no
-  // chat (decisão 3); false → vira curtida; null → toque vira no-op
-  // (correção pós-teste de aparelho, handleEmojiPress abaixo), nunca gasta o
-  // pedido por um toque de 1 emoji antes de saber de verdade (decisão 4,
-  // "nunca por engano").
-  const [hasMatch, setHasMatch] = useState<boolean | null>(null);
   // Lista nominal (decisão 6) só abre quando isOwnMomento; a barra de
   // resposta (decisão 5/6 da S143-C, substitui o antigo MomentoCommentModal)
   // só quando !isOwnMomento — ver o footer de ações e a MomentoReplyBar
@@ -100,8 +92,9 @@ export function MomentoViewerModal({
   // entra no anyOverlayVisible abaixo pra pausar o timer de auto-avanço
   // igual aos outros overlays (mesmo raciocínio do antigo commentVisible).
   const [replyBarFocused, setReplyBarFocused] = useState(false);
-  // S143-C — true enquanto handleSendText/handleEmojiPress (via comentário)
-  // está em voo; passado pra MomentoReplyBar como `submitting`.
+  // S143-C — true enquanto handleSendText está em voo (chip, texto ou
+  // emoji — os três chamam a mesma função, revisão pós-teste de aparelho);
+  // passado pra MomentoReplyBar como `submitting`.
   const [replySubmitting, setReplySubmitting] = useState(false);
   // S143-A — largura da área de conteúdo, medida via onLayout, mesmo padrão
   // de photoAreaWidth em MatchProfileScreen.tsx. Usada só pra decidir metade
@@ -159,32 +152,24 @@ export function MomentoViewerModal({
   // (troca de item na fila do feed, ver MomentosScreen.openFeedItem). Não se
   // aplica ao próprio momento (decisão 9): liked fica sempre false ali, sem
   // nem chamar o service (a rule negaria mesmo — likerUid != authorId).
-  // S143-C — estendido pra também buscar hasMatch em paralelo (mesma
-  // guarda, mesmo reset pro estado neutro quando não se aplica): o emoji
-  // rápido da MomentoReplyBar precisa saber ANTES do toque se o caminho é
-  // comentário (match) ou curtida (sem match), decisão 3/4.
+  // S143-C (revisão pós-teste de aparelho) — voltou a ser só sobre `liked`:
+  // a versão anterior buscava hasMatch em paralelo (Promise.all) pro
+  // roteamento do emoji, mas a decisão nova (Raphael, 25/08/2026) tornou
+  // responder a um Momento INDEPENDENTE de match — nenhuma consulta de
+  // match no fluxo de resposta, curtida e comentário são estados
+  // completamente separados de novo.
   useEffect(() => {
     if (!momento || isOwnMomento || !user) {
       setLiked(false);
-      setHasMatch(null);
       return undefined;
     }
     let cancelled = false;
-    Promise.all([
-      hasLikedMomento(momento.authorId, user.uid),
-      findMatchWithUser(user.uid, momento.authorId),
-    ])
-      .then(([likedValue, match]) => {
-        if (!cancelled) {
-          setLiked(likedValue);
-          setHasMatch(!!match);
-        }
+    hasLikedMomento(momento.authorId, user.uid)
+      .then((likedValue) => {
+        if (!cancelled) setLiked(likedValue);
       })
       .catch(() => {
-        if (!cancelled) {
-          setLiked(false);
-          setHasMatch(null);
-        }
+        if (!cancelled) setLiked(false);
       });
     return () => {
       cancelled = true;
@@ -212,22 +197,34 @@ export function MomentoViewerModal({
     }
   };
 
-  // S143-C — chip tocado ou texto do campo enviado: SEMPRE vai por
-  // sendMomentoComment (decisão 5), com match → mensagem no chat, sem
-  // match → pedido (momentoRequests). Mesmo tratamento de resultado/erro
-  // que estava em MomentoCommentModal.handleSend (removido nesta sprint —
-  // a barra substitui o modal, não convivem os dois caminhos, decisão 6).
+  // S143-C (revisão pós-teste de aparelho, decisão de produto do Raphael,
+  // 25/08/2026 — revoga o roteamento por match desta sprint) — emoji, chip
+  // e texto livre são TODOS mensagens pelo MESMO caminho, sempre via
+  // sendMomentoComment: independente de match, curtida ou qualquer outro
+  // estado entre as duas pessoas (decisão 1). Curtida continua existindo só
+  // no botão de coração (handleToggleLike acima), sem nenhuma relação com o
+  // envio de mensagem — a MomentoReplyBar liga onSendText E onEmojiPress
+  // direto nesta função (ver JSX abaixo), não precisa de um handler
+  // separado pro emoji.
   const handleSendText = async (text: string) => {
     if (!user || !momento) return;
     setReplySubmitting(true);
     try {
       const result = await sendMomentoComment(user.uid, momento, text);
-      if (result.via === 'match') {
-        Alert.alert('Comentário enviado', 'Sua mensagem foi enviada na conversa.');
-      } else if (result.status === 'pending') {
+      if (result.status === 'pending') {
+        // S143-C (revisão pós-teste de aparelho) — alreadyExisted distingue
+        // "acabei de criar o pedido" (mensagem original) de "você já tinha
+        // mandado um pedido pra este momento, isso foi no-op" (decisão 3, 1
+        // pedido por remetente por instância enquanto está pendente,
+        // decisão nova: "1 mensagem por remetente por instância enquanto o
+        // pedido está pendente") — sem isso os dois casos mostravam o
+        // mesmo "Pedido enviado", como se um pedido novo tivesse saído na
+        // segunda tentativa.
         Alert.alert(
-          'Pedido enviado',
-          'Vocês ainda não têm match — avisamos o autor do momento. Assim que ele responder, a conversa libera aqui.',
+          result.alreadyExisted ? 'Pedido já enviado' : 'Pedido enviado',
+          result.alreadyExisted
+            ? 'Você já enviou uma mensagem para este momento — aguarde o autor responder.'
+            : 'Enviamos seu pedido para o autor do momento. Assim que ele responder, você vê a conversa na aba Conversas.',
         );
       } else if (result.status === 'answered') {
         Alert.alert('Mensagem enviada', 'Sua mensagem foi enviada na conversa deste pedido.');
@@ -244,35 +241,6 @@ export function MomentoViewerModal({
       );
     } finally {
       setReplySubmitting(false);
-    }
-  };
-
-  // S143-C — emoji rápido da MomentoReplyBar: com match vira comentário
-  // (decisão 3, mesmo caminho de handleSendText); sem match vira curtida,
-  // reusando o MESMO padrão otimista de handleToggleLike acima, mas só pra
-  // frente: se já está curtido, no-op (decisão 4).
-  // S143-C (correção pós-teste de aparelho) — hasMatch === null (o
-  // Promise.all de findMatchWithUser/hasLikedMomento ainda não voltou, ver
-  // efeito acima) agora é NO-OP, não mais "trata como sem match": toque
-  // rápido demais (comum em teste de aparelho, mal o momento abre) não pode
-  // decidir curtida quando ainda não se sabe se existe match — só líquido é
-  // hasMatch === false pra ir pro caminho de curtida.
-  const handleEmojiPress = async (emoji: string) => {
-    if (!user || !momento || hasMatch === null) return;
-    if (hasMatch === true) {
-      await handleSendText(emoji);
-      return;
-    }
-    if (!liked && !likeBusy) {
-      setLiked(true);
-      setLikeBusy(true);
-      try {
-        await likeMomento(momento.authorId, user.uid);
-      } catch {
-        setLiked(false);
-      } finally {
-        setLikeBusy(false);
-      }
     }
   };
 
@@ -519,7 +487,7 @@ export function MomentoViewerModal({
                   <MomentoReplyBar
                     momentoId={momento?.id ?? null}
                     onSendText={handleSendText}
-                    onEmojiPress={handleEmojiPress}
+                    onEmojiPress={handleSendText}
                     onFocusChange={setReplyBarFocused}
                     submitting={replySubmitting}
                   />

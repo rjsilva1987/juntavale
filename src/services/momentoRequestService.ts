@@ -1,19 +1,25 @@
 // src/services/momentoRequestService.ts
 //
 // S143-B — pedido de conversa gerado por um comentário/resposta a um
-// momento de alguém SEM match (decisão 2, molde Instagram: fica pendente
-// até o autor responder ou recusar). Comentar quem JÁ é match usa o chat
-// normal (sendMessage, firestoreService.ts, com momentoRef) — sendMomentoComment
-// abaixo decide entre os dois caminhos sozinho, sem perguntar ao usuário
-// (decisão 5). Responder um pedido NUNCA cria um match (decisão 4): só
-// libera a subcoleção messages deste pedido específico, sem nenhuma outra
-// feature de match (imagem/localização/reação/edição/apagar/typing/
-// bloqueio/unmatch/MatchProfileScreen).
+// momento (decisão 2, molde Instagram: fica pendente até o autor
+// responder, ignorar ou recusar). Responder um pedido NUNCA cria um match
+// (decisão 4): só libera a subcoleção messages deste pedido específico,
+// sem nenhuma outra feature de match (imagem/localização/reação/edição/
+// apagar/typing/bloqueio/unmatch/MatchProfileScreen).
+// S143-C (revisão pós-teste de aparelho, 25/08/2026 — decisão de produto do
+// Raphael, revoga o roteamento por match desta sprint): responder a um
+// Momento é INDEPENDENTE de match — sendMomentoComment abaixo é o ÚNICO
+// caminho, sem consulta de match nenhuma. Quem já é match e conversa via
+// Momento ganha uma thread SEPARADA do chat do match (aqui, não em
+// matches/{matchId}/messages) — "via Momento" na aba Conversas
+// (useAnsweredMomentoRequests.ts) não se mistura com o chat normal do
+// match.
 import {
   addDoc,
   collection,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -25,7 +31,6 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
-import { findMatchWithUser, MomentoRef, sendMessage } from '@/services/firestoreService';
 import { MomentoWithId } from '@/services/momentoService';
 
 export type MomentoRequestStatus = 'pending' | 'answered' | 'declined';
@@ -74,20 +79,30 @@ const buildRequestId = (authorId: string, senderId: string, momento: MomentoWith
 const truncate = (value: string, max: number): string =>
   value.length > max ? value.slice(0, max) : value;
 
-const buildMomentoRef = (momento: MomentoWithId): MomentoRef => ({
-  authorId: momento.authorId,
-  createdAt: momento.createdAt,
-  type: momento.type,
-  ...(momento.text ? { text: truncate(momento.text, MOMENTO_SNAPSHOT_TEXT_MAX) } : {}),
-  ...(momento.photoUrl ? { photoUrl: momento.photoUrl } : {}),
-});
-
 const buildMomentoSnapshot = (momento: MomentoWithId): MomentoRequestSnapshot => ({
   type: momento.type,
   createdAt: momento.createdAt,
   ...(momento.text ? { text: truncate(momento.text, MOMENTO_SNAPSHOT_TEXT_MAX) } : {}),
   ...(momento.photoUrl ? { photoUrl: momento.photoUrl } : {}),
 });
+
+// TEMP-DIAG S143-C — remover depois: log padronizado de falha de escrita/leitura, com path completo, chaves do payload e code/message do erro do Firestore.
+const logDiag = (
+  op: 'read' | 'create' | 'update',
+  path: string,
+  payloadKeys: string[],
+  err: unknown,
+): void => {
+  // TEMP-DIAG S143-C
+  console.error(
+    '[TEMP-DIAG S143-C]',
+    op,
+    path,
+    payloadKeys,
+    (err as { code?: string })?.code,
+    (err as Error)?.message,
+  ); // TEMP-DIAG S143-C
+}; // TEMP-DIAG S143-C
 
 // Só funciona quando o pedido pai já está 'answered' (rules exigem) —
 // chamar antes disso é sempre permission-denied, ver firestore.rules
@@ -101,22 +116,33 @@ export const sendMomentoRequestMessage = async (
   if (trimmed.length === 0 || trimmed.length > MOMENTO_REQUEST_TEXT_MAX) {
     throw new Error('Mensagem inválida.');
   }
-  await addDoc(collection(db, 'momentoRequests', requestId, 'messages'), {
-    senderId,
-    text: trimmed,
-    createdAt: serverTimestamp(),
-  });
+  const payload = { senderId, text: trimmed, createdAt: serverTimestamp() }; // TEMP-DIAG S143-C
+  try {
+    // TEMP-DIAG S143-C
+    await addDoc(collection(db, 'momentoRequests', requestId, 'messages'), payload);
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('create', `momentoRequests/${requestId}/messages`, Object.keys(payload), err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
 };
 
-export type MomentoCommentResult =
-  | { via: 'match'; matchId: string }
-  | { via: 'request'; requestId: string; status: MomentoRequestStatus };
+export interface MomentoCommentResult {
+  requestId: string;
+  status: MomentoRequestStatus;
+  // S143-C (revisão pós-teste de aparelho) — true quando o pedido já
+  // existia ANTES desta chamada (nada foi escrito agora, o remetente já
+  // tinha 1 pedido pendente pra esta instância do momento, decisão 3);
+  // deixa handleSendText (MomentoViewerModal.tsx) distinguir "acabei de
+  // criar o pedido" de "você já tinha mandado, isso foi no-op" em vez de
+  // mostrar o mesmo "Pedido enviado" pros dois casos.
+  alreadyExisted: boolean;
+}
 
-// Decide o caso A (já tem match: mensagem normal em matches/{matchId}/messages
-// com momentoRef) ou o caso B (sem match: cria/reusa um momentoRequests/{...})
-// — decisão 5, sem perguntar ao usuário qual caminho. Ninguém comenta o
-// próprio momento por aqui (decisão 9, mesma guarda de likeMomento em
-// momentoService.ts).
+// S143-C (revisão pós-teste de aparelho) — ÚNICO caminho pra responder um
+// Momento (emoji, chip e texto livre, decisão 1: independente de match ou
+// curtida). Ninguém comenta o próprio momento por aqui (decisão 9, mesma
+// guarda de likeMomento em momentoService.ts).
 export const sendMomentoComment = async (
   uid: string,
   momento: MomentoWithId,
@@ -131,41 +157,36 @@ export const sendMomentoComment = async (
   }
 
   // S143-C (débito da S143-B, decisão 7) — checa o `blockedUsers` do
-  // PRÓPRIO remetente ANTES de qualquer findMatchWithUser/setDoc/sendMessage.
-  // Cobre os dois sentidos de bloqueio (eu bloqueei OU ele me bloqueou): a
-  // Cloud Function onBlockCreated propaga o uid do outro lado pros dois
-  // perfis (ver comentário em firestore.rules), então o array do PRÓPRIO
-  // usuário já basta — não precisa ler o perfil do autor.
-  const myProfileSnap = await getDoc(doc(db, 'users', uid));
+  // PRÓPRIO remetente ANTES de qualquer getDoc/setDoc do pedido. Cobre os
+  // dois sentidos de bloqueio (eu bloqueei OU ele me bloqueou): a Cloud
+  // Function onBlockCreated propaga o uid do outro lado pros dois perfis
+  // (ver comentário em firestore.rules), então o array do PRÓPRIO usuário
+  // já basta — não precisa ler o perfil do autor.
+  let myProfileSnap; // TEMP-DIAG S143-C
+  try {
+    // TEMP-DIAG S143-C
+    myProfileSnap = await getDoc(doc(db, 'users', uid));
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('read', `users/${uid}`, [], err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
   const blockedUsers = (myProfileSnap.data()?.blockedUsers ?? []) as string[];
   if (blockedUsers.includes(momento.authorId)) {
     throw new Error('Não é possível enviar — bloqueio ativo entre vocês.');
   }
 
-  const match = await findMatchWithUser(uid, momento.authorId);
-  if (match) {
-    // S143-C — melhoria de UX (débito da S143-B, decisão 7): o servidor já
-    // nega via matchAllowsPost (firestore.rules) se `blockedBy` não está
-    // vazio, mas sem esta checagem client-side o usuário veria um
-    // permission-denied cru em vez de uma mensagem amigável.
-    if ((match.blockedBy ?? []).length > 0) {
-      throw new Error('Não é possível enviar — bloqueio ativo entre vocês.');
-    }
-    await sendMessage(
-      match.id,
-      uid,
-      trimmed,
-      undefined,
-      undefined,
-      undefined,
-      buildMomentoRef(momento),
-    );
-    return { via: 'match', matchId: match.id };
-  }
-
   const requestId = buildRequestId(momento.authorId, uid, momento);
   const ref = doc(db, 'momentoRequests', requestId);
-  const existing = await getDoc(ref);
+  let existing; // TEMP-DIAG S143-C
+  try {
+    // TEMP-DIAG S143-C
+    existing = await getDoc(ref);
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('read', `momentoRequests/${requestId}`, [], err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
   if (existing.exists()) {
     // Decisão 3 — no máximo 1 pedido pendente por remetente por instância do
     // momento: já existe um pedido pra este trio author/sender/instância.
@@ -178,18 +199,27 @@ export const sendMomentoComment = async (
     if (data.status === 'answered') {
       await sendMomentoRequestMessage(requestId, uid, trimmed);
     }
-    return { via: 'request', requestId, status: data.status };
+    return { requestId, status: data.status, alreadyExisted: true };
   }
 
-  await setDoc(ref, {
+  const newRequestPayload = {
+    // TEMP-DIAG S143-C
     authorId: momento.authorId,
     senderId: uid,
     text: trimmed,
     momentoSnapshot: buildMomentoSnapshot(momento),
     status: 'pending',
     createdAt: serverTimestamp(),
-  });
-  return { via: 'request', requestId, status: 'pending' };
+  };
+  try {
+    // TEMP-DIAG S143-C
+    await setDoc(ref, newRequestPayload);
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('create', `momentoRequests/${requestId}`, Object.keys(newRequestPayload), err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
+  return { requestId, status: 'pending', alreadyExisted: false };
 };
 
 // Pedidos em que o usuário é o AUTOR (recebidos) — pendentes e já
@@ -246,6 +276,31 @@ export const listenMomentoRequestMessages = (
   });
 };
 
+// S143-C (revisão pós-teste de aparelho) — última mensagem da thread, usada
+// pela aba Conversas (useAnsweredMomentoRequests.ts) pra ordenar/mostrar
+// preview das conversas 'answered' junto das de match. Só a thread de
+// pedidos JÁ respondidos tem preview aqui — answerMomentoRequest sempre
+// escreve a 1ª mensagem no MESMO momento em que muda o status pra
+// 'answered' (dois writes sequenciais, ver comentário abaixo), então nunca
+// existe um pedido 'answered' com a subcoleção messages vazia.
+export const listenMomentoRequestLastMessage = (
+  requestId: string,
+  callback: (message: MomentoRequestMessage | null) => void,
+) => {
+  const q = query(
+    collection(db, 'momentoRequests', requestId, 'messages'),
+    orderBy('createdAt', 'desc'),
+    limit(1),
+  );
+  return onSnapshot(q, (snap) => {
+    callback(
+      snap.empty
+        ? null
+        : ({ id: snap.docs[0].id, ...snap.docs[0].data() } as MomentoRequestMessage),
+    );
+  });
+};
+
 // Responder um pedido pendente: transição pending -> answered (só o autor,
 // ver firestore.rules) SEGUIDA do envio da primeira mensagem da thread —
 // dois writes sequenciais de propósito, a rule da subcoleção só libera
@@ -255,10 +310,24 @@ export const answerMomentoRequest = async (
   authorId: string,
   firstReplyText: string,
 ): Promise<void> => {
-  await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'answered' });
+  try {
+    // TEMP-DIAG S143-C
+    await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'answered' });
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('update', `momentoRequests/${requestId}`, ['status'], err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
   await sendMomentoRequestMessage(requestId, authorId, firstReplyText);
 };
 
 export const declineMomentoRequest = async (requestId: string): Promise<void> => {
-  await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'declined' });
+  try {
+    // TEMP-DIAG S143-C
+    await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'declined' });
+  } catch (err) {
+    // TEMP-DIAG S143-C
+    logDiag('update', `momentoRequests/${requestId}`, ['status'], err); // TEMP-DIAG S143-C
+    throw err; // TEMP-DIAG S143-C
+  } // TEMP-DIAG S143-C
 };

@@ -14,14 +14,36 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
+import { useAnsweredMomentoRequests } from '@/hooks/useAnsweredMomentoRequests';
 import { RootStackParamList } from '@/navigation';
-import { LastMessage } from '@/services/firestoreService';
+import { LastMessage, UserProfile } from '@/services/firestoreService';
 import { hasValidLastMessage, isMatchUnread } from '@/utils/matches';
 import { getDisplayName } from '@/utils/profile';
 
 type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
 
-type Conversation = MatchWithProfile & { lastMessage: LastMessage };
+// S143-C (revisão pós-teste de aparelho) — linha da lista "Mensagens":
+// conversa de match (kind 'match', preview + unread reais) OU conversa de
+// Momento JÁ respondida (kind 'momento', etiqueta "via Momento", SEPARADA
+// do chat do match mesmo quando as duas pessoas têm match — decisão de
+// produto, useAnsweredMomentoRequests.ts). As duas entram na MESMA lista,
+// ordenadas juntas pela última mensagem (ver `rows` abaixo).
+type ConversationRow =
+  | {
+      kind: 'match';
+      id: string;
+      matchId: string;
+      otherProfile?: UserProfile;
+      lastMessage: LastMessage;
+      unread: boolean;
+    }
+  | {
+      kind: 'momento';
+      id: string;
+      requestId: string;
+      otherProfile?: UserProfile;
+      lastMessage: LastMessage;
+    };
 
 // firstName() foi removido na S135: nickname já nasce curto de propósito
 // (cap de 30 chars, ver MAX_NICKNAME_LENGTH em ProfileScreen.tsx), então
@@ -30,7 +52,13 @@ type Conversation = MatchWithProfile & { lastMessage: LastMessage };
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const { user, profile } = useAuth();
-  const { matches: activeMatches, loading } = useActiveMatches();
+  const { matches: activeMatches, loading: matchesLoading } = useActiveMatches();
+  // S143-C (revisão pós-teste de aparelho) — conversas de Momento
+  // 'answered', SEPARADAS do chat de match (decisão de produto). Mesclado
+  // com activeMatches abaixo, ordenado junto pela última mensagem.
+  const { conversations: momentoConversations, loading: momentoLoading } =
+    useAnsweredMomentoRequests();
+  const loading = matchesLoading || momentoLoading;
 
   // Novos matches (sem mensagem válida ainda) x conversas com preview —
   // padrão Tinder. Legado com lastMessage string antiga cai em newMatches
@@ -41,19 +69,38 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
   }, [activeMatches]);
 
-  const conversations = useMemo<Conversation[]>(() => {
-    return activeMatches.filter(hasValidLastMessage).sort((a, b) => {
+  // Mescla conversas de match (com preview) + conversas de Momento
+  // respondidas numa lista só, ordenada pela última mensagem — mesmo
+  // critério de "createdAt ausente vira Infinity" (mensagem ainda
+  // resolvendo o serverTimestamp local não deve saltar pro fim da lista).
+  const rows = useMemo<ConversationRow[]>(() => {
+    const matchRows: ConversationRow[] = activeMatches.filter(hasValidLastMessage).map((m) => ({
+      kind: 'match',
+      id: `match:${m.id}`,
+      matchId: m.id,
+      otherProfile: m.otherProfile,
+      lastMessage: m.lastMessage,
+      unread: isMatchUnread(m, user?.uid ?? ''),
+    }));
+    const momentoRows: ConversationRow[] = momentoConversations.map((c) => ({
+      kind: 'momento',
+      id: `momento:${c.requestId}`,
+      requestId: c.requestId,
+      otherProfile: c.otherProfile,
+      lastMessage: c.lastMessage,
+    }));
+    return [...matchRows, ...momentoRows].sort((a, b) => {
       const ta = a.lastMessage.createdAt?.toMillis() ?? Infinity;
       const tb = b.lastMessage.createdAt?.toMillis() ?? Infinity;
       return tb - ta;
     });
-  }, [activeMatches]);
+  }, [activeMatches, momentoConversations, user]);
 
   // Gate client-side: só evita a navegação e explica o motivo. A garantia
   // real é a rule de create em matches/{matchId}/messages (verified==true) —
   // isso aqui é UX, não segurança (ver ChatScreen.tsx pra defesa em
   // profundidade, caso alguém chegue no Chat por outro caminho).
-  const handleOpenChat = (item: MatchWithProfile) => {
+  const handleOpenChat = (matchId: string, otherProfile?: UserProfile) => {
     if (!profile?.verified) {
       Alert.alert(
         'Verifique seu perfil para conversar',
@@ -66,11 +113,22 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       return;
     }
     navigation.navigate('Chat', {
-      matchId: item.id,
-      otherUid: item.otherProfile?.uid ?? '',
-      otherName: getDisplayName(item.otherProfile),
-      otherPhoto: item.otherProfile?.photoURL ?? '',
+      matchId,
+      otherUid: otherProfile?.uid ?? '',
+      otherName: getDisplayName(otherProfile),
+      otherPhoto: otherProfile?.photoURL ?? '',
     });
+  };
+
+  // S143-C (revisão pós-teste de aparelho) — reusa a MomentoRequestChatScreen
+  // já existente (S143-B) como tela da conversa; nenhum gate de `verified`
+  // aqui, mesmo comportamento que ela já tinha antes desta revisão.
+  const handleOpenRow = (row: ConversationRow) => {
+    if (row.kind === 'match') {
+      handleOpenChat(row.matchId, row.otherProfile);
+    } else {
+      navigation.navigate('MomentoRequestChat', { requestId: row.requestId });
+    }
   };
 
   if (loading) {
@@ -103,7 +161,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     <AnimatedPressable
       style={styles.newMatchItem}
       entering={FadeInDown}
-      onPress={() => handleOpenChat(item)}
+      onPress={() => handleOpenChat(item.id, item.otherProfile)}
     >
       <View style={styles.newMatchAvatarWrap}>
         {item.otherProfile?.photoURL ? (
@@ -131,8 +189,8 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     </AnimatedPressable>
   );
 
-  const renderConversation = ({ item }: { item: Conversation }) => {
-    const unread = isMatchUnread(item, user?.uid ?? '');
+  const renderConversation = ({ item }: { item: ConversationRow }) => {
+    const unread = item.kind === 'match' && item.unread;
     const isPhoto = item.lastMessage.text === '📷 Foto';
     const youPrefix = item.lastMessage.senderId === user?.uid ? 'Você: ' : '';
 
@@ -140,7 +198,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       <AnimatedPressable
         style={styles.matchCard}
         entering={FadeInDown}
-        onPress={() => handleOpenChat(item)}
+        onPress={() => handleOpenRow(item)}
       >
         <View style={styles.avatarWrap}>
           {item.otherProfile?.photoURL ? (
@@ -169,6 +227,15 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               {getDisplayName(item.otherProfile)}
             </Text>
             {item.otherProfile?.verified === true && <VerifiedBadge size={14} />}
+            {/* S143-C (revisão pós-teste de aparelho) — etiqueta "via Momento":
+                conversa SEPARADA do chat de match, mesmo quando as duas
+                pessoas têm match (decisão de produto). */}
+            {item.kind === 'momento' && (
+              <View style={styles.momentoTag}>
+                <Ionicons name="sparkles" size={10} color={theme.colors.primary} />
+                <Text style={styles.momentoTagText}>via Momento</Text>
+              </View>
+            )}
           </View>
           <Text style={[styles.lastMsg, unread && styles.lastMsgUnread]} numberOfLines={1}>
             {youPrefix}
@@ -196,9 +263,15 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           />
         </>
       )}
-      {conversations.length > 0 && <Text style={styles.sectionTitle}>Mensagens</Text>}
+      {rows.length > 0 && <Text style={styles.sectionTitle}>Mensagens</Text>}
     </>
   );
+
+  // S143-C (revisão pós-teste de aparelho) — o gate "nada ainda" agora
+  // considera as duas fontes: uma conta sem NENHUM match mas com uma
+  // conversa de Momento respondida não pode cair no "Nenhum match ainda"
+  // (teria conteúdo real escondido atrás do empty state errado).
+  const hasNothing = activeMatches.length === 0 && momentoConversations.length === 0;
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
@@ -206,7 +279,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         <Text style={styles.title}>Conversas</Text>
       </View>
 
-      {activeMatches.length === 0 ? (
+      {hasNothing ? (
         <EmptyState
           icon="heart-outline"
           title="Nenhum match ainda"
@@ -214,7 +287,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         />
       ) : (
         <FlatList
-          data={conversations}
+          data={rows}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}
           ListHeaderComponent={listHeader}
@@ -341,6 +414,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
     flexShrink: 1,
+  },
+  // S143-C (revisão pós-teste de aparelho) — etiqueta "via Momento": fundo
+  // primaryLight + texto/ícone primary (REGRA DE OURO do CLAUDE.md: nunca
+  // texto branco sobre secondary/#FBBF24 — este par não usa secondary,
+  // então nem se aproxima do problema).
+  momentoTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  momentoTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   lastMsg: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   lastMsgUnread: { fontWeight: '600', color: theme.colors.text },

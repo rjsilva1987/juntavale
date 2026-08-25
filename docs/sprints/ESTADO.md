@@ -4,11 +4,24 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 25/08/2026
-**Commit atual:** df08ee7 — feat(momentos): curtir e comentar momento sem
-match (S143-B, FECHADA em código e DEPLOYADA, aprovada na 2ª auditoria,
-SEM teste em aparelho) — ver ROADMAP.md.
+**Commit atual:** 00dd061 — fix(momentos): permission-denied no 1o pedido +
+emoji prematuro durante carregamento (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S143-C — REDESENHO por decisão de produto do Raphael (25/08/2026), ainda
+  SEM commit (mudanças no working tree por cima de 00dd061, aguardando o
+  Raphael fechar num commit único): responder a um Momento (emoji, chip,
+  texto) virou INDEPENDENTE de match — sempre pedido (`momentoRequests`),
+  nunca mensagem direta em `matches/{matchId}/messages`, nunca curtida; a
+  aba Conversas passou a mesclar conversas de match + conversas de Momento
+  respondidas ("via Momento", `useAnsweredMomentoRequests.ts`);
+  `firestore.rules` (bloco `momentoRequests`) ganhou endurecimento
+  defensivo (`exists()` antes de `get()`) contra a classe de bug do
+  permission-denied. Esse permission-denied do teste de aparelho SEGUE sem
+  causa confirmada — instrumentação `TEMP-DIAG S143-C` ativa em
+  `momentoRequestService.ts` até passar no teste. Precisa de
+  `firebase deploy --only firestore:rules` depois do commit. Ver ROADMAP.md
+  § S143-C pro histórico completo (design revogado + decisões novas).
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
 

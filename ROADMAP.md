@@ -677,12 +677,13 @@ produto e deve parar no portão.
 
 ### S143-C — Momento: barra de resposta no viewer (chips + emojis + campo)
 **Status:** IMPLEMENTADA em código (25/08/2026), auditoria aprovada, SEM
-teste em aparelho. Exige deploy de `firestore.rules` (nova condição de
-`blockedUsers` na regra `momentoRequests/{requestId}` `allow create`) —
-nenhuma Cloud Function nova/alterada. Rodou no modo AUTOMATICO do `/sprint`
-com o pré-requisito "SÓ COMEÇA depois da bateria de testes do lote da
-S143-B" explicitamente destravado pelo Raphael no despacho, mesmo a S143-B
-seguindo sem teste em aparelho — ver `docs/sprints/ESTADO.md`.
+teste em aparelho aprovado ainda (rodada de bugs pós-teste em andamento,
+ver `docs/sprints/ESTADO.md`). Exige deploy de `firestore.rules`
+(condição de `blockedUsers` + o endurecimento defensivo abaixo, na regra
+`momentoRequests/{requestId}`) — nenhuma Cloud Function nova/alterada.
+Rodou no modo AUTOMATICO do `/sprint` com o pré-requisito "SÓ COMEÇA
+depois da bateria de testes do lote da S143-B" explicitamente destravado
+pelo Raphael no despacho, mesmo a S143-B seguindo sem teste em aparelho.
 
 Escopo: SÓ camada de UI por cima do encanamento da S143-B, mais a rule
 nova do débito de `blockedBy` abaixo — nenhuma coleção nova, nenhuma
@@ -695,28 +696,61 @@ function nova.
   cada exibição do momento, dentre um catálogo estático de 6 textos
   aprovados ("Kkkkk adorei", "Que demais!", "Conta mais sobre isso",
   "Isso aí ein 👀", "Muito bom!", "Marca aê").
-- Chip e texto do campo enviam SEMPRE pelo caminho de comentário da
-  S143-B: com match → chat com `momentoRef`; sem match → pedido
-  (respeitando 1 pedido por remetente por instância e as demais regras já
-  implementadas).
-- Emoji rápido tem caminho PRÓPRIO, resolvendo o portão de produto que
-  esta sprint tinha registrado: COM match, vai pelo mesmo caminho de
-  comentário (chat); SEM match, vira CURTIDA (reusa `likeMomento`) em vez
-  de virar pedido — evita que um toque de 1 emoji gaste o único pedido
-  permitido por remetente/instância do momento.
 - A barra convive com os gestos da S143-A/S141: campo focado pausa o
   timer de auto-avanço (`replyBarFocused` entrou no `anyOverlayVisible`,
   mesmo padrão de `reportVisible`/`likersVisible`) e não conflita com
   toque-nos-lados.
 - `MomentoCommentModal` foi REMOVIDO por completo (arquivo deletado) — a
   barra substitui o modal, sem dois caminhos de envio convivendo.
-- Débito de `blockedBy` quitado: a recon encontrou que NENHUM dos dois
-  caminhos filtrava bloqueio (a premissa original desta sprint, de que o
-  caminho sem match já filtrava, estava desatualizada) — checagem de
-  `blockedUsers` client-side adicionada nos dois caminhos
-  (`momentoRequestService.ts`), mais uma condição nova em
-  `firestore.rules` (`momentoRequests/{requestId}` `allow create`) pro
-  caminho sem match, que não tinha nenhuma barreira server-side antes.
+- Débito de `blockedBy` quitado: checagem de `blockedUsers` client-side em
+  `momentoRequestService.ts`, mais uma condição em `firestore.rules`
+  (`momentoRequests/{requestId}` `allow create`).
+
+**REVOGADO em 25/08/2026** (desenho original desta sprint, substituído pela
+revisão abaixo): chip/texto/emoji roteavam por MATCH — com match, mensagem
+normal em `matches/{matchId}/messages` com `momentoRef`; sem match, pedido
+(`momentoRequests`). O emoji sozinho tinha um terceiro ramo (opção "c" do
+portão de produto): sem match, virava CURTIDA em vez de pedido. Esse
+desenho nunca chegou a passar no teste de aparelho (bugs de
+permission-denied e de roteamento ficaram abertos — ver
+`docs/sprints/ESTADO.md`) e foi revogado por decisão de produto antes de
+ser corrigido, não por ter sido corrigido e trocado depois.
+
+**Decisões NOVAS (revisão pós-teste de aparelho, Raphael, 25/08/2026):**
+- Responder a um Momento é INDEPENDENTE de match, curtida ou qualquer
+  outro estado entre as duas pessoas — nenhuma consulta de match no fluxo
+  de resposta (`sendMomentoComment`, `momentoRequestService.ts`, não chama
+  mais `findMatchWithUser`).
+- Emoji, chip e texto livre são TODOS mensagens, pelo MESMO caminho: o
+  pedido de Momento da S143-B (`momentoRequests`) — sem exceção, sem ramo
+  de curtida no emoji. Curtida continua existindo só no botão de coração
+  (`handleToggleLike`), sem nenhuma relação com o envio de mensagem.
+- A conversa só aparece na aba Conversas quando o AUTOR do Momento
+  responde ao pedido (`status` vira `'answered'`). Antes disso, o
+  remetente vê "Pedido enviado" e o autor vê o pedido pendente na tela de
+  pedidos (fluxo já existente da S143-B, intocado).
+- Pessoas COM match que conversam via Momento têm uma conversa SEPARADA
+  do chat do match — nunca escreve em `matches/{matchId}/messages`, nem
+  mistura na mesma thread. A aba Conversas (`MatchesScreen.tsx`) passou a
+  mesclar conversas de match + conversas de Momento respondidas
+  (`useAnsweredMomentoRequests.ts`) numa lista só, ordenada pela última
+  mensagem, com etiqueta visual "via Momento" nas linhas de Momento —
+  pedidos `pending` NÃO aparecem nessa lista. A tela da conversa reusa a
+  `MomentoRequestChatScreen` já existente (S143-B), sem tela nova.
+- Limite mantido (decisão 3 da S143-B, sem mudança): 1 mensagem por
+  remetente por instância do Momento enquanto o pedido está pendente — 2º
+  toque (chip ou emoji) mostra "Você já enviou uma mensagem para este
+  momento", nunca duplica nem dá erro cru. Depois de respondido, mensagens
+  livres na conversa (thread `momentoRequests/{requestId}/messages`).
+- `firestore.rules` (`momentoRequests/{requestId}`, bloco inteiro)
+  endurecido defensivamente contra a classe de bug "resource == null /
+  get() em doc ausente lança erro em vez de negar": `allow read` já tinha
+  `resource != null` (correção anterior); ganhou também `exists()` antes
+  do `get()` de `blockedUsers` no `allow create`, e a subcoleção
+  `messages` ganhou `momentoRequestExists(requestId)` antes de qualquer
+  `getMomentoRequest(requestId)`. Suspeito vivo do permission-denied do
+  teste de aparelho, ainda sem causa confirmada — instrumentação
+  TEMP-DIAG S143-C segue no código até o teste passar.
 
 **Notas:**
 - Débito que FICA de fora (segue registrado): curtidas coladas quando o
@@ -966,15 +1000,25 @@ S143-B já deixou pendente acima (curtir/comentar momento, deploy de
   aprovados + campo "Enviar mensagem..." + 3 emojis fixos (👍😂❤️); abrir o
   PRÓPRIO momento: a barra não aparece (nem o botão de comentário antigo,
   removido nesta sprint).
-- S143-C — tocar um chip ou enviar o campo de texto: COM match existente, a
-  mensagem chega na conversa normal (chat) com a referência (`momentoRef`)
-  ao momento; SEM match, gera/reusa um pedido (mesmo comportamento da
-  S143-B, "Meus pedidos").
-- S143-C — tocar um emoji rápido: COM match, vira mensagem de chat (mesmo
-  caminho do chip, decisão 3); SEM match, vira CURTIDA (coração do footer
-  preenche), SEM criar pedido nem gastar o único pedido permitido por
-  remetente/instância do momento (decisão 4) — conferir que um segundo
-  toque no emoji com o coração já cheio é no-op (não duplica, não dá erro).
+- S143-C (revisão pós-teste de aparelho) — tocar um chip, enviar o campo
+  de texto OU tocar um emoji rápido: os TRÊS viram pedido de Momento
+  (`momentoRequests`), sempre, independente de match — nenhum vira
+  mensagem direta em `matches/{matchId}/messages`, nenhum vira curtida.
+  Coração do footer não reage a nenhum dos três, só ao próprio botão de
+  coração (`handleToggleLike`). Confirma "Pedido enviado" no 1º toque.
+- S143-C (revisão pós-teste de aparelho) — 2º toque (chip OU emoji) sobre
+  a MESMA instância do Momento com pedido ainda pendente: mostra "Pedido
+  já enviado" / "Você já enviou uma mensagem para este momento", não
+  duplica, não dá erro cru.
+- S143-C (revisão pós-teste de aparelho) — em outra conta, o AUTOR do
+  Momento responde o pedido (tela de pedidos, "Meus pedidos"): confirma
+  que SÓ a partir daí a conversa aparece na aba Conversas dos DOIS lados,
+  com etiqueta "via Momento", ordenada junto das conversas de match pela
+  última mensagem — pedido ainda `pending` NÃO aparece na aba Conversas.
+  Se as duas contas TÊM match, confirma que a conversa via Momento fica
+  SEPARADA do chat do match (duas linhas distintas na lista, não mistura).
+  Tocar a linha "via Momento" abre a `MomentoRequestChatScreen` (thread
+  isolada, reusada da S143-B).
 - S143-C — focar o campo de texto da barra: o timer de auto-avanço PAUSA
   (barra de progresso para de encher) e retoma ao desfocar, mesmo padrão do
   ReportModal/LikersModal (S141/S143-B).
@@ -983,9 +1027,14 @@ S143-B já deixou pendente acima (curtir/comentar momento, deploy de
   sem quebrar o toque nos lados (S143-A) nem o pause/resume por toque
   longo.
 - S143-C — enviar chip/texto/emoji com bloqueio ativo entre as duas contas
-  (client bloqueou o autor, OU o autor bloqueou o client, nos dois
-  caminhos — com match e sem match): a UI mostra "Não é possível enviar —
-  bloqueio ativo entre vocês." em vez de um erro cru de permissão negada.
+  (client bloqueou o autor, OU o autor bloqueou o client): a UI mostra
+  "Não é possível enviar — bloqueio ativo entre vocês." em vez de um erro
+  cru de permissão negada.
+- S143-C (permission-denied ainda aberto) — se "Missing or insufficient
+  permissions" aparecer de novo em qualquer um dos toques acima, copiar o
+  log `[TEMP-DIAG S143-C]` do Metro/Expo Go (path completo, chaves do
+  payload, `err.code`/`err.message`) — instrumentação ainda ativa no
+  código pra esta rodada de diagnóstico.
 
 **Espera o build 15:**
 
