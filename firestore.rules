@@ -110,10 +110,162 @@
 // writeBatch [memberCount vindo de parâmetro carregado na tela, podia
 // desatualizar] pra runTransaction [memberCount lido FRESCO de dentro da
 // própria transação])
-// Histórico anterior a S135 (S135 até S-Matrícula): ver ARQUITETURA.md, seção "Histórico do rules-stamp".
+// + S135 (23/08/2026 — nome real vira PRIVADO de verdade
+// (rules-level, não só escondido da UI): users/{uid} perde o campo `name`
+// [público, causava truncamento em card/cabeçalho — S134] e ganha
+// `nickname` [público, "como quer ser chamado", SEM trava de imutabilidade
+// — editável sempre, mesmo depois de verificado]; nome real migra pro novo
+// subdocumento users/{uid}/private/legalName [allow read: isOwner||isAdmin,
+// mesmo molde de private/registration], carregando a trava de imutabilidade
+// pós-verificação que antes vivia em `name` (S76-B1, removida daqui — ver
+// comentário no lugar de onde saiu). isValidProfile: `name` deixa de ser
+// exigido incondicionalmente, `nickname` entra como opcional [molde
+// gender/uf/vale] — só obrigatório no allow create [molde lookingFor/uf/
+// vale], nunca em isValidProfile, porque essa função roda no update também
+// e uma conta legada sem nickname ainda [janela até o script de migração
+// manual, functions/scripts/migrateNicknames.js, rodar] ficaria impedida
+// de salvar qualquer edição de perfil se nickname virasse obrigatório ali)
+// + S129-B (23/08/2026 — terceiro tique estilo WhatsApp
+// ("entregue"): novo campo deliveredAt em matches/{matchId}, mesmo padrão
+// de lastReadAt (S27/S86) — mapa por uid, cada participante só escreve a
+// própria chave, valor tem que ser timestamp) + S127 (23/08/2026 — Marcos e selos: nova collection
+// users/{uid}/achievements/{achievementId} [id firstMatch|profileComplete|
+// tenDaysInApp, doc {unlockedAt}], create-only e write EXCLUSIVO de Cloud
+// Function via Admin SDK — allow read restrito ao dono, allow write: if
+// false pra todo mundo, inclusive o próprio dono; matchesCount [novo campo
+// em users/{uid}] de propósito NÃO entra em hasOnly nenhum de create/update,
+// mesmo tratamento já dado a founderNumber/pollCounts, só Admin SDK escreve)
+// + S128 (22/08/2026 — Super Curtida diária: novo doc
+// users/{uid}/superLikes/dailyGrant [irmão do superLikes/usage, campos
+// {year,month,day} UTC, sem contador — create/update só grava a data de
+// hoje, e só quando o valor anterior do doc, se existir, é de outro dia];
+// swipes/{swipeId} allow create, ramo direction=='superlike', passa a ser
+// um OR de dois ramos [verified continua a PRIMEIRA condição, FORA do OR]:
+// Ramo A consome o dailyGrant do dia via getAfter/exists/get [mesmo padrão
+// do usage], Ramo B é a validação mensal já existente, cópia idêntica, sem
+// nenhuma mudança de lógica) + S128-fix (22/08/2026 — correção pós-auditoria:
+// Ramo A ganhou existsAfter(dailyGrant) como PRIMEIRA condição, curto-
+// circuito antes de qualquer getAfter(dailyGrant).data.*, porque getAfter()
+// de doc inexistente lança erro e negava a allow create INTEIRA [não só o
+// ramo] pra client pré-S128 que nunca escreve dailyGrant no batch) + S123 (22/08/2026 — nova collection users/{ownerUid}/photoLikes/
+// {likeId}, curtir foto pós-match [MatchProfileScreen, !isPreview]: likeId
+// determinístico `${likerUid}_${encodeURIComponent(photoUrl)}`, toggle via
+// create/delete diretos (nunca update — allow update: if false). allow read
+// aberto a isSignedIn(), igual match /users/{userId} — curtida de foto não é
+// anônima (revela quem curtiu, mas sem lista de curtidores nesta sprint, só
+// contador no client). create exige likerUid == request.auth.uid, likerUid
+// != ownerUid, hasOnly(['photoUrl','likerUid','createdAt']), createdAt ==
+// request.time, e valida photoUrl contra o array `photos` do dono via
+// get() — só é possível curtir uma foto que de fato está no perfil.
+// delete exige resource.data.likerUid == request.auth.uid.) + S121 (22/08/2026 — nova collection raiz momentos/{uid} [doc ID
+// == uid do autor, story de 24h, audiência é a base inteira]: allow read exige
+// expiresAt > request.time [doc expirado fica ilegível antes mesmo da function
+// de limpeza rodar]; create/update exige dono, type in ['text','photo'],
+// createdAt == request.time, expiresAt numa janela de 23h-25h a partir de
+// request.time, texto OU foto mutuamente exclusivos; allow delete só do dono.
+// reports/{reportId} ganha 3 campos opcionais novos — momentoId, momentoText
+// [<=400] e momentoPhotoUrl — no create, mesmo molde de matchId/messageId/
+// messageText/messageImageUrl da S102-C, liberando denúncia de um momento
+// específico reusando a mesma coleção/fila) + S102-C (21/08/2026 — reports/{reportId} ganha campos
+// opcionais matchId, messageId, messageText [snapshot truncado, <=400] e
+// messageImageUrl no create, liberando denúncia de mensagem específica do
+// chat, reusa a mesma coleção/fila da S96) + S126 (21/08/2026 — Enquete no perfil: users/{userId} ganha
+// campo `poll`, mapa {question, options} opcional, validado em
+// isValidProfile e liberado só no hasOnly do UPDATE — cadastro nunca nasce
+// com enquete; `pollCounts` de propósito NÃO entra em hasOnly nenhum, só
+// Admin SDK escreve; nova collection users/{ownerUid}/pollVotes/{voterUid},
+// create-only, allow read restrito ao próprio votante — dono nunca lê quem
+// votou o quê) + S120 (isValidProfile: teto de data.photos passa de <=6 pra
+// <=4, alinhando com MAX_PROFILE_PHOTOS do client em firestoreService.ts —
+// só o número mudou, hasOnly de create/update de users/{userId} continuam
+// intactos, `photos` já estava nas duas listas antes desta sprint) + S116
+// (nova collection testerSignups — captação de testadores
+// pela landing: allow create público (sem auth) restrito a exatamente 3
+// campos via hasOnly+hasAll — email (string, 5<len<=200, regex simples),
+// createdAt (== request.time) e source (== 'site'); allow read/update/delete
+// bloqueado pra todo mundo, leitura é só via Console/Admin SDK, que ignora
+// rules; cada `match` é isolado — testerSignups não herda nada do
+// catch-all {document=**}=>false no fim do arquivo, só cobre esse; nenhuma
+// regra existente foi tocada) + S115 (segundo uid admin — isAdmin() passa a aceitar 2 uids via
+// `in [...]`, mesma sintaxe já usada em `status in [...]` mais abaixo; regra
+// de create de matches/{matchId} ganha 2ª cláusula !('uid2' in ...users)
+// cobrindo o admin novo, ao lado da já existente do admin original) + S113
+// (reports/{reportId}/messages e support/{ticketId}/messages
+// ganham campo imageUrl opcional, mesmo molde de matches/{matchId}/messages:
+// string quando presente, entra no hasOnly do create; text deixa de exigir
+// tamanho mínimo — vazio só é aceito quando há imageUrl, guarda de "texto OU
+// foto" via `text.size() > 0 || 'imageUrl' in request.resource.data`; guarda
+// de abuso .matches('.*\\S.*') contra string só-espaço passa a só se aplicar
+// quando text não está vazio) + S109 (users/{userId} ganha campo aboutHidden, array de
+// AboutFieldId opcional — visibilidade por campo do `about`: isValidProfile
+// exige só data.aboutHidden is list && data.aboutHidden.size() <= 30, molde
+// exato da cláusula de `about` logo abaixo, inserida ao lado dela; entra no
+// hasOnly do UPDATE apenas, fora do create — conta nova nasce sem nada
+// escondido, ou seja, tudo visível por default) + S104 (users/{userId} ganha campo about, mapa livre — piloto
+// do perfil estruturado: isValidProfile exige só data.about is map &&
+// data.about.keys().size() <= 30, as chaves de DENTRO do mapa não são
+// validadas — deliberado, pra que um campo novo no catálogo do client
+// (src/constants/profileAbout.ts) não exija mexer nas rules nem fazer
+// deploy; entra no hasOnly do UPDATE apenas, fora do create — conta nova
+// nasce sem o campo; molde exato da cláusula de filters logo acima, só
+// com teto de chaves a mais) + S97 (users/{userId} update ganha campo paused, bool opcional
+// — "pausar perfil"/modo invisível: entra no diff().affectedKeys().hasOnly()
+// ao lado de reengagementOptOut; isValidProfile valida SÓ quando presente
+// (data.paused is bool); NÃO entra no hasOnly do create — conta nova nasce
+// sem o campo, ou seja, despausada por default; é filtro de VISIBILIDADE no
+// client (getDiscoverProfiles/useLikers/useMyLikes), não fronteira de
+// leitura — rules não ganham guarda nova, o doc continua lido por qualquer
+// isSignedIn() como hoje, senão quebraria matches/conversas existentes) +
+// S96-A (reports/{reportId} deixa de ser só de ida: allow read
+// isAdmin()||reporterId==auth.uid (denunciado nunca lê); create aceita
+// status ausente — compat com build antigo do reportUser em campo, que
+// ainda não manda o campo — ou 'open', nunca já 'resolved'; allow update
+// restrito a isAdmin(), só trocando status entre 'open'/'resolved' via
+// diff().affectedKeys().hasOnly(['status']); nova subcoleção
+// reports/{reportId}/messages espelhando support/{ticketId}/messages, com
+// reporterId no lugar do uid do ticket) + S92+S76-B2 (users/{userId} update: birthDate vira IMUTÁVEL a
+// partir da aprovação da verificação, mesmo gatilho get('verified', false)
+// != true do nome — 3 ramos: não verificado livre, verificado sem
+// birthDate libera a 1ª gravação, verificado com birthDate exige valor
+// idêntico; `age` NÃO trava, continua livre pra reconciliar via
+// getDisplayAge no save do client) + S76-B1 (users/{userId} update: nome vira IMUTÁVEL a partir da
+// aprovação da verificação — resource.data.get('verified', false) != true ||
+// request.resource.data.name == resource.data.name, inserido logo após a
+// guarda write-once do vale) + S92 (matches/{matchId}/messages/{messageId} ganha segundo ramo de
+// update pra editar texto — mesma janela de 1h de createdAt, sem lapide,
+// sem foto/localizacao, text editável com truncamento, editedAt obrigatório
+// com serverTimestamp) + S85-B (matches/{matchId}/messages/{messageId} ganha update:
+// "apagar pros dois" vira lápide, nunca deleta o doc — só o próprio
+// senderId, só dentro de 1h de createdAt (duration.value), só uma vez
+// (!('deletedAt' in resource.data)), hasOnly(['senderId','createdAt',
+// 'deletedAt']) derruba text/imageUrl/location/replyTo por construção,
+// senderId e createdAt preservados, deletedAt == request.time; allow delete
+// continua false, separado) + S85-A (matches/{matchId}/hidden/{uid} nova: "apagar pra mim",
+// doc por usuário com messageIds (list) das mensagens escondidas na própria
+// tela — client-side only, não afeta o doc da mensagem nem o outro
+// participante; create/update restrito ao dono, hasOnly(['messageIds']);
+// delete negado por quebrar hasOnly sobre request.resource nulo; messages/
+// {messageId} intocado, allow update, delete: if false segue igual) + S83-A (users/{userId} ganha campo vale, enum ['BB', 'CAIXA',
+// 'BRB']: obrigatório no create, dentro do enum; no update, gravável UMA VEZ
+// só — campo ausente nos dois é ok, campo já existente não pode mudar de
+// valor, campo ausente antes e presente agora precisa estar no enum; entra
+// no hasOnly de create e update) + S76-A (birthDate opcional em users/{userId}: entra no hasOnly
+// de create e update; isValidProfile valida SÓ quando presente — is
+// timestamp e idade aproximada entre 18 e 101 anos via duration.value(),
+// checagem exata mora no client; age continua obrigatório e sem trava,
+// segue derivado de birthDate no cadastro; nenhum campo removido) + S80-A
+// (matches/{matchId}/reactions/{messageId} nova: reação de
+// emoji por mensagem, chave = uid de quem reagiu, valor = emoji — mesmo
+// padrão de guarda por diff de 3 ramos do typing (S79-C1): chave do próprio
+// uid inalterada, ausente no resultado (remoção via deleteField, usada pelo
+// S80-B) ou presente com valor na lista fixa de 6 emoji; create+update
+// juntos pois o doc pode não existir na 1ª reação, mesmo padrão do presence
+// (S79-C2-A); delete negado; lista de emoji precisa ficar em sincronia com
+// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) + S-Matricula (troca "Chave F" pra "Matrícula", regex ^F\d{7}$ pra ^[A-Z]?\d{1,7}$ — F+7 continua casando, sem migração) — 2026-08-03
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
+// firestore.rules — última alteração: S104 (2026-08-06)
 // Regras de PRODUÇÃO — deny by default: toda collection sem regra explícita é bloqueada
 // (ver o "catch-all" no final do arquivo).
 //
