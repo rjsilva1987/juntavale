@@ -583,7 +583,23 @@ Expo Go. A recon deve dizer se o problema é do ChatScreen ou do app inteiro
 antes de qualquer correção.
 
 ### S143-A — Momento: navegar por toque nos lados
-**Status:** ABERTA · decisões tomadas · sem recon · ajuste da S121, DEPOIS da S141
+**Status:** IMPLEMENTADA em 25/08/2026, APROVADA na 3ª auditoria (2 rodadas
+de correção). Client puro, sem função nova nem alteração de `firestore.rules`
+— nenhum deploy necessário. SEM teste em aparelho. Histórico: a 1ª
+implementação foi bloqueada porque `Gesture.Tap().maxDuration(250)` tem
+timer nativo que falha o reconhecedor sozinho ~250ms após o toque começar
+(dedo ainda na tela) e dispara `onFinalize` nesse timeout, não no release
+real; corrigida trocando por
+`Gesture.Simultaneous(Gesture.LongPress().minDuration(0).maxDistance(100000), Gesture.Tap())`
+em `MomentoViewerModal.tsx`. A 2ª rodada foi bloqueada de novo por dois
+gaps no mesmo arquivo: `GestureDetector` dentro do `<Modal>` sem
+`GestureHandlerRootView` aninhado (corrigido com um `GestureHandlerRootView`
+próprio dentro do `Modal`, mesmo motivo do `SafeAreaProvider` aninhado da
+S141) e `pauseResumeGesture` sem `.maxDistance(...)`, herdando o default
+nativo (~10dp/10pt) e cancelando sozinho por tremor de mão num toque longo.
+A 3ª auditoria aprovou sem ressalva bloqueante — só uma ressalva de runtime
+não verificável estaticamente, ver "Testes pendentes" abaixo · ajuste da
+S121, DEPOIS da S141
 
 Modelo dos stories do Instagram: tocar na METADE ESQUERDA da tela volta um
 momento, tocar na METADE DIREITA avança um. Client puro, sem servidor.
@@ -841,6 +857,26 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   "Criador" ao lado; no chat de grupo (`GroupChatScreen`), o mesmo selo
   aparece ao lado do nome só nas mensagens do CRIADOR, nunca nas de outro
   membro.
+- S143-A — abrir um momento (próprio ou de terceiro) e tocar na METADE
+  ESQUERDA da área de conteúdo (texto ou foto): volta um momento na fila;
+  tocar na METADE DIREITA: avança um. Conferir os dois lados com momento de
+  texto e com momento de foto.
+- S143-A — voltar estando no PRIMEIRO momento da fila é no-op: não fecha o
+  modal, não trava, não dá erro (mesmo comportamento de
+  `PhotoCarousel.goToPrevious` nas pontas).
+- S143-A — avançar estando no ÚLTIMO momento continua fechando o modal
+  (regra da S141, não pode ter regredido).
+- S143-A — segurar o dedo (toque longo) na área de conteúdo continua só
+  PAUSANDO a barra de progresso, sem navegar; soltar depois de um toque
+  longo retoma a barra do ponto exato, sem pular pro item anterior/seguinte.
+- S143-A — toque curto no botão do cabeçalho (X, denunciar/lixeira) continua
+  funcionando normalmente e não deve disparar navegação do conteúdo por
+  trás.
+- S143-A — ressalva da 3ª auditoria (não bloqueou, é runtime, não decidível
+  só lendo código): tocar rápido e repetido nos dois lados do conteúdo, pra
+  confirmar que não há avanço/retrocesso duplo por corrida entre o
+  `resumeTimer()` do toque anterior e o `useEffect([momento?.id])` disparado
+  pela navegação em si.
 - S139 — **depois que Raphael fizer o deploy das rules corrigidas**: com a
   conta A publicando um momento ativo, abrir a aba de Momentos com a conta
   B e conferir que o momento de A aparece (sem `permission-denied` no
@@ -1054,6 +1090,32 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   `<Modal>` precisa de um `<SafeAreaProvider>` PRÓPRIO, aninhado dentro do
   próprio `Modal`, envolvendo esse `SafeAreaView`. Vale para qualquer
   `Modal` novo que precise respeitar safe area, não só o de Momentos.
+- **`GestureDetector` dentro de `<Modal>` nativo não herda o
+  `GestureHandlerRootView` de topo — pelo MESMO motivo do bullet acima.**
+  Descoberto na S143-A (rodada 2) no `MomentoViewerModal`: a raiz nativa
+  do `<Modal>` (`ReactModalHostView.DialogRootViewGroup` no Android) não é
+  descendente do `RNGestureHandlerRootView` de `App.tsx`, então
+  `hasGestureHandlerEnabledRootView`
+  (`node_modules/react-native-gesture-handler/android/.../
+  RNGestureHandlerRootView.kt`) sobe a árvore de pais, encontra a raiz
+  genérica do `Modal` primeiro e retorna `false` — qualquer
+  `GestureDetector` dentro do `Modal` fica sem efeito. Fix: todo
+  `GestureDetector` usado DENTRO de um `<Modal>` precisa de um
+  `<GestureHandlerRootView style={{ flex: 1 }}>` PRÓPRIO, aninhado dentro
+  do próprio `Modal` (pode envolver o `SafeAreaProvider` já exigido pelo
+  bullet acima). Vale para qualquer `Modal` novo que use gestos, não só o
+  de Momentos.
+- **`Gesture.LongPress()` sem `.maxDistance(...)` cancela sozinho por
+  tremor de mão em toques longos.** Descoberto na S143-A (rodada 2): o
+  default nativo de deslocamento máximo é só ~10dp (Android,
+  `DEFAULT_MAX_DIST_DP` em `LongPressGestureHandler.kt`) / ~10pt (iOS,
+  `allowableMovement` em `RNLongPressHandler.m`). Num toque longo de
+  vários segundos (ex.: segurar pra pausar um timer), o tremor natural da
+  mão ultrapassa esse limite e cancela o reconhecedor sozinho —
+  `onFinalize` dispara com o dedo ainda na tela, como se o usuário
+  tivesse soltado. Se a área do `LongPress` não competir com nenhum gesto
+  de arraste/scroll, usar um `.maxDistance(...)` bem generoso (ex.:
+  `100000`) pra nunca cancelar por deslocamento.
 
 ## Baseline técnica
 

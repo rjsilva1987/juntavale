@@ -136,6 +136,13 @@ export default function MomentosScreen() {
     setViewerIndex(nextIndex);
   };
 
+  // S143-A — espelha advanceViewer, mas pra trás. Início da fila é no-op
+  // (não fecha o modal), mesmo precedente de PhotoCarousel.goToPrevious.
+  const retreatViewer = () => {
+    if (viewerIndex <= 0) return;
+    setViewerIndex(viewerIndex - 1);
+  };
+
   const handleDeleteOwn = () => {
     if (!user || !myMomento) return;
     Alert.alert('Apagar momento', 'Tem certeza que quer apagar seu momento?', [
@@ -270,6 +277,7 @@ export default function MomentosScreen() {
         isOwnMomento={viewerIsOwn}
         onDeleteOwn={viewerIsOwn ? handleDeleteOwn : undefined}
         onAdvance={advanceViewer}
+        onRetreat={retreatViewer}
       />
     </Animated.View>
   );

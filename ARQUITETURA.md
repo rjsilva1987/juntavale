@@ -147,3 +147,44 @@ circulava no ROADMAP.md).
    não seja exatamente `+1` ou `-1` sobre o valor atual, com
    `affectedKeys().hasOnly(['memberCount'])`; quem copiar este molde
    precisa repetir essa restrição na rule.
+7. **Navegação por toque nos lados (S123/S143-A)** — metade esquerda da
+   área tocável volta um item, metade direita avança um, no modelo dos
+   stories do Instagram. Molde já usado em `PhotoCarousel.tsx`
+   (`goToPrevious`/`goToNext`, no-op nas pontas, não fecha nem erra) e em
+   `MatchProfileScreen.tsx`/`SwipeScreen.tsx` via
+   `react-native-gesture-handler`: `Gesture.Tap().maxDuration(250).maxDistance(10)`,
+   comparando `x` (do evento) contra a metade da largura medida via
+   `onLayout`. A S143-A estendeu esse molde pro `MomentoViewerModal.tsx`,
+   onde o tap curto precisa conviver com pausa por toque longo do timer de
+   5s. AQUI NÃO dá pra usar um único `Gesture.Tap` com `onTouchesDown`/
+   `onEnd`/`onFinalize` fazendo pausa+navegação ao mesmo tempo (tentativa
+   original da S143-A, corrigida em auditoria): `maxDuration(250)` do
+   `Gesture.Tap` é um timer NATIVO que falha (`FAILED`) o reconhecedor
+   sozinho ~250ms após o toque começar, mesmo com o dedo ainda na tela, e
+   essa transição pra `FAILED` já dispara `onFinalize(event, false)`
+   sozinha, na hora do timeout — não na hora do dedo soltar de verdade
+   (`node_modules/react-native-gesture-handler/src/handlers/gestures/
+   eventReceiver.ts`). Num toque longo isso resumia o timer aos ~250ms com
+   o dedo ainda pressionado. A correção usa DOIS reconhecedores compostos
+   via `Gesture.Simultaneous` (mesmo padrão de composição de
+   `SwipeScreen.tsx`/`MatchProfileScreen.tsx`, mas aqui sem `PagerView`
+   concorrente — não é por causa dele): `Gesture.LongPress().minDuration(0)`
+   pausa no `onStart` (ativa na hora, sem timer, porque `minDurationMs == 0`
+   pula o `postDelayed`) e retoma no `onFinalize`, que só dispara no
+   `ACTION_UP` real (`.../LongPressGestureHandler.kt`); um
+   `Gesture.Tap().maxDuration(250).maxDistance(10)` separado só decide a
+   navegação no `onEnd`, igual ao molde original.
+   **Rodada 2 de correção (mesma sprint) bloqueou por mais dois gaps, os
+   dois só em `MomentoViewerModal.tsx`:** (a) `GestureDetector` dentro de
+   `<Modal>` precisa de um `GestureHandlerRootView` PRÓPRIO aninhado
+   dentro do `Modal` — pelo MESMO motivo do `SafeAreaProvider` aninhado
+   (ver "Padrões de UI que valem para o projeto inteiro" no
+   `ROADMAP.md`): a raiz nativa do `Modal` não é descendente do
+   `RNGestureHandlerRootView` de `App.tsx`, então
+   `hasGestureHandlerEnabledRootView` (`.../RNGestureHandlerRootView.kt`)
+   sobe a árvore, acha a raiz genérica do `Modal` primeiro e retorna
+   `false`; (b) `Gesture.LongPress()` sem `.maxDistance(...)` herda o
+   default nativo (~10dp/10pt) e cancela sozinho por tremor de mão num
+   toque longo de vários segundos — corrigido com
+   `.maxDistance(100000)` em `pauseResumeGesture`, já que esta área não
+   compete com nenhum gesto de arraste/scroll.
