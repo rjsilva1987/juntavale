@@ -5,24 +5,19 @@ description: Ciclo de sprint do JuntaVale e formato de relatorio. Use em toda ro
 
 # Ciclo de sprint
 
-recon (so leitura) -> implementacao -> auditoria -> commit/push/deploy pelo
-Raphael -> teste em device. Uma sprint por sessao.
+recon (so leitura, so na trilha completa) -> implementacao -> auditoria ->
+commit/push/deploy pelo Raphael -> teste em device. Uma sprint por sessao.
 
 Quem escreve o codigo nao e quem aprova. A auditoria existe pra achar o que
 o implementador nao viu; se ela so confirmar o proprio trabalho, perdeu a
 funcao.
 
-# Regras inegociaveis
-
-- O Claude Code NUNCA roda git de escrita (add/commit/push) nem
-  firebase deploy nem eas build. Isso e sempre do Raphael.
-- Decisao de produto nao e do Claude Code. Na duvida, PARE e pergunte.
-- Prova de escrita obrigatoria: nada de "confirmado acima" sem a saida
-  bruta do terminal.
-- Nao rodar eslint --fix em arquivo inteiro (reformata linha alheia ao
-  escopo da sprint).
-- Carimbo de versao no topo do firestore.rules a cada sprint que mexer em
-  rules — e ele que forca o upload no deploy.
+Regras de pipeline (git/deploy proibidos, recon so-leitura, prova de
+escrita, relatorio enxuto, auditoria adversarial, saida final): Regras
+invariantes do CLAUDE.md, itens 1-6. Baseline de tsc/lint: secao
+"Baseline de tsc/lint" do mesmo arquivo. Carimbo de versao no topo do
+firestore.rules a cada sprint que mexer em rules continua valendo (ver
+CLAUDE.md, "Processo").
 
 # FORMATO DE RELATORIO
 
@@ -38,7 +33,8 @@ Ele existe pra provar o que foi feito, nao pra reapresentar o codigo.
 5. Nao repita no relatorio codigo que ja apareceu antes na mesma rodada.
    Referencie ("mesmo trecho do item 2").
 6. Validacoes: cole a linha de resultado e o exit code. A saida completa do
-   eslint so quando divergir da baseline — se bater 0/25, uma linha basta.
+   eslint so quando divergir da baseline da sessao — se bater dentro dela,
+   uma linha basta.
 7. Comparacoes vao em tabela, nao em prosa.
 8. Achados: uma linha por achado, com a evidencia minima que o prova.
 9. Se um passo pedido exigir colar mais de ~80 linhas, PARE antes e

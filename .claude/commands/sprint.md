@@ -22,9 +22,8 @@ ANTES DE QUALQUER OUTRA COISA, pergunte ao Raphael via AskUserQuestion:
 
 Valem no AUTOMATICO, sem excecao — o modo automatico decide o COMO, nunca
 o O QUE:
-- Nenhum comando git de escrita (add/commit/push) — so imprime, nunca
-  executa (regra da Fase 6, vale nos dois modos).
-- Nenhum deploy de rules ou de functions.
+- Nenhum comando git de escrita nem deploy — so imprime, nunca executa
+  (Regras invariantes do CLAUDE.md, item 2, vale nos dois modos).
 - Se um portao for sobre ABRIR UMA FRENTE NOVA de produto — uma feature
   sem nenhuma decisao ja tomada no ROADMAP.md (ex.: grupos, eventos) —
   PARE e pergunte mesmo no automatico. Automatico nunca decide "o que"
@@ -32,7 +31,25 @@ o O QUE:
 
 Guarde o modo escolhido: ele vale para a sprint inteira, Fase 1 a 6.
 
+## Fase 0-B — Trilha
+
+Classifique a sprint ANTES de decidir se delega ao `jv-recon`:
+- **Trilha P** (pequena): mudanca estimada ate ~15 linhas, sem tocar
+  `firestore.rules`, sem Cloud Function nova ou alterada, sem fluxo de
+  dados novo. PULA a Fase 1 (`jv-recon`) e vai direto pra Fase 2 com o
+  que ja se sabe do pedido. `jv-implementa` e `jv-audita` continuam
+  normais — a auditoria segue adversarial do mesmo jeito.
+- **Trilha completa**: qualquer coisa que nao se encaixe acima. Segue a
+  Fase 1 normalmente.
+
+- MANUAL: proponha a trilha escolhida e espere confirmacao do Raphael
+  antes de seguir.
+- AUTOMATICO: decida sozinho; na duvida entre P e completa, suba pra
+  completa e registre a escolha em "Decisoes tomadas no automatico"
+  (Fase 6).
+
 ## Fase 1 — Recon
+SO na trilha completa (ver Fase 0-B) — trilha P pula direto pra Fase 2.
 Delegue ao subagente `jv-recon`. Passe o objetivo e o que precisa ser
 descoberto.
 
@@ -84,6 +101,10 @@ porque o auditor chega no codigo sem saber o que o autor pensou.
   nos dois modos.
 
 ## Fase 6 — Entrega
+Tudo desta fase, do inicio ao fim do bloco de comandos git, vai entre
+`=== COPIAR A PARTIR DAQUI ===` e `=== FIM ===` (Regras invariantes do
+CLAUDE.md, item 6), pra ficar facil de colar em outro lugar.
+
 Primeira linha do relatorio: em qual modo a sprint rodou (AUTOMATICO ou
 MANUAL). Se rodou no AUTOMATICO, inclua logo em seguida a secao "Decisoes
 tomadas no automatico", uma linha por decisao — o que foi escolhido e por
@@ -109,6 +130,13 @@ rodando. Essa reescrita e so uma edicao de arquivo: nao e um commit, nao e
 git de escrita, e nao muda a regra de que o commit e sempre do Raphael —
 ela so entra no `git add` do bloco de comandos abaixo, junto com o resto
 da sprint.
+
+PASSO OBRIGATORIO — ATUALIZAR `docs/sprints/ESTADO.md`: logo depois de
+reescrever o status no ROADMAP.md, atualize o ESTADO.md substituindo as
+linhas que mudaram (sprint que fechou sai de "em andamento", pendencia
+resolvida sai da lista, commit atual atualiza) — nunca acumule, o arquivo
+fica curto (ver "Estado do projeto" no CLAUDE.md). Tambem entra no
+`git add` do bloco abaixo.
 
 Depois imprima os comandos git — e SO isso, voce nunca os executa:
 

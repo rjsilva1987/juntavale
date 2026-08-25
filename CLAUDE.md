@@ -14,8 +14,6 @@
 - Só tokens do theme.ts; nenhuma cor hardcoded.
 
 ## Processo (inegociável)
-- Raphael roda TODOS os git (add/commit/push) e TODOS os firebase deploy.
-  Claude Code NUNCA executa git de escrita nem deploy.
 - firestore.rules: pode editar, NUNCA deployar. Todo diff de rules é
   auditado externamente antes do deploy. Ao editar rules, atualize o
   comentário rules-stamp da linha 1 (sprint + data) — ele força o upload
@@ -23,14 +21,50 @@
 - Decisões de produto NUNCA são tomadas autonomamente: em ambiguidade de
   produto, PARE e pergunte.
 - Sprints numeradas Sxx; 1 sprint = 1 commit sempre que possível.
+- Regras de pipeline (git, deploy, recon, prova de escrita, relatório,
+  auditoria): ver "Regras invariantes do pipeline" abaixo — fonte única,
+  agentes e skills só referenciam por número.
 
-## Relatórios (sem isso, relatório rejeitado)
-- Toda validação com SAÍDA BRUTA de terminal em bloco de código.
-- Nunca escrever "confirmado acima"/"já reproduzido" — tudo literal.
-- Toda função/tipo/componente/constante CRIADO deve constar na lista de
-  alterações.
-- Baseline de lint: 0 erros / 21 warnings (prettier pré-existentes).
-  Qualquer erro novo é regressão.
+## Regras invariantes do pipeline
+1. **Recon é só-leitura.** jv-recon só tem Read/Grep/Glob; nunca edita nem
+   roda Bash de escrita.
+2. **Claude Code nunca roda git de escrita** (add/commit/push/reset/
+   checkout/restore/revert) **nem deploy** (firebase deploy, eas build/
+   submit) — isso é sempre do Raphael.
+3. **Prova de escrita obrigatória** depois de CADA edição: Select-String
+   (ou grep) das linhas-chave alteradas, com `arquivo:linha` e saída
+   bruta, mais `git diff -w <arquivo>`. Nunca escrever "confirmado acima"/
+   "já reproduzido" sem a saída literal. Relatório sem prova é rejeitado.
+4. **Relatório enxuto:** diff por hunk/intervalo de linhas, nunca o
+   arquivo inteiro (exceção: arquivo novo, cola inteiro uma vez só).
+   Validações (tsc/eslint) resumidas à linha de resultado e ao exit code —
+   saída completa só quando divergir da baseline da sessão (ver
+   "Baseline de tsc/lint" abaixo). Toda função/tipo/componente/constante
+   CRIADA entra na lista de alterações. Formato completo do relatório:
+   skill `juntavale-sprint`.
+5. **Auditoria é adversarial:** jv-audita NUNCA lê relatório, raciocínio
+   ou justificativa de quem implementou (arquivos com "implementa",
+   "correcao" ou "relatorio" no nome). Ler o relatório de RECON é
+   permitido — é terreno factual, não autojustificativa.
+6. **Saída final da sprint** (Fase 6 do `/sprint`) vai entre
+   `=== COPIAR A PARTIR DAQUI ===` e `=== FIM ===`.
+
+## Baseline de tsc/lint (relativa à sessão)
+- jv-implementa roda `npx tsc --noEmit` e `npx eslint .` ANTES de editar
+  (baseline da sessão) e DEPOIS de editar.
+- Critério: tsc sai com exit 0; contagem de erros/warnings do eslint fica
+  ≤ baseline medida no início da sessão. Nunca comparar contra um número
+  fixo de sessões passadas — o baseline é sempre o da sessão atual.
+- Proibido `git stash` para isolar mudanças (CRLF quebra no Windows).
+
+## Estado do projeto
+- Agentes leem `docs/sprints/ESTADO.md` por padrão (commit atual, sprints
+  em andamento, pendências vivas, débitos ativos). Relatórios antigos em
+  `docs/sprints/` só entram quando a tarefa tocar naquele terreno
+  específico.
+- Quem fecha uma sprint atualiza o `ESTADO.md` substituindo as linhas que
+  mudaram, nunca acumulando — histórico completo vive no ROADMAP.md e nos
+  relatórios de sprint.
 
 ## Padrões estabelecidos
 - Tela com input fixo no rodapé: SafeAreaView SEM edges (padrão
