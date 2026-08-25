@@ -39,6 +39,7 @@ import {
   listenEvent,
   listenJoinRequests,
   listEventParticipants,
+  markEventParticipationSeen,
   rejectJoinRequest,
   requestToJoinEvent,
 } from '@/services/eventService';
@@ -100,6 +101,16 @@ export default function EventDetailScreen({ route, navigation }: EventDetailScre
 
   const isCreator = !!user && event?.creatorId === user.uid;
   const isApproved = !!participation;
+
+  // S146 — mirror EXATO do efeito de GroupDetailScreen.tsx — badge
+  // "aceite→solicitante": marca o próprio doc de participação como visto
+  // quando o usuário logado é participante NÃO-criador e ainda não tem
+  // `seenAt`.
+  useEffect(() => {
+    if (!user || !participation || isCreator) return;
+    if (participation.seenAt) return;
+    markEventParticipationSeen(eventId, user.uid).catch(() => {});
+  }, [user, participation, isCreator, eventId]);
 
   // Local só é buscado depois de saber que sou criador/participante
   // aprovado — permission-denied é ESPERADO pra quem só vê o evento na

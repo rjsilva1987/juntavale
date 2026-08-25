@@ -855,6 +855,63 @@ deep link/notificação existente.
 
 ---
 
+### S146 — Badges in-app (dot vermelho) de pedidos e aprovações no Explorar
+**Status:** IMPLEMENTADA e AUDITADA — aprovada sem ressalvas bloqueantes
+(25/08/2026) · trilha completa · mexe em `firestore.rules` (3 regras de
+`allow update` — `groups/.../members`, `events/.../participants`,
+`momentoRequests` — NÃO deployadas, aguardando deploy do Raphael) ·
+nenhuma Cloud Function tocada (push já existia, S124-A/S125/S143-B) ·
+client puro fora das rules, sem deploy adicional exigido · SEM teste em
+aparelho
+
+Escopo definido por Raphael (25/08/2026, modo automático): push já cobre as
+4 direções de grupos/eventos e 2 de momentos (`functions/src/grupos.ts`/
+`eventos.ts`/`momentos.ts`, intocadas nesta sprint), mas o badge IN-APP só
+existia pra momentos (S145, `usePendingMomentoRequests`). Esta sprint
+estende o badge "solicitação→dono" pra grupos/eventos (mirror do padrão
+S145) e cria do zero o badge "aceite→solicitante" nas 3 frentes — 100%
+inexistente antes.
+
+**O que foi feito:**
+- Badge "solicitação→dono" (grupos/eventos): hooks novos
+  `usePendingGroupJoinRequests`/`usePendingEventJoinRequests`
+  (`src/hooks/`) — um `listenJoinRequests` por grupo/evento próprio
+  (`listMyGroups`/`listMyEvents` filtrado por `creatorId === uid`), soma
+  agregada. `joinRequests` só existe enquanto pendente, então não precisa
+  filtro de status.
+- Badge "aceite→solicitante" (100% novo, 3 frentes): campo `seenAt`
+  (`serverTimestamp`) em `groups/{groupId}/members/{uid}`,
+  `events/{eventId}/participants/{uid}` e `momentoRequests/{requestId}`.
+  `firestore.rules`: os dois primeiros saem de `allow update: if false`
+  pra permitir só o próprio uid gravar só `seenAt`; `momentoRequests`
+  ganha ramo OR novo (author continua o único que muda `status`, sender
+  grava só `seenAt` depois que o pedido sai de pending). Funções novas
+  `markGroupMembershipSeen`/`markEventParticipationSeen`/
+  `markMomentoRequestSeen` (mesmo molde de `markMatchRead`,
+  `firestoreService.ts`), chamadas fire-and-forget no mount de
+  `GroupDetailScreen`/`EventDetailScreen`/`MomentoRequestChatScreen`.
+  Hooks agregados novos `useUnseenAcceptedGroups`/`useUnseenAcceptedEvents`
+  (1 `listenMyMembership`/`listenMyParticipation` — funções novas em
+  `groupService.ts`/`eventService.ts` — por grupo/evento onde sou membro
+  mas não dono) e `useUnseenAnsweredMomentoRequests` (reusa
+  `listenSentMomentoRequests`, já existente, sem listener por doc).
+- Os 5 hooks somados ao `tabBarBadge` da aba Explorar
+  (`src/navigation/index.tsx`) junto do `usePendingMomentoRequests` já
+  existente; nos cards Grupos/Eventos/Pedidos de `MomentosScreen.tsx`, o
+  dot aparece se `pendente > 0 || não-visto > 0`.
+
+**Decisões técnicas registradas (sem decisão de produto nova — spec já
+veio fechada):** `listenMyMembership`/`listenMyParticipation` são funções
+novas não nomeadas explicitamente na spec (que só previa as 3 `mark*Seen`
+e os 5 hooks) — necessárias pro contrato "reativo/onSnapshot" exigido
+pelos hooks `useUnseenAccepted*`; mirror do padrão já existente de
+`listenGroup`/`listenEvent` (doc por ID, não uma query nova). Nenhuma
+Cloud Function tocada, nenhum índice novo (nenhuma query nova usa
+`collectionGroup`/filtro composto — os hooks de agregação usam N
+listeners de doc único, não 1 query nova).
+
+---
+
 ## Fechadas recentemente
 
 | Sprint | O que era |
@@ -1051,6 +1108,28 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   `isAdmin &&`), com o mesmo pontinho de antes quando há pedido pendente.
   Admin não tem aba Explorar, então o teste do dot da tab (item acima) não
   se aplica a ele.
+- S146 — **depois que Raphael fizer o deploy das rules desta sprint**: com
+  a conta B pedindo pra entrar num grupo/evento da conta A (dona), o dot
+  vermelho aparece na tab bar Explorar de A e no card "Grupos"/"Eventos"
+  de A; aprovar o pedido apaga os dois dots de A.
+- S146 — conta B tem o pedido de entrada em grupo/evento da conta A
+  APROVADO enquanto B não abre `GroupDetailScreen`/`EventDetailScreen`: o
+  dot aparece na tab bar de B e no card correspondente; abrir a tela do
+  grupo/evento aprovado apaga os dois dots de B (mesmo com o app
+  fechado/reaberto depois — `seenAt` é campo do Firestore, não
+  AsyncStorage local).
+- S146 — mirror do teste acima pra "Pedidos de conversa": conta B manda um
+  comentário/pedido a um Momento de A; A responde (`answerMomentoRequest`)
+  ou recusa (`declineMomentoRequest`); o dot aparece na tab bar de B e no
+  card "Pedidos" de B até B abrir `MomentoRequestChatScreen`.
+- S146 — conta A (dona do grupo/evento) NÃO deve ver o dot "aceite→
+  solicitante" na própria participação (ela é `creatorId`, o hook
+  `useUnseenAccepted*` já exclui os próprios); e conta B (autora do
+  comentário respondido) não deve ver o dot "solicitação→dono" (esse é só
+  de quem CRIOU o grupo/evento).
+- S146 — regressão: o dot "solicitação→dono" de momentos (S145,
+  `usePendingMomentoRequests`) continua aparecendo/sumindo igual antes,
+  sem interferência dos hooks novos somados no mesmo `tabBarBadge`.
 - S139 — **depois que Raphael fizer o deploy das rules corrigidas**: com a
   conta A publicando um momento ativo, abrir a aba de Momentos com a conta
   B e conferir que o momento de A aparece (sem `permission-denied` no
@@ -1260,6 +1339,24 @@ continua na bateria geral.
   expiração/agendamento (`expiresAt`, `startsAt`, `purgeAt`...) consultada
   por `list` precisa nascer já com get/list separados — não esperar o bug
   aparecer de novo pra lembrar da lição.
+
+- **Hook de contagem agregada sobre N docs dinâmicos (ex.: "1 listener por
+  grupo/evento próprio") precisa de um acumulador ESCOPADO ao efeito, não
+  de `setState((prev) => ...)` acumulando sobre o state anterior.**
+  Estabelecido na S146 (`usePendingGroupJoinRequests`/
+  `usePendingEventJoinRequests`/`useUnseenAcceptedGroups`/
+  `useUnseenAcceptedEvents`): quando a LISTA de ids muda (ex.: um grupo
+  novo aprovado, um grupo que expirou), os listeners antigos são
+  desmontados e novos são montados pro conjunto novo de ids — se o
+  acumulador fosse `setCounts((prev) => ({...prev, [id]: n}))`, entradas de
+  ids que SAÍRAM da lista ficariam presas no state pra sempre (nenhum
+  listener novo vai reescrever/apagar aquela chave), inflando a contagem
+  incorretamente. Fix: cada rodada do `useEffect([idsList])` declara um
+  acumulador `local` (variável comum, não state) FECHADO sobre essa versão
+  específica da lista de ids — cada callback de listener escreve nesse
+  `local` e chama `setState(local)` direto (substitui o objeto inteiro, não
+  funde com o state anterior). Vale pra qualquer hook novo que agregue N
+  listeners de doc dinâmico (não uma única query/collectionGroup).
 
 ## Padrões de UI que valem para o projeto inteiro
 

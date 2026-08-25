@@ -18,7 +18,12 @@ import { MomentoViewerModal } from '@/components/MomentoViewerModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePendingEventJoinRequests } from '@/hooks/usePendingEventJoinRequests';
+import { usePendingGroupJoinRequests } from '@/hooks/usePendingGroupJoinRequests';
 import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
+import { useUnseenAcceptedEvents } from '@/hooks/useUnseenAcceptedEvents';
+import { useUnseenAcceptedGroups } from '@/hooks/useUnseenAcceptedGroups';
+import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomentoRequests';
 import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
@@ -51,6 +56,14 @@ export default function MomentosScreen() {
   // (navigation/index.tsx) e do ponto de aviso que sobrou na ProfileScreen
   // (agora só admin).
   const pendingMomentoRequests = usePendingMomentoRequests();
+  // S146 — badges "solicitação→dono" (pedidos de entrada pendentes nos meus
+  // grupos/eventos) e "aceite→solicitante" (fui aceito e ainda não vi) dos
+  // cards Grupos/Eventos/Pedidos abaixo.
+  const pendingGroupJoinRequests = usePendingGroupJoinRequests();
+  const pendingEventJoinRequests = usePendingEventJoinRequests();
+  const unseenAcceptedGroups = useUnseenAcceptedGroups();
+  const unseenAcceptedEvents = useUnseenAcceptedEvents();
+  const unseenAnsweredMomentoRequests = useUnseenAnsweredMomentoRequests();
   // undefined = ainda carregando, null = sem momento ativo.
   const [myMomento, setMyMomento] = useState<MomentoWithId | null | undefined>(undefined);
   const [feed, setFeed] = useState<MomentoWithId[]>([]);
@@ -209,6 +222,9 @@ export default function MomentosScreen() {
                 >
                   <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
                   <Text style={styles.exploreCardText}>Grupos</Text>
+                  {(pendingGroupJoinRequests > 0 || unseenAcceptedGroups > 0) && (
+                    <View style={styles.pendingDot} />
+                  )}
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.exploreCard}
@@ -216,6 +232,9 @@ export default function MomentosScreen() {
                 >
                   <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
                   <Text style={styles.exploreCardText}>Eventos</Text>
+                  {(pendingEventJoinRequests > 0 || unseenAcceptedEvents > 0) && (
+                    <View style={styles.pendingDot} />
+                  )}
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.exploreCard}
@@ -227,7 +246,9 @@ export default function MomentosScreen() {
                     color={theme.colors.textSecondary}
                   />
                   <Text style={styles.exploreCardText}>Pedidos</Text>
-                  {pendingMomentoRequests > 0 && <View style={styles.pendingDot} />}
+                  {(pendingMomentoRequests > 0 || unseenAnsweredMomentoRequests > 0) && (
+                    <View style={styles.pendingDot} />
+                  )}
                 </AnimatedPressable>
               </View>
 

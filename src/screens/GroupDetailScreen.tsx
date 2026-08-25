@@ -37,6 +37,7 @@ import {
   leaveGroup,
   listenGroup,
   listenJoinRequests,
+  markGroupMembershipSeen,
   rejectJoinRequest,
   removeGroupPoll,
   requestToJoinGroup,
@@ -117,6 +118,17 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
   }, [refreshMembership]);
 
   const isCreator = !!user && group?.creatorId === user.uid;
+
+  // S146 — badge "aceite→solicitante": marca o próprio doc de membership
+  // como visto (fire-and-forget, mesmo padrão de markMatchRead em
+  // ChatScreen.tsx) quando o usuário logado é membro NÃO-criador e ainda
+  // não tem `seenAt` — dono nunca marca (o dot dele é outro, "solicitação→
+  // dono", some ao ver os pedidos pendentes, não a própria participação).
+  useEffect(() => {
+    if (!user || !membership || isCreator) return;
+    if (membership.seenAt) return;
+    markGroupMembershipSeen(groupId, user.uid).catch(() => {});
+  }, [user, membership, isCreator, groupId]);
 
   // Lista de pedidos pendentes: só o criador precisa (ninguém mais lê isso —
   // firestore.rules restringe read a próprio requerente + criador).

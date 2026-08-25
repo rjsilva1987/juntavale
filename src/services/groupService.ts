@@ -80,6 +80,10 @@ export interface GroupMember {
   uid: string;
   joinedAt: Timestamp;
   role: GroupMemberRole;
+  // S146 — badge "aceite→solicitante": ausente até o membro (não-dono) abrir
+  // GroupDetailScreen pela 1ª vez depois de aprovado (markGroupMembershipSeen
+  // abaixo). Mesmo molde de lastReadAt em matches (firestoreService.ts).
+  seenAt?: Timestamp;
 }
 
 export interface GroupJoinRequest {
@@ -209,6 +213,33 @@ export const getMyMembership = async (
 ): Promise<GroupMember | null> => {
   const snap = await getDoc(memberRef(groupId, uid));
   return snap.exists() ? (snap.data() as GroupMember) : null;
+};
+
+// S146 — versão reativa de getMyMembership, usada por useUnseenAcceptedGroups
+// (badge "aceite→solicitante"): precisa saber em tempo real quando `seenAt`
+// é gravado, mesmo padrão de erro de listenGroup acima (permission-denied
+// aqui é inesperado — o próprio uid sempre pode ler o próprio doc de member,
+// ver allow read de members/{uid} — mas tratado sem derrubar o listener).
+export const listenMyMembership = (
+  groupId: string,
+  uid: string,
+  callback: (member: GroupMember | null) => void,
+) => {
+  return onSnapshot(
+    memberRef(groupId, uid),
+    (snap) => callback(snap.exists() ? (snap.data() as GroupMember) : null),
+    (error) => {
+      console.error('[listenMyMembership] erro no listener:', error);
+    },
+  );
+};
+
+// S146 — badge "aceite→solicitante": chamado fire-and-forget no mount de
+// GroupDetailScreen quando o usuário logado é membro não-criador e o
+// próprio doc ainda não tem `seenAt` (mesmo padrão de markMatchRead em
+// firestoreService.ts, chamado por ChatScreen.tsx).
+export const markGroupMembershipSeen = async (groupId: string, uid: string): Promise<void> => {
+  await updateDoc(memberRef(groupId, uid), { seenAt: serverTimestamp() });
 };
 
 export const getMyJoinRequest = async (

@@ -50,6 +50,10 @@ export interface MomentoRequest {
   momentoSnapshot: MomentoRequestSnapshot;
   status: MomentoRequestStatus;
   createdAt: Timestamp;
+  // S146 — badge "aceite→solicitante": ausente até o SENDER abrir
+  // MomentoRequestChatScreen depois que o pedido sai de pending
+  // (markMomentoRequestSeen abaixo). Mesmo molde de lastReadAt em matches.
+  seenAt?: Timestamp;
 }
 
 export interface MomentoRequestMessage {
@@ -267,4 +271,11 @@ export const answerMomentoRequest = async (
 
 export const declineMomentoRequest = async (requestId: string): Promise<void> => {
   await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'declined' });
+};
+
+// S146 — badge "aceite→solicitante": chamado fire-and-forget no mount de
+// MomentoRequestChatScreen quando o usuário logado é o SENDER e o pedido já
+// saiu de pending (mesmo padrão de markMatchRead em firestoreService.ts).
+export const markMomentoRequestSeen = async (requestId: string): Promise<void> => {
+  await updateDoc(doc(db, 'momentoRequests', requestId), { seenAt: serverTimestamp() });
 };

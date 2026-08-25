@@ -8,6 +8,17 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S146 — FECHADA em código (25/08/2026), auditoria APROVADA sem ressalvas
+  bloqueantes, pendente de commit do Raphael: badge in-app (dot vermelho)
+  de pedidos/aprovações nas 3 frentes do Explorar (grupos, eventos,
+  momentos). Estende o badge "solicitação→dono" (S145) pra grupos/eventos
+  e cria do zero o badge "aceite→solicitante" nas 3 frentes (`seenAt` novo
+  em `groups/{groupId}/members/{uid}`, `events/{eventId}/participants/{uid}`,
+  `momentoRequests/{requestId}`). `firestore.rules` alteradas (2
+  `allow update` saem de `if false` pra liberar só `seenAt` do próprio uid;
+  `momentoRequests` ganha ramo OR pro sender) — **EXIGE DEPLOY de rules**,
+  nenhuma Cloud Function tocada. Ver ROADMAP.md § S146. SEM teste em
+  aparelho.
 - S138 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
   nome completo (`legalName`) e apelido (`nickname`) viram IMUTÁVEIS pelo
   usuário no app, sempre (inclusive pré-verificação) — única via de

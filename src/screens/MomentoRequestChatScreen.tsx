@@ -40,6 +40,7 @@ import {
   declineMomentoRequest,
   listenMomentoRequestById,
   listenMomentoRequestMessages,
+  markMomentoRequestSeen,
   MOMENTO_REQUEST_TEXT_MAX,
   MomentoRequest,
   MomentoRequestMessage,
@@ -107,6 +108,19 @@ export default function MomentoRequestChatScreen({
   const isPending = request?.status === 'pending';
   const isAnswered = request?.status === 'answered';
   const isDeclined = request?.status === 'declined';
+
+  // S146 — badge "aceite→solicitante": marca o pedido como visto (fire-and-
+  // forget, mesmo padrão de markMatchRead em ChatScreen.tsx) quando o
+  // usuário logado é o SENDER, o pedido já saiu de pending (answered ou
+  // declined) e ainda não tem `seenAt`. O autor nunca marca aqui — o dot
+  // dele é outro ("solicitação→dono"), some ao ver os pedidos pendentes.
+  useEffect(() => {
+    if (!user || !request) return;
+    if (request.senderId !== user.uid) return;
+    if (request.status === 'pending') return;
+    if (request.seenAt) return;
+    markMomentoRequestSeen(requestId).catch(() => {});
+  }, [user, request, requestId]);
 
   // Mensagem inicial (o comentário/pedido, sempre do senderId) + thread
   // respondida, nessa ordem — mesma junção "histórico + tempo real" do

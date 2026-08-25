@@ -1,4 +1,13 @@
-// rules-stamp: S125-A (25/08/2026 — permission-denied persistente na
+// rules-stamp: S146 (25/08/2026 — badges in-app de pedidos/aceites nas 3
+// frentes do Explorar (grupos/eventos/momentos): groups/{groupId}/
+// members/{uid} e events/{eventId}/participants/{uid} allow update saem
+// de `if false` pra permitir SÓ o próprio uid gravar SÓ `seenAt`
+// (serverTimestamp exigido; role/joinedAt continuam imutáveis, mesma
+// trava de antes); momentoRequests/{requestId} allow update ganha ramo OR
+// novo pro SENDER gravar `seenAt` quando o pedido já saiu de pending (o
+// author continua sendo o único que muda `status`). Badge
+// "solicitação→dono" de grupos/eventos é 100% client, sem rules novas
+// (mirror do padrão já existente de momentos, S145).) + S125-A (25/08/2026 — permission-denied persistente na
 // EventsScreen depois do deploy da S125: allow read UNIFICADO (get + list)
 // de events/{eventId} split em allow get + allow list, mesma lição da S139
 // (momentos/{uid}) — `resource.data.startsAt > request.time` dentro do OR
@@ -1645,7 +1654,15 @@ service cloud.firestore {
               && exists(/databases/$(database)/documents/groups/$(groupId)/joinRequests/$(uid)))
           );
 
-        allow update: if false; // sem trocar role/joinedAt depois de criado
+        // S146 — trocar role/joinedAt continua barrado; único campo
+        // liberado é `seenAt` (dot "aceite→solicitante" da aba Explorar
+        // some depois que o membro abre GroupDetailScreen — ver
+        // markGroupMembershipSeen/GroupDetailScreen.tsx), e só o PRÓPRIO
+        // uid grava, com serverTimestamp exigido.
+        allow update: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
+          && request.resource.data.seenAt == request.time;
 
         // O próprio uid pode apagar o próprio doc (sair), EXCETO se for o
         // criador (decisão de produto: criador não sai, só some via
@@ -1832,7 +1849,14 @@ service cloud.firestore {
               && exists(/databases/$(database)/documents/events/$(eventId)/joinRequests/$(uid)))
           );
 
-        allow update: if false; // sem trocar role/joinedAt depois de criado
+        // S146 — mirror EXATO do ramo novo de groups/{groupId}/members/{uid}
+        // acima: só `seenAt` liberado, só pelo próprio uid, serverTimestamp
+        // exigido (badge "aceite→solicitante" — ver
+        // markEventParticipationSeen/EventDetailScreen.tsx).
+        allow update: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
+          && request.resource.data.seenAt == request.time;
 
         allow delete: if isSignedIn() && request.auth.uid == uid && resource.data.role != 'creator';
       }
@@ -2519,17 +2543,28 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(
              ['authorId', 'senderId', 'text', 'momentoSnapshot', 'status', 'createdAt']);
 
-      // Só o autor decide o desfecho (responder ou recusar) — decisão 4:
-      // isso NUNCA cria um match, só abre a subcoleção messages abaixo pra
-      // esta thread isolada. Única transição permitida é pending->answered
-      // ou pending->declined; affectedKeys().hasOnly(['status']) garante
-      // que nenhum outro campo (inclusive momentoSnapshot/text) é reescrito
-      // por essa via, mesmo padrão do update de reports/{reportId} (S96-A).
+      // Dois ramos independentes (OR): (a) só o autor decide o desfecho
+      // (responder ou recusar) — decisão 4: isso NUNCA cria um match, só
+      // abre a subcoleção messages abaixo pra esta thread isolada. Única
+      // transição permitida é pending->answered ou pending->declined;
+      // affectedKeys().hasOnly(['status']) garante que nenhum outro campo
+      // (inclusive momentoSnapshot/text) é reescrito por essa via, mesmo
+      // padrão do update de reports/{reportId} (S96-A). (b) S146 — só o
+      // SENDER grava `seenAt`, só depois que o pedido já saiu de pending
+      // (dot "aceite→solicitante" some depois que o remetente abre
+      // MomentoRequestChatScreen — ver markMomentoRequestSeen).
       allow update: if isSignedIn()
-        && request.auth.uid == resource.data.authorId
-        && resource.data.status == 'pending'
-        && request.resource.data.status in ['answered', 'declined']
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+        && (
+          (request.auth.uid == resource.data.authorId
+            && resource.data.status == 'pending'
+            && request.resource.data.status in ['answered', 'declined']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+          ||
+          (request.auth.uid == resource.data.senderId
+            && resource.data.status in ['answered', 'declined']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
+            && request.resource.data.seenAt == request.time)
+        );
 
       allow delete: if false;
 

@@ -19,9 +19,14 @@ import { useSupportAlert } from '@/contexts/SupportAlertContext';
 import { useVerificationAlert } from '@/contexts/VerificationAlertContext';
 import { useActivityTracker } from '@/hooks/useActivityTracker';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePendingEventJoinRequests } from '@/hooks/usePendingEventJoinRequests';
+import { usePendingGroupJoinRequests } from '@/hooks/usePendingGroupJoinRequests';
 import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
 import { usePresenceHeartbeat } from '@/hooks/usePresenceHeartbeat';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
+import { useUnseenAcceptedEvents } from '@/hooks/useUnseenAcceptedEvents';
+import { useUnseenAcceptedGroups } from '@/hooks/useUnseenAcceptedGroups';
+import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomentoRequests';
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
@@ -179,6 +184,22 @@ function MainTabs() {
   // "Pedidos de conversa" da ProfileScreen (agora só admin), aqui alimenta
   // o tabBarBadge do Tab.Screen "Explorar" abaixo.
   const pendingMomentoRequestsCount = usePendingMomentoRequests();
+  // S146 — badges "solicitação→dono" (grupos/eventos, mirror do de momentos
+  // acima) e "aceite→solicitante" (novo, 3 frentes) somados no MESMO
+  // tabBarBadge da aba Explorar — a aba não distingue a ORIGEM do aviso,
+  // só "tem algo novo pra ver" (mesmo raciocínio de dot único da S145).
+  const pendingGroupJoinRequestsCount = usePendingGroupJoinRequests();
+  const pendingEventJoinRequestsCount = usePendingEventJoinRequests();
+  const unseenAcceptedGroupsCount = useUnseenAcceptedGroups();
+  const unseenAcceptedEventsCount = useUnseenAcceptedEvents();
+  const unseenAnsweredMomentoRequestsCount = useUnseenAnsweredMomentoRequests();
+  const explorarBadgeCount =
+    pendingMomentoRequestsCount +
+    pendingGroupJoinRequestsCount +
+    pendingEventJoinRequestsCount +
+    unseenAcceptedGroupsCount +
+    unseenAcceptedEventsCount +
+    unseenAnsweredMomentoRequestsCount;
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.
@@ -284,7 +305,7 @@ function MainTabs() {
           <Tab.Screen
             name="Explorar"
             options={{
-              tabBarBadge: pendingMomentoRequestsCount > 0 ? ' ' : undefined,
+              tabBarBadge: explorarBadgeCount > 0 ? ' ' : undefined,
               tabBarBadgeStyle: { backgroundColor: theme.colors.error },
             }}
           >

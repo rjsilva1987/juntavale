@@ -22,6 +22,7 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -66,6 +67,9 @@ export interface EventParticipant {
   uid: string;
   joinedAt: Timestamp;
   role: EventParticipantRole;
+  // S146 — mirror EXATO de GroupMember.seenAt (groupService.ts) — badge
+  // "aceite→solicitante".
+  seenAt?: Timestamp;
 }
 
 export interface EventJoinRequest {
@@ -199,6 +203,28 @@ export const getMyParticipation = async (
 ): Promise<EventParticipant | null> => {
   const snap = await getDoc(participantRef(eventId, uid));
   return snap.exists() ? (snap.data() as EventParticipant) : null;
+};
+
+// S146 — mirror EXATO de listenMyMembership (groupService.ts) — usado por
+// useUnseenAcceptedEvents (badge "aceite→solicitante").
+export const listenMyParticipation = (
+  eventId: string,
+  uid: string,
+  callback: (participant: EventParticipant | null) => void,
+) => {
+  return onSnapshot(
+    participantRef(eventId, uid),
+    (snap) => callback(snap.exists() ? (snap.data() as EventParticipant) : null),
+    (error) => {
+      console.error('[listenMyParticipation] erro no listener:', error);
+    },
+  );
+};
+
+// S146 — mirror EXATO de markGroupMembershipSeen (groupService.ts), chamado
+// fire-and-forget no mount de EventDetailScreen.
+export const markEventParticipationSeen = async (eventId: string, uid: string): Promise<void> => {
+  await updateDoc(participantRef(eventId, uid), { seenAt: serverTimestamp() });
 };
 
 export const getMyEventJoinRequest = async (
