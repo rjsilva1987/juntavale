@@ -394,6 +394,28 @@ real mas deixou os dois editáveis pelo usuário.
 3. Onde vive o fluxo de chamado de suporte (S84, S94) pra saber onde
    encaixar a edição pelo admin.
 
+### S138-B — Copy do cadastro: papel dos campos nome completo/apelido
+**Status:** IMPLEMENTADA (25/08/2026) · auditoria APROVADA sem ressalvas ·
+client puro, sem rules/functions, sem deploy · SEM teste em aparelho.
+
+Ajuste de copy no RegisterScreen (Step 1): os dois campos já obrigatórios
+desde a S135 (nome completo e apelido) ganham um helper curto explicando
+seu papel, sem mexer em obrigatoriedade, labels, placeholders nem no aviso
+de imutabilidade da S138.
+
+**Mudança:**
+- Campo "Como quer ser chamado": helper "É o nome que todos veem no app."
+  — `RegisterScreen.tsx:228-229`.
+- Campo "Nome completo": helper "Visível só para a equipe, usado para
+  verificar sua identidade." — `RegisterScreen.tsx:215-218`.
+- Estilo novo `styles.fieldHint` (`theme.fontSize.xs` +
+  `theme.colors.textLight`), sem cor hardcoded.
+- Aviso de imutabilidade da S138 mantido intacto, mesmo texto e posição.
+- Tela de editar perfil (`ProfileScreen.tsx`, campos travados): avaliado
+  no portão da sprint — decisão do Raphael foi MANTER como está, sem
+  duplicar a distinção público/interno no `lockedHint` de um campo que já
+  está fixado.
+
 ### S139 — Bug: momento de terceiros não carrega (permission-denied)
 **Status:** FECHADA em 24/08/2026 (commit d0a6b15) · rules deployadas ·
 TESTADA em aparelho e aprovada em 24/08/2026

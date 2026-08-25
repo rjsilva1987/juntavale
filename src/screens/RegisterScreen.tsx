@@ -212,6 +212,10 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 value={name}
                 onChangeText={setName}
               />
+              {/* S138-B — helper de escopo do campo, texto exato da spec. */}
+              <Text style={styles.fieldHint}>
+                Visível só para a equipe, usado para verificar sua identidade.
+              </Text>
 
               <Text style={styles.label}>Como quer ser chamado</Text>
               <TextInput
@@ -221,6 +225,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
                 value={nickname}
                 onChangeText={setNickname}
               />
+              {/* S138-B — helper de escopo do campo, texto exato da spec. */}
+              <Text style={styles.fieldHint}>É o nome que todos veem no app.</Text>
 
               {/* S138 — nome completo e apelido ficam imutáveis assim que
                   definidos aqui no cadastro; a única forma de corrigir depois
@@ -548,6 +554,13 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     marginTop: 4,
     marginBottom: theme.spacing.sm,
+  },
+  // S138-B — helper curto abaixo de cada campo (nome completo/apelido);
+  // cor menos enfática que immutableHint pra não competir com o aviso.
+  fieldHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textLight,
+    marginTop: 4,
   },
 
   genderRow: {

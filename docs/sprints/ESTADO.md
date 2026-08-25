@@ -38,6 +38,12 @@ permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
   `updateUserProfile` do `ProfileScreen` quebrava save de perfil inteiro
   pra conta legada) — corrigido e APROVADO na 2ª rodada. Ver ROADMAP.md
   § S138. SEM teste em aparelho.
+- S138-B — FECHADA em código (25/08/2026), auditoria APROVADA sem
+  ressalvas, pendente de commit do Raphael: copy do RegisterScreen ganha
+  helper curto por campo explicando o papel de nome completo (interno) e
+  apelido (público), sem mexer em obrigatoriedade/labels/placeholders nem
+  no aviso de imutabilidade da S138. Client puro, sem rules/functions. Ver
+  ROADMAP.md § S138-B. SEM teste em aparelho.
 - S145 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
   aba Explorar (não-admin) ganha acesso a Grupos, Eventos e "Pedidos de
   conversa" via fileira de cards no topo do feed de Momentos, com badge
