@@ -43,7 +43,7 @@ curtida (modelo Instagram). Em aberto se entra comentário junto.
 Interage com S122: notificação por curtida é candidata a virar spam.
 
 ### S124-A — Grupos: esqueleto
-**Status:** EM IMPLEMENTAÇÃO · decisões tomadas · recon feita (23/08/2026)
+**Status:** IMPLEMENTADA em 23/08/2026 (commit 0915a2a) · índices, rules e storage deployados · functions expireGroups, onGroupMemberCreated e onGroupJoinRequestCreated criadas · SEM teste em aparelho
 
 Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
 
@@ -94,8 +94,9 @@ Salas de conversa em grupo, com prazo de encerramento. Base pra S124-B.
    mostrando só `groupName` (sem foto — grupo não tem).
 
 ### S124-B — Grupos: camadas de engajamento
-**Status:** EM IMPLEMENTAÇÃO (implementada, aguardando auditoria) · decisões
-tomadas · recon feita (24/08/2026)
+**Status:** IMPLEMENTADA em 24/08/2026 (commit 724f072) · rules deployadas ·
+functions onGroupPollVoteCreated, onGroupPollChanged e
+getGroupActiveNowCount criadas · SEM teste em aparelho
 
 Três camadas por cima do grupo pronto, todas REUSANDO o que já existe:
 1. Enquete dentro do grupo — reusa a S126 (já implementada).
@@ -170,7 +171,8 @@ onGroupPollVoteCreated, onGroupPollChanged e getGroupActiveNowCount. SEM
 teste em aparelho ainda — só validado por tipo/lint/revisão manual.
 
 ### S125 — Eventos / encontros
-**Status:** ABERTA · decisões tomadas · sem recon
+**Status:** IMPLEMENTADA em 24/08/2026 (commit d72b3dc) · rules deployadas
+junto com a S137 · SEM teste em aparelho
 
 Alguém marca um encontro (ex.: happy hour) e quem topa entra numa lista de
 participantes.
@@ -240,7 +242,8 @@ já feita, sem reabrir nenhuma decisão de produto:
    nunca tratado como "esgotado").
 
 ### S133 — Bug do Descobrir: próximo perfil visível durante o arraste
-**Status:** EM CORREÇÃO (implementada, aguardando auditoria) · decisões tomadas
+**Status:** IMPLEMENTADA em 23/08/2026 (commit 4661a62) · client puro · SEM
+teste em aparelho
 
 Ao arrastar o card atual, o card de trás fica legível — nome, vale,
 intenção ("Só amizade") e UF aparecem por completo — e o perfil seguinte
@@ -269,7 +272,8 @@ trás trocado de `View` para `Animated.View`, com novo estilo animado
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ### S129-B — Tiques estilo WhatsApp (entregue)
-**Status:** EM CORREÇÃO (implementada, aguardando auditoria) · decisões tomadas
+**Status:** IMPLEMENTADA em 23/08/2026 (commit 05ef571) · rules deployadas ·
+SEM teste em aparelho
 
 Tiques estilo WhatsApp: enviado / entregue / lido.
 
@@ -321,10 +325,8 @@ fire-and-forget, sem listener adicional.
 mantida). SEM teste em aparelho ainda — só validado por tipo/lint.
 
 ### S135 — "Como quer ser chamado" separado do nome completo
-**Status:** IMPLEMENTADA em código (rules, client e Cloud Functions) —
-falta (a) Raphael rodar `functions/scripts/migrateNicknames.js` DEPOIS do
-deploy de `firestore.rules`, e (b) teste em aparelho. Ainda não fechada —
-só migra pra "Fechadas recentemente" depois da auditoria aprovar.
+**Status:** IMPLEMENTADA em 23/08/2026 (commit 8805fd6) · rules e 5
+functions deployadas · SEM teste em aparelho
 
 Hoje o cadastro tem um só campo de nome, preenchido com nome completo, e ele
 é o que aparece em todo lugar do app — o que causa truncamento em card e
@@ -389,9 +391,8 @@ real mas deixou os dois editáveis pelo usuário.
    encaixar a edição pelo admin.
 
 ### S139 — Bug: momento de terceiros não carrega (permission-denied)
-**Status:** EM CORREÇÃO · causa raiz confirmada · fix aplicado em
-`firestore.rules` (não deployado — Raphael faz o deploy) · aguardando
-auditoria
+**Status:** FECHADA em 24/08/2026 (commit d0a6b15) · rules deployadas ·
+TESTADA em aparelho e aprovada em 24/08/2026
 
 Reproduzido no Expo Go em 22/08/2026, com as rules da S121 já deployadas.
 Ao abrir a aba de Momentos, nenhum momento de outra pessoa aparece e o log
@@ -636,7 +637,9 @@ produto e deve parar no portão.
    de mensagem) — a resposta ao momento precisa mostrar a que ele se refere.
 
 ### S144 — Infraestrutura: reduzir custo de token por sprint
-**Status:** ABERTA · decisões tomadas · sem recon · 4 partes independentes
+**Status:** partes A e C FECHADAS (commits 3dd5ad9 e f679098) · parte B
+revertida (commit fa757f5) — a refazer · parte D é regra, não código · 4
+partes independentes
 
 Motivo (Raphael, 24/08/2026): o consumo por sprint está alto demais. As
 quatro causas abaixo foram levantadas a partir do que se observou na
