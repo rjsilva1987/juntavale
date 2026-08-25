@@ -86,24 +86,6 @@ const buildMomentoSnapshot = (momento: MomentoWithId): MomentoRequestSnapshot =>
   ...(momento.photoUrl ? { photoUrl: momento.photoUrl } : {}),
 });
 
-// TEMP-DIAG S143-C — remover depois: log padronizado de falha de escrita/leitura, com path completo, chaves do payload e code/message do erro do Firestore.
-const logDiag = (
-  op: 'read' | 'create' | 'update',
-  path: string,
-  payloadKeys: string[],
-  err: unknown,
-): void => {
-  // TEMP-DIAG S143-C
-  console.error(
-    '[TEMP-DIAG S143-C]',
-    op,
-    path,
-    payloadKeys,
-    (err as { code?: string })?.code,
-    (err as Error)?.message,
-  ); // TEMP-DIAG S143-C
-}; // TEMP-DIAG S143-C
-
 // Só funciona quando o pedido pai já está 'answered' (rules exigem) —
 // chamar antes disso é sempre permission-denied, ver firestore.rules
 // (momentoRequests/{requestId}/messages).
@@ -116,15 +98,8 @@ export const sendMomentoRequestMessage = async (
   if (trimmed.length === 0 || trimmed.length > MOMENTO_REQUEST_TEXT_MAX) {
     throw new Error('Mensagem inválida.');
   }
-  const payload = { senderId, text: trimmed, createdAt: serverTimestamp() }; // TEMP-DIAG S143-C
-  try {
-    // TEMP-DIAG S143-C
-    await addDoc(collection(db, 'momentoRequests', requestId, 'messages'), payload);
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('create', `momentoRequests/${requestId}/messages`, Object.keys(payload), err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  const payload = { senderId, text: trimmed, createdAt: serverTimestamp() };
+  await addDoc(collection(db, 'momentoRequests', requestId, 'messages'), payload);
 };
 
 export interface MomentoCommentResult {
@@ -162,15 +137,7 @@ export const sendMomentoComment = async (
   // Function onBlockCreated propaga o uid do outro lado pros dois perfis
   // (ver comentário em firestore.rules), então o array do PRÓPRIO usuário
   // já basta — não precisa ler o perfil do autor.
-  let myProfileSnap; // TEMP-DIAG S143-C
-  try {
-    // TEMP-DIAG S143-C
-    myProfileSnap = await getDoc(doc(db, 'users', uid));
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('read', `users/${uid}`, [], err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  const myProfileSnap = await getDoc(doc(db, 'users', uid));
   const blockedUsers = (myProfileSnap.data()?.blockedUsers ?? []) as string[];
   if (blockedUsers.includes(momento.authorId)) {
     throw new Error('Não é possível enviar — bloqueio ativo entre vocês.');
@@ -178,15 +145,7 @@ export const sendMomentoComment = async (
 
   const requestId = buildRequestId(momento.authorId, uid, momento);
   const ref = doc(db, 'momentoRequests', requestId);
-  let existing; // TEMP-DIAG S143-C
-  try {
-    // TEMP-DIAG S143-C
-    existing = await getDoc(ref);
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('read', `momentoRequests/${requestId}`, [], err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  const existing = await getDoc(ref);
   if (existing.exists()) {
     // Decisão 3 — no máximo 1 pedido pendente por remetente por instância do
     // momento: já existe um pedido pra este trio author/sender/instância.
@@ -203,7 +162,6 @@ export const sendMomentoComment = async (
   }
 
   const newRequestPayload = {
-    // TEMP-DIAG S143-C
     authorId: momento.authorId,
     senderId: uid,
     text: trimmed,
@@ -211,14 +169,7 @@ export const sendMomentoComment = async (
     status: 'pending',
     createdAt: serverTimestamp(),
   };
-  try {
-    // TEMP-DIAG S143-C
-    await setDoc(ref, newRequestPayload);
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('create', `momentoRequests/${requestId}`, Object.keys(newRequestPayload), err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  await setDoc(ref, newRequestPayload);
   return { requestId, status: 'pending', alreadyExisted: false };
 };
 
@@ -310,24 +261,10 @@ export const answerMomentoRequest = async (
   authorId: string,
   firstReplyText: string,
 ): Promise<void> => {
-  try {
-    // TEMP-DIAG S143-C
-    await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'answered' });
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('update', `momentoRequests/${requestId}`, ['status'], err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'answered' });
   await sendMomentoRequestMessage(requestId, authorId, firstReplyText);
 };
 
 export const declineMomentoRequest = async (requestId: string): Promise<void> => {
-  try {
-    // TEMP-DIAG S143-C
-    await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'declined' });
-  } catch (err) {
-    // TEMP-DIAG S143-C
-    logDiag('update', `momentoRequests/${requestId}`, ['status'], err); // TEMP-DIAG S143-C
-    throw err; // TEMP-DIAG S143-C
-  } // TEMP-DIAG S143-C
+  await updateDoc(doc(db, 'momentoRequests', requestId), { status: 'declined' });
 };

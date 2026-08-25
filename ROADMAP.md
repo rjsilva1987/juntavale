@@ -676,14 +676,13 @@ produto e deve parar no portão.
    de mensagem) — a resposta ao momento precisa mostrar a que ele se refere.
 
 ### S143-C — Momento: barra de resposta no viewer (chips + emojis + campo)
-**Status:** IMPLEMENTADA em código (25/08/2026), auditoria aprovada, SEM
-teste em aparelho aprovado ainda (rodada de bugs pós-teste em andamento,
-ver `docs/sprints/ESTADO.md`). Exige deploy de `firestore.rules`
-(condição de `blockedUsers` + o endurecimento defensivo abaixo, na regra
-`momentoRequests/{requestId}`) — nenhuma Cloud Function nova/alterada.
-Rodou no modo AUTOMATICO do `/sprint` com o pré-requisito "SÓ COMEÇA
-depois da bateria de testes do lote da S143-B" explicitamente destravado
-pelo Raphael no despacho, mesmo a S143-B seguindo sem teste em aparelho.
+**Status:** FECHADA e TESTADA em aparelho (25/08/2026), auditoria
+aprovada. `firestore.rules` (condição de `blockedUsers` + o endurecimento
+defensivo, na regra `momentoRequests/{requestId}`) já deployadas —
+nenhuma Cloud Function nova/alterada. Rodou no modo AUTOMATICO do
+`/sprint` com o pré-requisito "SÓ COMEÇA depois da bateria de testes do
+lote da S143-B" explicitamente destravado pelo Raphael no despacho, mesmo
+a S143-B seguindo sem teste em aparelho.
 
 Escopo: SÓ camada de UI por cima do encanamento da S143-B, mais a rule
 nova do débito de `blockedBy` abaixo — nenhuma coleção nova, nenhuma
@@ -748,9 +747,13 @@ ser corrigido, não por ter sido corrigido e trocado depois.
   `resource != null` (correção anterior); ganhou também `exists()` antes
   do `get()` de `blockedUsers` no `allow create`, e a subcoleção
   `messages` ganhou `momentoRequestExists(requestId)` antes de qualquer
-  `getMomentoRequest(requestId)`. Suspeito vivo do permission-denied do
-  teste de aparelho, ainda sem causa confirmada — instrumentação
-  TEMP-DIAG S143-C segue no código até o teste passar.
+  `getMomentoRequest(requestId)`. Causa do permission-denied CONFIRMADA
+  por log de aparelho e corrigida: `allow get` de
+  `momentoRequests/{requestId}` negava doc inexistente (`resource !=
+  null &&` vira `&&` inteiro false quando resource é null) — corrigido
+  pro padrão `resource == null || dono`, mesmo molde do swipe da S49 (ver
+  § "Padrões de escrita no Firestore"). Instrumentação TEMP-DIAG S143-C
+  REMOVIDA de `momentoRequestService.ts` depois do teste passar.
 
 **Notas:**
 - Débito que FICA de fora (segue registrado): curtidas coladas quando o
@@ -805,6 +808,7 @@ entra no `CLAUDE.md` ou no arquivo do `/sprint`.
 
 | Sprint | O que era |
 |---|---|
+| S143-C | Barra de resposta no viewer do Momento (chips + emojis + campo), redesenhada pós-teste pra ser independente de match — commits `d753ef7`, `faa1e36`, `00dd061`, `0447db6`, `94df3c7`. `firestore.rules` **deployadas**. Causa do permission-denied CONFIRMADA e corrigida: `allow get` de `momentoRequests/{requestId}` negava doc inexistente em vez de permitir — padrão `resource == null \|\| dono`, mesmo molde do swipe da S49. **Fechada em código E testada em aparelho (25/08/2026).** |
 | S144-C | Quebrou `functions/src/index.ts` (1929 linhas, 31 Cloud Functions) em módulos por domínio: `chat.ts`, `admin.ts`, `account.ts`, `perfil.ts`, `momentos.ts`, `grupos.ts`, `eventos.ts`, `agendadas.ts` + `shared/index.ts` (único lugar com `initializeApp()` e `defineSecret('GMAIL_APP_PASSWORD')`). `index.ts` final é só reexport nomeado. Confirmado: os 31 nomes exportados no runtime são exatamente os mesmos de antes, sem renomear/aninhar nada — nenhum deploy foi feito nesta sprint. `ARQUITETURA.md` atualizado com a estrutura nova. |
 | S134 | Bug: idade some quando o nome é longo — nome e idade viravam UMA string dentro de `Text numberOfLines={1}`; nome comprido truncava a string inteira e cortava a idade junto. Corrigido nos 5 arquivos onde isso ocorria (`MatchProfileScreen.tsx`, `SwipeScreen.tsx`/`ProfileCard`, `ProfileSheet.tsx`, `LikesScreen.tsx`, `AdminVerificationsScreen.tsx`): nome e idade agora são DOIS `Text` dentro de um `View` (`nameAgeGroup`/`likerNameAgeGroup`) — só o `Text` do nome tem `numberOfLines`+`flexShrink`, o `Text` da idade (`nameAge`/`likerNameAge`) nunca encolhe e só renderiza com guard `displayAge != null`. De caminho, corrigido bug lateral em `SwipeScreen.tsx` e `LikesScreen.tsx`: antes exibiam literalmente `"Nome, null"` quando `displayAge` era `null` (concatenação direta sem guard); agora não renderizam o trecho da idade nesse caso. Client puro, sem rules/functions. **Fechada em código, SEM teste em aparelho — bateria pendente do build 15.** |
 | S132 | Enquete visível e votável fora do Descobrir — agora aparece também no perfil do match (MatchProfileScreen), não só no card do Descobrir (ProfileSheet) — commit `a326077`. Client puro. **Fechada em código, ainda SEM teste em aparelho.** |
@@ -991,50 +995,12 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   ~24h, ou reduzir `expiresAt` manualmente no Console pra simular) some do
   feed de B sem erro.
 
-**Bateria de aparelho pendente (build 15) — S143-C, além de tudo que a
-S143-B já deixou pendente acima (curtir/comentar momento, deploy de
-`firestore.rules`/Cloud Functions):**
-
-- S143-C — abrir momento de OUTRA pessoa: a barra de resposta aparece
-  embaixo do footer de curtir/contador, com 3 chips sorteados dentre os 6
-  aprovados + campo "Enviar mensagem..." + 3 emojis fixos (👍😂❤️); abrir o
-  PRÓPRIO momento: a barra não aparece (nem o botão de comentário antigo,
-  removido nesta sprint).
-- S143-C (revisão pós-teste de aparelho) — tocar um chip, enviar o campo
-  de texto OU tocar um emoji rápido: os TRÊS viram pedido de Momento
-  (`momentoRequests`), sempre, independente de match — nenhum vira
-  mensagem direta em `matches/{matchId}/messages`, nenhum vira curtida.
-  Coração do footer não reage a nenhum dos três, só ao próprio botão de
-  coração (`handleToggleLike`). Confirma "Pedido enviado" no 1º toque.
-- S143-C (revisão pós-teste de aparelho) — 2º toque (chip OU emoji) sobre
-  a MESMA instância do Momento com pedido ainda pendente: mostra "Pedido
-  já enviado" / "Você já enviou uma mensagem para este momento", não
-  duplica, não dá erro cru.
-- S143-C (revisão pós-teste de aparelho) — em outra conta, o AUTOR do
-  Momento responde o pedido (tela de pedidos, "Meus pedidos"): confirma
-  que SÓ a partir daí a conversa aparece na aba Conversas dos DOIS lados,
-  com etiqueta "via Momento", ordenada junto das conversas de match pela
-  última mensagem — pedido ainda `pending` NÃO aparece na aba Conversas.
-  Se as duas contas TÊM match, confirma que a conversa via Momento fica
-  SEPARADA do chat do match (duas linhas distintas na lista, não mistura).
-  Tocar a linha "via Momento" abre a `MomentoRequestChatScreen` (thread
-  isolada, reusada da S143-B).
-- S143-C — focar o campo de texto da barra: o timer de auto-avanço PAUSA
-  (barra de progresso para de encher) e retoma ao desfocar, mesmo padrão do
-  ReportModal/LikersModal (S141/S143-B).
-- S143-C — abrir o teclado (Android e iOS): a barra de resposta e seus
-  controles ficam visíveis ACIMA do teclado, sem cobrir o campo de texto,
-  sem quebrar o toque nos lados (S143-A) nem o pause/resume por toque
-  longo.
-- S143-C — enviar chip/texto/emoji com bloqueio ativo entre as duas contas
-  (client bloqueou o autor, OU o autor bloqueou o client): a UI mostra
-  "Não é possível enviar — bloqueio ativo entre vocês." em vez de um erro
-  cru de permissão negada.
-- S143-C (permission-denied ainda aberto) — se "Missing or insufficient
-  permissions" aparecer de novo em qualquer um dos toques acima, copiar o
-  log `[TEMP-DIAG S143-C]` do Metro/Expo Go (path completo, chaves do
-  payload, `err.code`/`err.message`) — instrumentação ainda ativa no
-  código pra esta rodada de diagnóstico.
+**S143-C — bateria de aparelho TESTADA e APROVADA em 25/08/2026** (barra de
+resposta no viewer, roteamento independente de match, mesclagem "via
+Momento" na aba Conversas, bloqueio ativo, teclado/timer de auto-avanço —
+ver "Fechadas recentemente"). Débito de S143-B que segue pendente acima
+(curtir/comentar momento, deploy de `firestore.rules`/Cloud Functions)
+continua na bateria geral.
 
 **Espera o build 15:**
 
