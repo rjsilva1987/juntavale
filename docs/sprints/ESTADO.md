@@ -3,11 +3,23 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 25/08/2026
-**Commit atual:** 94df3c7 — fix(momentos): allow get de momentoRequests
-permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
+**Atualizado:** 26/08/2026
+**Commit atual:** 16a1cf5 — feat(grupos): opcao "sem prazo" na criacao de
+grupo (S149-A) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S152 — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA na 3ª rodada (2 rodadas de correção: um
+  write-storm de escritas repetidas em `seenAt`/`authorSeenAt` de
+  `momentoRequests/{requestId}`, corrigido com guard por `useRef` nos dois
+  efeitos de `MomentoRequestChatScreen.tsx`): card do momento próprio no
+  feed do Explorar sem moldura azul (render idêntico ao dos outros
+  usuários); filtro de client pra momento vencido não aparecer no feed nem
+  no card próprio (tick de 60s, `expireMomentos` confirmada sem bug via
+  logs reais do Firebase); dot vermelho por item na lista do card
+  Momentos, nos dois sentidos (autor/solicitante). Client puro, sem
+  rules/functions tocadas, SEM deploy necessário. Ver ROADMAP.md § S152.
+  SEM teste em aparelho.
 - S149-A — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA na 3ª rodada (2 correções: `orderBy`
   residual excluindo grupo sem prazo de "Descobrir"; crash por acesso

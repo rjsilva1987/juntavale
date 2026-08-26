@@ -1202,6 +1202,110 @@ já a importava em todo lugar, não precisou de mudança própria. Dois
 literais em `firestore.rules` (paridade users/groups) atualizados junto
 com os comentários-espelho e o rules-stamp da linha 1.
 
+### S152 — Momento: card do dono, expiração no feed e badge por conversa
+**Status:** FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA na 3ª rodada (2 rodadas de correção: ver
+"Correção pós-auditoria" abaixo). Client puro — diagnóstico confirmou que
+`expireMomentos` não tinha bug, nenhuma rule nem Cloud Function tocada,
+SEM deploy necessário. SEM teste em aparelho.
+
+Reportado por Raphael em 26/08/2026, `/sprint lote --commit S152`.
+
+**(A) Card do momento PRÓPRIO no feed do Explorar:** a S147 corrigiu o
+conteúdo vazio mas manteve a moldura/fundo azul (`primaryDark`) do dono —
+no aparelho o texto de empty state ainda vaza por cima dela. Render deve
+ficar IDÊNTICO ao card dos outros usuários, sem nenhum tratamento visual
+especial pro dono.
+
+**(B) Expiração do momento — diagnóstico + fix de client:**
+- Diagnóstico feito no portão desta sprint via `mcp__firebase__
+  functions_get_logs` (26/08/2026, 100 entradas, 25/08 14h a 26/08 13h):
+  `expireMomentos` roda pontualmente a cada hora, sem gap e sem
+  ERROR/WARNING no período. Único ciclo com achado (25/08 14h): "varridos:
+  1, apagados: 1" — sweep e delete funcionaram. Todos os ciclos seguintes:
+  "varridos: 0, apagados: 0". **NÃO há bug na function** — ela varre e
+  apaga corretamente quando encontra algo vencido.
+- Causa real do sintoma relatado (selo "Expirando..." em momento já
+  vencido): `listenActiveMomentos` (client) filtra `expiresAt` só no
+  MOMENTO em que o listener é assinado — um `onSnapshot` não reavalia
+  `Timestamp.now()` conforme o relógio anda, só quando o Firestore empurra
+  uma escrita nova. Entre o instante em que `expiresAt` vence e a próxima
+  rodada horária de `expireMomentos` (janela de até 59min), o doc
+  continua existindo e visível no feed do client, vencido.
+- Fix a implementar: filtro adicional no CLIENT (listener ou render) que
+  esconde momento com `expiresAt` no passado, independente do que
+  `expireMomentos` já varreu — vale pro dono e pros outros.
+
+**(C) Badge vermelho por conversa na lista do card Momentos:** hoje o dot
+existe só agregado (S146 badge "aceite→solicitante" e S150 badge de
+mensagem nova), sem granularidade por item da lista. Nesta sprint, cada
+ITEM da lista de conversas/pedidos de Momento ganha o próprio dot,
+reusando os campos já existentes (`authorSeenAt`/`seenAt` da S146,
+`lastMessage` da S150), sem modelo novo:
+- Autor do momento: dot quando o solicitante mandou mensagem
+  (`lastMessage` mais novo que `authorSeenAt`).
+- Solicitante: dot quando o pedido foi respondido ou recebeu mensagem
+  (`lastMessage`/`status` mais novo que `seenAt`).
+- Abrir a conversa chama o `mark*Seen` correspondente (já existe, S146) e
+  apaga o dot daquele item.
+
+Se a parte B alterar alguma Cloud Function, entra na lista de deploy
+pendente do relatório da sprint.
+
+**O que foi feito:**
+- Parte A: `src/screens/MomentosScreen.tsx` — componente local
+  `MomentoFeedCard` extraído e reusado tanto no card do dono quanto no
+  `renderItem` do feed, garantindo render idêntico (fundo `surface`+borda,
+  sem `primaryDark`, com rodapé de avatar+nome, sem selo de tempo restante
+  — o dono também deixa de ver "Xh restantes"/"Expirando…", mesmo
+  tratamento dos outros cards). Estilos `myCard`/`myCardPhotoWrap`/
+  `myCardImage`/`myCardText`/`myCardTime`/`myCardTimeOverlay` e a função
+  `formatTimeRemaining` removidos (mortos).
+- Parte B: tick de 60s (`setTimeout` recursivo — nunca `setInterval`,
+  fora da allowlist do `eslint.config.js` — mesmo molde de
+  `useSuperLikeQuota.ts`) força reavaliação periódica de `visibleFeed` e
+  da condição de expiração do card do dono (que passa a tratar
+  `myMomento` com `expiresAt` no passado como se fosse `null`, mostrando
+  "Criar momento"), sem esperar por uma escrita externa do Firestore.
+- Parte C: `src/screens/MomentoRequestsScreen.tsx` ganha `hasUnseenDot`
+  (predicado por item, mirror do agregado de `useUnreadMomentoAuthorMessages`
+  pro autor e extensão do predicado de `useUnseenAnsweredMomentoRequests`
+  pro solicitante — hooks agregados NÃO alterados, só o item da lista).
+  Pré-requisito: `markMomentoRequestSeen` (lado solicitante) deixou de ser
+  one-shot (guard `!request.seenAt` removido em
+  `MomentoRequestChatScreen.tsx`), mesma cadência "toda montagem" já usada
+  por `markMomentoRequestAuthorSeen` desde a S150. `firestore.rules` não
+  precisou mudar (o ramo do sender já permitia reescrever `seenAt` sem
+  guarda de "só a 1ª vez" no servidor).
+- **Correção pós-auditoria (2 rodadas):** remover o guard one-shot da
+  Parte C abriu um write-storm — `request` (`listenMomentoRequestById`) é
+  objeto novo a cada evento de `onSnapshot`, e uma escrita com
+  `serverTimestamp()` gera múltiplos eventos (pendente local + confirmado
+  do servidor); sem guard, cada eco reexecutava o efeito e reescrevia o
+  campo, indefinidamente enquanto a tela ficasse aberta num pedido
+  `answered`/`declined`. 1ª rodada corrigiu o efeito do sender
+  (`seenMarkSignalRef`, guard por `useRef` comparando um "sinal" de
+  `status`+`lastMessage.createdAt` — só reescreve quando o sinal muda de
+  verdade, ignorando ecos da própria escrita). 2ª rodada estendeu o MESMO
+  guard ao efeito gêmeo do autor (`authorSeenMarkSignalRef`,
+  `markMomentoRequestAuthorSeen`) — mesmo mecanismo, pré-existente da
+  S150, mas controlando o mesmo documento; auditoria não aprovava sem
+  isso. Ambos em `MomentoRequestChatScreen.tsx`. Auditoria APROVADA na 3ª
+  rodada sem novo achado bloqueante.
+- **Ressalva não-bloqueante (débito técnico, não corrigida):** o guard
+  por `useRef` marca o "sinal" como feito ANTES de confirmar sucesso do
+  `updateDoc` (`.catch(() => {})` engole erro) — se a escrita falhar
+  (rede), nenhum snapshot subsequente com o mesmo sinal tenta de novo
+  dentro da mesma montagem; só reabrir a tela do zero reseta o guard.
+  Comportamento anterior (guard server-confirmado via `seenAt`) tinha
+  retry automático; o novo não tem. Aceito pra fechar o write-storm, fica
+  registrado pra sprint futura se virar problema real.
+
+Arquivos tocados: `src/screens/MomentosScreen.tsx`,
+`src/screens/MomentoRequestsScreen.tsx`,
+`src/screens/MomentoRequestChatScreen.tsx`,
+`src/services/momentoRequestService.ts`.
+
 ---
 
 ## Fechadas recentemente
