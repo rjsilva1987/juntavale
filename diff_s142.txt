@@ -1,0 +1,196 @@
+﻿diff --git a/src/screens/ChatScreen.tsx b/src/screens/ChatScreen.tsx
+index 24d147c..67d0028 100644
+--- a/src/screens/ChatScreen.tsx
++++ b/src/screens/ChatScreen.tsx
+@@ -554,6 +554,22 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+   // visibleMessages (ver scrollToMessage e o useEffect que consome este
+   // estado). null = nenhum salto pendente.
+   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
++  // S142 ÔÇö indicador flutuante "nova mensagem abaixo": true quando uma
++  // mensagem do OUTRO lado chega enquanto isNearBottomRef.current ├® false
++  // (usu├írio rolado pra cima lendo hist├│rico). Nesse caso o scroll N├âO ├®
++  // arrastado (ver o callback do listener abaixo) e markMatchRead fica
++  // pendente at├® o usu├írio voltar ao fim por qualquer via ÔÇö toque no
++  // indicador (handleReturnToBottom) ou rolagem manual (handleMessagesScroll).
++  // Resetado por gera├º├úo igual aos demais estados desta tela (ver efeito de
++  // dados abaixo).
++  const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
++  // S142 (corre├º├úo) ÔÇö espelha hasNewMessageBelow pra ser lido dentro do
++  // useFocusEffect sem re-render, mesmo padr├úo de isNearBottomRef logo abaixo:
++  // navegar pra MatchProfile/Verification e voltar reganha foco na mesma
++  // gera├º├úo sem passar por handleMessagesScroll/handleReturnToBottom, ent├úo o
++  // useFocusEffect precisa checar o indicador pendente por ref, n├úo por
++  // closure do state.
++  const hasNewMessageBelowRef = useRef(false);
+   // Defesa em profundidade: MatchesScreen j├í barra a navega├º├úo pra c├í se
+   // !profile?.verified, mas ChatScreen pode ser aberta por outros caminhos
+   // (deep link, MatchProfile, etc.) ÔÇö a garantia real continua sendo a rule
+@@ -664,6 +680,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+     setOlderCursor(null);
+     setHasOlderMessages(false);
+     isNearBottomRef.current = true;
++    setHasNewMessageBelow(false);
++    hasNewMessageBelowRef.current = false;
+ 
+     // S101 (corre├º├úo, RODADA 2) ÔÇö a leitura da ├óncora come├ºa AQUI e fica
+     // guardada na ref JUNTO da gera├º├úo desta abertura: o markMatchRead do
+@@ -702,10 +720,22 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+           windowIdsRef.current = new Set(msgs.map((m) => m.id));
+           setMessages(msgs);
+           setLoading(false);
+-          if (isOwnNewMessage || isNearBottomRef.current) {
++          // S142 ÔÇö "est├í vendo o fim" vale tanto pra mensagem pr├│pria quanto
++          // pra j├í estar perto do fim quando a mensagem do outro lado chega.
++          // S├│ nesse caso o scroll desce E markMatchRead ├® chamado; sen├úo
++          // (mensagem do outro lado, usu├írio rolado pra cima) acende o
++          // indicador flutuante e adia a leitura pro retorno ao fim (ver
++          // handleReturnToBottom/handleMessagesScroll).
++          const isViewingBottom = isOwnNewMessage || isNearBottomRef.current;
++          if (isViewingBottom) {
+             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
++            setHasNewMessageBelow(false);
++            hasNewMessageBelowRef.current = false;
++          } else {
++            setHasNewMessageBelow(true);
++            hasNewMessageBelowRef.current = true;
+           }
+-          if (isFocusedRef.current && uid) {
++          if (isViewingBottom && isFocusedRef.current && uid) {
+             markMatchRead(matchId, uid).catch(() => {});
+           }
+         },
+@@ -741,7 +771,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+       // markMatchRead.
+       const anchor = anchorPromiseRef.current;
+       const generation = chatGenerationRef.current;
+-      if (anchor && anchor.generation === generation) {
++      // S142 (corre├º├úo) ÔÇö refoco (ex.: voltar de MatchProfile/Verification na
++      // mesma stack, sem desmontar) N├âO deve marcar como lido enquanto o
++      // indicador "Nova mensagem" estiver pendente: o usu├írio ainda n├úo voltou
++      // ao fim da lista, s├│ saiu e voltou pra mesma gera├º├úo.
++      if (anchor && anchor.generation === generation && !hasNewMessageBelowRef.current) {
+         anchor.promise
+           .then(() => {
+             if (uid) markMatchRead(matchId, uid).catch(() => {});
+@@ -784,11 +818,35 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+   }, [loadingOlder, olderCursor, matchId]);
+ 
+   // S101 ÔÇö gate do scroll autom├ítico (ver isNearBottomRef).
+-  const handleMessagesScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
++  // S142 ÔÇö al├®m de atualizar o gate, detecta a transi├º├úo falseÔåÆtrue (usu├írio
++  // voltou ao fim rolando manualmente, sem tocar no indicador) e replica o
++  // mesmo efeito de handleReturnToBottom: limpa o indicador e dispara a
++  // leitura que tinha ficado pendente.
++  const handleMessagesScroll = useCallback(
++    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+       const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+       const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+-    isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
+-  }, []);
++      const wasNearBottom = isNearBottomRef.current;
++      const isNearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
++      isNearBottomRef.current = isNearBottom;
++      if (!wasNearBottom && isNearBottom && hasNewMessageBelow) {
++        setHasNewMessageBelow(false);
++        hasNewMessageBelowRef.current = false;
++        if (uid) markMatchRead(matchId, uid).catch(() => {});
++      }
++    },
++    [hasNewMessageBelow, matchId, uid],
++  );
++
++  // S142 ÔÇö toque no indicador flutuante "nova mensagem": desce at├® o fim,
++  // some com o indicador e dispara a leitura que tinha ficado pendente (ver
++  // decis├úo 3 acima, no callback do listener).
++  const handleReturnToBottom = useCallback(() => {
++    flatListRef.current?.scrollToEnd({ animated: true });
++    setHasNewMessageBelow(false);
++    hasNewMessageBelowRef.current = false;
++    if (uid) markMatchRead(matchId, uid).catch(() => {});
++  }, [matchId, uid]);
+ 
+   useEffect(() => {
+     const unsub = listenReactions(matchId, setReactions);
+@@ -1269,10 +1327,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+           keyboardVerticalOffset={0}
+         >
++          <View style={styles.messagesWrap}>
+             {loading ? (
+               <View style={styles.messagesList}>
+                 {SKELETON_PATTERN.map((isMe, i) => (
+-                <View key={i} style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
++                  <View
++                    key={i}
++                    style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}
++                  >
+                     {!isMe && <SkeletonPlaceholder width={30} height={30} borderRadius={15} />}
+                     <SkeletonPlaceholder
+                       width={isMe ? 160 : 200}
+@@ -1336,6 +1398,28 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
+                 }
+               />
+             )}
++            {/* S142 ÔÇö indicador flutuante "nova mensagem", mesmo molde visual do
++                bot├úo "carregar mensagens anteriores" (AnimatedPressable +
++                Ionicons + theme.colors.primary), ancorado embaixo (acima do
++                composer) em vez de no topo. Sem contador ÔÇö s├│ o aviso fixo.
++                pointerEvents box-none no wrap pra n├úo bloquear o scroll da
++                lista na ├írea vazia ao redor do bot├úo. */}
++            {hasNewMessageBelow && (
++              <View style={styles.newMessageIndicatorWrap} pointerEvents="box-none">
++                <AnimatedPressable
++                  style={styles.newMessageIndicatorBtn}
++                  onPress={handleReturnToBottom}
++                >
++                  <Ionicons
++                    name="arrow-down-circle-outline"
++                    size={16}
++                    color={theme.colors.primary}
++                  />
++                  <Text style={styles.newMessageIndicatorText}>Nova mensagem</Text>
++                </AnimatedPressable>
++              </View>
++            )}
++          </View>
+ 
+           {/* Upload progress */}
+           {uploadProgress !== null && (
+@@ -1750,6 +1834,37 @@ const styles = StyleSheet.create({
+ 
+   messagesList: { padding: theme.spacing.md, gap: 10, flexGrow: 1 },
+ 
++  // S142 ÔÇö container relativo da FlatList, ├óncora de posicionamento do
++  // indicador flutuante "nova mensagem" abaixo (position: absolute nele).
++  messagesWrap: { flex: 1, position: 'relative' },
++
++  // S142 ÔÇö indicador flutuante "nova mensagem", ancorado embaixo da lista
++  // (acima do composer). Mesmo molde visual de loadOlderBtn/loadOlderText
++  // logo abaixo (texto azul sobre surface, regra de ouro do tema).
++  newMessageIndicatorWrap: {
++    position: 'absolute',
++    bottom: theme.spacing.sm,
++    left: 0,
++    right: 0,
++    alignItems: 'center',
++  },
++  newMessageIndicatorBtn: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: theme.spacing.xs,
++    paddingVertical: theme.spacing.xs,
++    paddingHorizontal: theme.spacing.md,
++    borderRadius: theme.borderRadius.full,
++    backgroundColor: theme.colors.surface,
++    borderWidth: 0.5,
++    borderColor: theme.colors.border,
++  },
++  newMessageIndicatorText: {
++    fontSize: theme.fontSize.xs,
++    color: theme.colors.primary,
++    fontWeight: '600',
++  },
++
+   // S101 ÔÇö cabe├ºalho "carregar mais" da lista de mensagens. Texto azul sobre
+   // surface (nunca branco sobre amarelo, regra de ouro do tema).
+   loadOlderWrap: { alignItems: 'center', paddingBottom: theme.spacing.sm },

@@ -9,7 +9,13 @@ faca o trabalho deles por conta propria.
 
 ## Fase 0 — Modo
 
-ANTES DE QUALQUER OUTRA COISA, pergunte ao Raphael via AskUserQuestion:
+ANTES DE QUALQUER OUTRA COISA, verifique se `$ARGUMENTS` comeca com
+`lote --commit` seguido de uma lista de sprints (`S<NN> S<NN> ...`). Se
+sim, isso e o MODO LOTE — pule a pergunta abaixo (o modo lote roda toda
+sprint da lista em AUTOMATICO, sempre, por definicao) e va direto pra
+secao "Modo LOTE", logo apos esta, que substitui as Fases 0 a 6 por
+sprint da lista, em sequencia. Se nao, pergunte ao Raphael via
+AskUserQuestion:
 "Modo AUTOMATICO ou MANUAL?" — com as opcoes:
 - AUTOMATICO: sem nenhuma interacao ate o fim. Todo portao de decisao
   (Portao 1 e Portao 2) e resolvido por voce mesmo, escolhendo sempre a
@@ -30,6 +36,69 @@ o O QUE:
   construir, so "como" construir o que ja foi pedido.
 
 Guarde o modo escolhido: ele vale para a sprint inteira, Fase 1 a 6.
+
+## Modo LOTE (`lote --commit S<NN> S<NN> ...`)
+
+Só ativa com essa sintaxe exata em `$ARGUMENTS`. Fora dela, `/sprint` segue
+100% como hoje — sem excecao alguma ao item 2 do CLAUDE.md.
+
+Processe cada `S<NN>` da lista, EM SEQUENCIA. Cada uma roda o ciclo inteiro
+(Fase 0-B a Fase 6) no modo AUTOMATICO — a pergunta da Fase 0 nao se
+repete, o modo ja esta decidido pra lista toda. O objetivo de cada sprint
+da lista e o que ja esta registrado pra ela no ROADMAP.md/ESTADO.md; se
+faltar spec suficiente pra rodar sem uma decisao de produto nova, cai na
+mesma guarda de "frente nova" de baixo.
+
+Guardas do modo lote — somam-se a tudo que ja vale no automatico, nunca
+substituem:
+
+- **Commit e push so depois de auditoria APROVADA daquela sprint.** Ao
+  final da Fase 5 de cada sprint da lista, se o veredito for APROVADO,
+  antes de commitar faca os dois passos obrigatorios da Fase 6 (reescrever
+  o status no ROADMAP.md e atualizar o ESTADO.md) e so entao rode, voce
+  mesmo — esta e a UNICA excecao ao item 2 do CLAUDE.md, escopo exato:
+  `add`/`commit`/`push`, nunca `reset`/`checkout`/`restore`/`revert`,
+  nunca deploy:
+  ```powershell
+  $root = git rev-parse --show-toplevel 2>$null
+  if ($root -match 'juntavale$') {
+    Set-Location $root
+    git add <caminhos exatos da sprint, incluindo ROADMAP.md e ESTADO.md quando fizerem parte>
+    git commit -m "<tipo>(<escopo>): <resumo> (S<NN>)"
+    git push
+  } else { Write-Host 'nao estamos no repo do juntavale' }
+  ```
+  Nunca `git add .`. So depois disso passe pra proxima sprint da lista.
+- **Auditoria bloqueada sem correcao possivel → PARA O LOTE INTEIRO.** Isso
+  cobre: bloqueio na 3ª rodada (limite de correcao da Fase 5), ou qualquer
+  bloqueio cuja correcao proposta voce mesmo nao conseguiu validar contra
+  o codigo real. Nao pule pra proxima sprint da lista nem commite o que
+  ficou bloqueado — pare o lote nesse ponto e reporte quais sprints da
+  lista ja foram commitadas com sucesso e qual ficou pendente, com o
+  motivo do bloqueio.
+- **Portao de decisao de produto nova → PARA O LOTE e pergunta**, do mesmo
+  jeito que no automatico fora do lote (Fase 0 / Portao 1 / Portao 2). Nao
+  escolha por conta, nem pule so essa sprint da lista — pare o lote
+  inteiro nesse ponto e reporte o que ja foi commitado ate ali.
+- **Deploy continua proibido sempre**, no lote ou fora dele — rules,
+  functions, hosting, indexes. Se alguma sprint da lista tocar algum
+  desses, acumule o nome da sprint e o que precisa de deploy numa lista;
+  nunca deploye. Essa lista acumulada entra inteira no relatorio final do
+  lote.
+- **Fora do modo lote, git de escrita continua proibido como hoje** — so a
+  sintaxe exata `lote --commit S<NN> ...` ativa a excecao acima; qualquer
+  outra chamada de `/sprint` segue imprimindo os comandos git no fim (Fase
+  6 normal) e NUNCA os executando.
+
+Ao terminar — todas as sprints da lista commitadas, ou parado numa
+guarda — produza UM relatorio final cobrindo o lote inteiro, entre
+`=== COPIAR A PARTIR DAQUI ===` e `=== FIM ===` (item 6 do CLAUDE.md):
+- uma linha por sprint da lista: commitada (com o hash curto do
+  `git commit`) ou parada (com o motivo exato);
+- lista acumulada de deploys pendentes (rules/functions/hosting/indexes),
+  sprint a sprint, ou "nenhum" se nao houve;
+- "Decisoes tomadas no automatico", uma por decisao que algum portao
+  precisou resolver sozinho, em qualquer sprint da lista, ou "nenhuma".
 
 ## Fase 0-B — Trilha
 
@@ -101,6 +170,11 @@ porque o auditor chega no codigo sem saber o que o autor pensou.
   nos dois modos.
 
 ## Fase 6 — Entrega
+NO MODO LOTE, o commit/push de cada sprint ja acontece dentro do proprio
+loop (ver secao "Modo LOTE") — os passos abaixo, incluindo o bloco de
+comandos git impresso (nunca executado), valem so pra sprint rodada FORA
+do lote.
+
 Tudo desta fase, do inicio ao fim do bloco de comandos git, vai entre
 `=== COPIAR A PARTIR DAQUI ===` e `=== FIM ===` (Regras invariantes do
 CLAUDE.md, item 6), pra ficar facil de colar em outro lugar.

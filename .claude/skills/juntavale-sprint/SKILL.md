@@ -6,7 +6,12 @@ description: Ciclo de sprint do JuntaVale e formato de relatorio. Use em toda ro
 # Ciclo de sprint
 
 recon (so leitura, so na trilha completa) -> implementacao -> auditoria ->
-commit/push/deploy pelo Raphael -> teste em device. Uma sprint por sessao.
+commit/push/deploy pelo Raphael -> teste em device. Uma sprint por sessao —
+excecao: modo lote do `/sprint` (`lote --commit S<NN> S<NN> ...`) processa
+varias sprints em sequencia na mesma sessao, cada uma pelo ciclo completo
+em automatico, com commit/push proprio so apos auditoria aprovada daquela
+sprint (guardas completas em `.claude/commands/sprint.md`). Deploy fica
+proibido sempre, dentro ou fora do lote — so o Raphael deploya.
 
 Quem escreve o codigo nao e quem aprova. A auditoria existe pra achar o que
 o implementador nao viu; se ela so confirmar o proprio trabalho, perdeu a

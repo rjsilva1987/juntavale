@@ -30,7 +30,14 @@
    roda Bash de escrita.
 2. **Claude Code nunca roda git de escrita** (add/commit/push/reset/
    checkout/restore/revert) **nem deploy** (firebase deploy, eas build/
-   submit) — isso é sempre do Raphael.
+   submit) — isso é sempre do Raphael. EXCEÇÃO ÚNICA: modo lote do
+   `/sprint` (`/sprint lote --commit S<NN> S<NN> ...`) pode rodar
+   `git add`/`commit`/`push` — nunca reset/checkout/restore/revert, nunca
+   deploy — e só depois de auditoria aprovada de cada sprint da lista.
+   Fora dessa sintaxe exata, vale a proibição normal. Guardas completas
+   (parada em auditoria bloqueada, parada em decisão de produto nova,
+   deploy sempre proibido): seção "Modo LOTE" de
+   `.claude/commands/sprint.md`.
 3. **Prova de escrita obrigatória** depois de CADA edição: Select-String
    (ou grep) das linhas-chave alteradas, com `arquivo:linha` e saída
    bruta, mais `git diff -w <arquivo>`. Nunca escrever "confirmado acima"/
