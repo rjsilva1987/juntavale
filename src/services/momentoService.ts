@@ -76,19 +76,35 @@ export const listenActiveMomentos = (callback: (momentos: MomentoWithId[]) => vo
   );
 };
 
-// Doc ID == uid do autor (1 momento ativo por usuário). permission-denied
-// aqui significa "momento expirado, rules já negam a leitura, mas a
-// function de limpeza (expireMomentos) ainda não varreu o doc" — mesmo
-// princípio já usado no projeto (permission-denied = recurso sumiu, não
-// erro genérico). Não propaga esse erro pra tela, só null.
-export const getMyMomento = async (uid: string): Promise<MomentoWithId | null> => {
-  try {
-    const snap = await getDoc(doc(db, 'momentos', uid));
-    return snap.exists() ? { id: snap.id, ...(snap.data() as Momento) } : null;
-  } catch (error) {
-    if ((error as { code?: string })?.code === 'permission-denied') return null;
-    throw error;
-  }
+// S153 — listener do PRÓPRIO momento (doc por ID, allow get, mesma regra
+// que já protegia getMyMomento — get() é avaliado documento a documento
+// com dado real, não sofre da limitação estrutural de list()/query da
+// S139). Corrige o card do dono ficando pendurado depois de expirar:
+// getMyMomento (getDoc único) nunca refletia mudança no doc depois do
+// fetch inicial; este listener mantém myMomento sincronizado com o
+// Firestore de verdade — o filtro de Date.now()/tick de 60s da S152
+// (MomentosScreen.tsx) continua sendo a rede de segurança pra expiração
+// natural (sem escrita nova no doc), este listener resolve o caso de
+// escrita nova (edição manual, expireMomentos apagando o doc) não
+// chegar nunca ao client.
+export const listenMyMomento = (uid: string, callback: (momento: MomentoWithId | null) => void) => {
+  return onSnapshot(
+    doc(db, 'momentos', uid),
+    (snap) => {
+      callback(snap.exists() ? { id: snap.id, ...(snap.data() as Momento) } : null);
+    },
+    (error) => {
+      // Mesmo raciocínio de getMyMomento acima: doc com expiresAt vencido
+      // já é negado por `allow get` (firestore.rules) antes de
+      // expireMomentos varrer de fato — não é erro de verdade, é "sem
+      // momento ativo". Outros erros são logados mas ainda tratados como
+      // "sem momento" pro usuário nunca ficar com um card quebrado.
+      if ((error as { code?: string })?.code !== 'permission-denied') {
+        console.error('[listenMyMomento] erro no listener:', error);
+      }
+      callback(null);
+    },
+  );
 };
 
 // Mesmo molde de uploadProfilePhoto (firestoreService.ts).

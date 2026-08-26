@@ -30,8 +30,8 @@ import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   deleteMyMomento,
-  getMyMomento,
   listenActiveMomentos,
+  listenMyMomento,
   MomentoWithId,
 } from '@/services/momentoService';
 import { getDisplayName } from '@/utils/profile';
@@ -124,20 +124,27 @@ export default function MomentosScreen() {
   // S152 — só pra forçar re-render a cada tick (ver useEffect abaixo); o
   // valor em si nunca é lido.
   const [, forceTick] = useState(0);
+  // S153 correção pós-auditoria — onSnapshot morre permanentemente após um
+  // erro de allow→deny (mesmo padrão já em listenPresence,
+  // firestoreService.ts:1425-1440) — a rule de momentos/{uid} tem condição
+  // de tempo que pode negar a leitura (doc inexistente/expirado/apagado).
+  // A maioria das sessões começa sem momento ativo, então o listener já
+  // morre no mount (doc inexistente nega `allow get`) e nunca ressuscita
+  // sozinho. `listenGeneration` força o useEffect abaixo a recriar a
+  // assinatura a cada publish bem-sucedido — o momento exato em que a
+  // condição da rule volta a valer.
+  const [listenGeneration, setListenGeneration] = useState(0);
 
   const refreshMyMomento = () => {
     if (!user) return;
-    getMyMomento(user.uid)
-      .then(setMyMomento)
-      .catch(() => setMyMomento(null));
+    setListenGeneration((g) => g + 1);
   };
 
   useEffect(() => {
     if (!user) return;
-    getMyMomento(user.uid)
-      .then(setMyMomento)
-      .catch(() => setMyMomento(null));
-  }, [user]);
+    const unsub = listenMyMomento(user.uid, setMyMomento);
+    return unsub;
+  }, [user, listenGeneration]);
 
   useEffect(() => {
     const unsub = listenActiveMomentos((momentos) => {

@@ -1306,6 +1306,96 @@ Arquivos tocados: `src/screens/MomentosScreen.tsx`,
 `src/screens/MomentoRequestChatScreen.tsx`,
 `src/services/momentoRequestService.ts`.
 
+### S153 — Bug: card do momento PRÓPRIO fica pendurado depois de expirar
+**Status:** FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA na 2ª rodada (1 rodada de correção: ver
+"Correção pós-auditoria" abaixo). Client puro, sem rules/functions
+tocadas, SEM deploy necessário. SEM teste em aparelho.
+
+Reportado por Raphael em 26/08/2026, depois de testar em aparelho a
+correção da Parte B da S152 (commit `b68a6b1`): editando `expiresAt`
+direto no Console do Firebase pra simular expiração, o card do momento
+PRÓPRIO continuou aparecendo no app depois de vencido — o feed dos
+OUTROS usuários se comporta corretamente (o momento some pro leitor).
+
+**Causa confirmada (recon + teste em aparelho, 26/08/2026):**
+`visibleFeed` (feed dos outros) vem de `listenActiveMomentos`
+(`src/services/momentoService.ts:60-77`) — um `onSnapshot` real-time —
+combinado com o filtro redundante de `Date.now()` da S152
+(`MomentosScreen.tsx:198-200`) e o tick de 60s (`MomentosScreen.tsx:181-
+191`); esse caminho funciona. O card do DONO, porém, vem de `myMomento`,
+alimentado por `getMyMomento` (`momentoService.ts:84-92`) — um `getDoc`
+ÚNICO, chamado 1x no mount (`MomentosScreen.tsx:135-140`) e só re-buscado
+manualmente pelo `onPublished` do composer (`refreshMyMomento`). O tick
+de 60s da S152 reavalia corretamente a condição `myMomento.expiresAt.
+toMillis() <= Date.now()` (`MomentosScreen.tsx:336`) — mas contra um
+`expiresAt` que NUNCA é atualizado depois do fetch inicial. Editar o doc
+direto no Console (ou a expiração natural acontecer) enquanto a tela já
+está montada não é refletido em `myMomento` — o dado em memória fica
+obsoleto, não o relógio. `firestore.rules:2406` (`allow get` de
+`momentos/{uid}`) já nega leitura de doc vencido
+(`resource.data.expiresAt > request.time`) — se a tela fosse
+REMONTADA do zero depois da expiração, `getMyMomento` capturaria o
+`permission-denied` e devolveria `null` corretamente
+(`momentoService.ts:88-91`); o bug só se manifesta com a tela já aberta
+quando o doc vence.
+
+**Correção (Raphael, 26/08/2026 — decisão técnica já fechada no pedido):**
+`myMomento` passa a vir de um LISTENER (`onSnapshot` no doc
+`momentos/{uid}` do próprio usuário), mesmo molde de
+`listenActiveMomentos`, em vez do `getDoc` único — mantendo o filtro/tick
+já existente como rede de segurança (defesa em profundidade, mesmo
+raciocínio já documentado no comentário de `visibleFeed`). Quando o doc
+for apagado (`expireMomentos`) ou vencer, o card do dono deve voltar
+sozinho ao estado "Criar momento", sem precisar de remount. Tratar o erro
+de `permission-denied` do listener (esperado na virada, já que `allow
+get`/`allow list` negam doc vencido por ID) como "sem momento" — mesmo
+tratamento que `getMyMomento` já dá hoje.
+
+**NÃO mexer em `expireMomentos`** — diagnóstico da S152 confirmou que ela
+não tem bug; o apagamento acontece na varredura horária, não no instante
+da edição/expiração.
+
+**O que foi feito:**
+- `src/services/momentoService.ts` ganhou `listenMyMomento(uid, callback)`
+  — `onSnapshot` sobre `doc(db,'momentos',uid)` (leitura por ID, mesma
+  operação "get" que já protegia `getMyMomento`, não sofre da limitação
+  estrutural de `list()`/query da S139). Erro tratado como "sem momento"
+  (`callback(null)`), logando só quando não for `permission-denied`.
+  `getMyMomento` foi REMOVIDA (ficou sem nenhum call site no repo depois
+  da troca abaixo).
+- `src/screens/MomentosScreen.tsx` — o `useEffect` de mount troca
+  `getMyMomento` por `listenMyMomento`, com `unsub` no cleanup.
+- **Correção pós-auditoria (1 rodada):** a auditoria achou que um
+  `onSnapshot` sobre uma rule com condição de tempo mutável
+  (`allow get` de `momentos/{uid}`, nega doc inexistente/expirado) MORRE
+  permanentemente ao primeiro `permission-denied` — mesmo padrão já
+  documentado em `listenPresence` (`firestoreService.ts:1425-1440`) — e
+  nunca se re-inscreve sozinho, mesmo que o doc volte a existir depois
+  (publicar um momento novo). Como a maioria das sessões começa sem
+  momento ativo, o listener morreria já no mount, reabrindo o mesmo bug
+  assim que um momento publicado DEPOIS expirasse com a tela aberta.
+  Corrigido com um contador `listenGeneration`: `refreshMyMomento` (já
+  chamada pelo `onPublished` do composer a cada publish bem-sucedido)
+  passa a incrementar esse contador em vez de fazer um `getDoc` avulso; o
+  `useEffect` do listener depende de `[user, listenGeneration]`, então
+  cada publish força desmontar a assinatura (viva ou morta) e criar uma
+  nova, exatamente no momento em que o doc volta a satisfazer a rule.
+  Auditoria confirmou a ordem de escrita (`await setDoc` sempre resolve
+  antes de `onPublished()` disparar, `MomentoComposerModal.tsx:80-98`) e
+  aprovou sem novo achado bloqueante.
+- **Ressalva não-bloqueante:** `handleDeleteOwn` (exclusão manual do
+  próprio momento) não passa pelo `listenGeneration` — deixa o listener
+  potencialmente morto até o próximo publish, mas inofensivo (o estado
+  visual já é setado otimisticamente e o próximo publish revive o
+  listener do mesmo jeito). Se uma sprint futura adicionar outra via de
+  escrita em `momentos/{uid}` fora do composer, ela precisa lembrar de
+  também incrementar `listenGeneration` (ou equivalente) pra reviver o
+  listener.
+
+Arquivos tocados: `src/screens/MomentosScreen.tsx`,
+`src/services/momentoService.ts`.
+
 ---
 
 ## Fechadas recentemente

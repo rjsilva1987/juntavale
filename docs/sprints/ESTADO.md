@@ -4,10 +4,23 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 26/08/2026
-**Commit atual:** 16a1cf5 — feat(grupos): opcao "sem prazo" na criacao de
-grupo (S149-A) — ver ROADMAP.md.
+**Commit atual:** b68a6b1 — fix(momentos): card do dono sem moldura,
+expiracao no feed via client e badge por conversa (S152) — ver
+ROADMAP.md.
 
 ## Sprints em andamento
+- S153 — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA na 2ª rodada (1 rodada de correção: um
+  `onSnapshot` sobre rule com condição de tempo mutável morre
+  permanentemente ao 1º `permission-denied` e nunca revive sozinho —
+  corrigido com contador `listenGeneration` que força o listener a se
+  reinscrever a cada publish bem-sucedido). Continuação da S152: o card do
+  momento PRÓPRIO ficava pendurado depois de expirar porque `myMomento`
+  vinha de um `getDoc` único (nunca atualizado); agora vem de um listener
+  (`listenMyMomento`, `momentoService.ts`) que reflete o Firestore de
+  verdade. `getMyMomento` removida (código morto). Client puro, sem
+  rules/functions tocadas, SEM deploy necessário. Ver ROADMAP.md § S153.
+  SEM teste em aparelho.
 - S152 — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA na 3ª rodada (2 rodadas de correção: um
   write-storm de escritas repetidas em `seenAt`/`authorSeenAt` de
