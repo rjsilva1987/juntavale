@@ -173,6 +173,41 @@ export const onGroupPollChanged = onDocumentUpdated(
   },
 );
 
+// S150 — espelha lastMessage no doc pai do grupo, MESMO MECANISMO de
+// onMessageCreated (matches/{matchId}/messages, chat.ts): Cloud Function
+// (Admin SDK) reagindo à criação da mensagem — NÃO um write direto do client
+// (groups/{groupId} não libera 'lastMessage' no hasOnly do allow update, ver
+// firestore.rules, mesmo tratamento de matches/{matchId}.lastMessage).
+// Fundação do badge "mensagem nova em grupo que participo"
+// (useUnreadGroupMessages.ts) — SEM push aqui: zero push por mensagem de
+// grupo é decisão de produto permanente (S124-B "NÃO FAZER"), esta function
+// só mantém o preview/timestamp em sincronia.
+export const onGroupMessageCreated = onDocumentCreated(
+  { document: 'groups/{groupId}/messages/{messageId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { groupId } = event.params;
+    const message = snap.data() as { senderId: string; text?: string; imageUrl?: string };
+
+    const preview = message.text ? message.text : message.imageUrl ? '📷 Foto' : '';
+    const lastMessageText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
+
+    try {
+      await db.doc(`groups/${groupId}`).update({
+        lastMessage: {
+          text: lastMessageText,
+          senderId: message.senderId,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+      });
+    } catch (error) {
+      console.error('[onGroupMessageCreated] falha ao atualizar lastMessage:', error);
+    }
+  },
+);
+
 // S124-B (camada 2 — Gente ativa agora). Réplica manual de PRESENCE_ONLINE_MS
 // (src/hooks/usePresenceHeartbeat.ts:20) — Cloud Functions não importa src/
 // (mesmo padrão de SUPPORT_CATEGORY_LABELS, admin.ts), sincronize

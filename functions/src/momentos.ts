@@ -165,6 +165,41 @@ export const onMomentoRequestCreated = onDocumentCreated(
   },
 );
 
+// S150 — espelha lastMessage no doc pai do pedido, MESMO MECANISMO de
+// onMessageCreated (matches/{matchId}/messages, chat.ts) e de
+// onGroupMessageCreated (grupos.ts, S150): Cloud Function (Admin SDK)
+// reagindo à criação da mensagem — client nunca escreve este campo
+// (momentoRequests/{requestId} não libera 'lastMessage' no hasOnly do allow
+// update, ver firestore.rules). Fundação do badge "mensagem nova" pro AUTOR
+// (useUnreadMomentoAuthorMessages.ts) — SEM push aqui, os pushes de
+// pedido/resposta já existem em onMomentoRequestCreated/Updated acima, nada
+// novo por mensagem de acompanhamento.
+export const onMomentoRequestMessageCreated = onDocumentCreated(
+  { document: 'momentoRequests/{requestId}/messages/{messageId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { requestId } = event.params;
+    const message = snap.data() as { senderId: string; text: string };
+
+    const lastMessageText =
+      message.text.length > 120 ? `${message.text.slice(0, 120)}…` : message.text;
+
+    try {
+      await db.doc(`momentoRequests/${requestId}`).update({
+        lastMessage: {
+          text: lastMessageText,
+          senderId: message.senderId,
+          createdAt: FieldValue.serverTimestamp(),
+        },
+      });
+    } catch (error) {
+      console.error('[onMomentoRequestMessageCreated] falha ao atualizar lastMessage:', error);
+    }
+  },
+);
+
 // Notifica o REMETENTE quando o autor responde (status -> answered) ou
 // recusa (status -> declined) o pedido — decisão 4: responder NUNCA cria
 // match, só libera a subcoleção messages deste pedido específico (ver

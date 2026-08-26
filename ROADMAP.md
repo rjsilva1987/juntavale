@@ -1104,7 +1104,14 @@ escopo do badge).
    rules pra grupos sem `expiresAt`.
 
 ### S150 — Explorar: notificações (push + badge)
-**Status:** ABERTA — decisão fechada, sem recon
+**Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA (1 ressalva não-bloqueante: agregação de
+grupos no hook `useUnreadGroupMessages` não re-busca a lista de grupos do
+usuário após o mount, padrão herdado dos hooks irmãos — risco pré-existente,
+não regressão desta sprint). `firestore.rules` alteradas (ramos novos de
+`messagesSeenAt`/`authorSeenAt`) + 2 Cloud Functions novas
+(`onGroupMessageCreated`, `onMomentoRequestMessageCreated`) — **EXIGE
+DEPLOY de rules E de functions**. SEM teste em aparelho.
 
 **Decisão fechada (Raphael, 25/08/2026):**
 - PUSH fica SÓ no que pede ação da pessoa (pedido de entrada recebido,
@@ -1116,6 +1123,22 @@ escopo do badge).
   mensagem nova em conversa de Momento dela → card Momentos; grupo
   novo/evento novo NÃO acendem; momento novo não acende nada. Dot some ao
   abrir a tela correspondente.
+
+**Mecanismo confirmado e replicado (decisão técnica, ver "Padrões de escrita
+no Firestore"):** `lastMessage` de `groups/{groupId}` e
+`momentoRequests/{requestId}` é escrito pela MESMA via que `matches/
+{matchId}.lastMessage` já usa — Cloud Function (Admin SDK,
+`onDocumentCreated` na subcoleção `messages`), nunca client direto.
+`messagesSeenAt` (membro de grupo, distinto do `seenAt` do S146) e
+`authorSeenAt` (pedido de Momento, distinto do `seenAt` do sender) são
+campos NOVOS, gravados pelo client no mount de `GroupChatScreen`/
+`MomentoRequestChatScreen` a CADA abertura (não só a 1ª, ao contrário dos
+badges one-shot do S146 — este é um contador de não-lidas de verdade, tem
+que acompanhar mensagem nova a cada rodada). Hooks novos:
+`useUnreadGroupMessages` (2 listeners por grupo — doc do grupo e doc de
+membership, campos em documentos diferentes) e
+`useUnreadMomentoAuthorMessages` (1 listener só, os dois campos vivem no
+mesmo doc `momentoRequests/{requestId}`).
 
 ### S151 — Enquete do perfil: até 5 opções
 **Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
@@ -1386,6 +1409,27 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   o momento de origem aparece no topo, com o autor certo (você ou o outro
   lado), texto ou miniatura de foto conforme o tipo, sem responder a
   toque (não deve abrir nenhum viewer).
+- S150 — **depois que Raphael fizer o deploy das rules E das Cloud Functions
+  novas desta sprint** (`onGroupMessageCreated`, `onMomentoRequestMessageCreated`):
+  conta B manda mensagem num grupo que a conta A participa (A não-criadora
+  ou criadora) — o dot aparece na tab bar Explorar de A e no card "Grupos"
+  de A; abrir `GroupChatScreen` (A) apaga os dois dots, mesmo com mensagens
+  de B se acumulando antes de A abrir.
+- S150 — mirror do teste acima pro card "Momentos": conta B manda mensagem
+  numa thread de Momento já respondida ('answered') onde conta A é a AUTORA
+  do momento original — o dot aparece na tab bar de A e no card "Momentos"
+  de A; abrir `MomentoRequestChatScreen` (A) apaga os dois dots.
+- S150 — regressão: mandar mensagem EU MESMO (grupo ou Momento) nunca acende
+  o próprio dot (critério "última mensagem do próprio uid nunca é não
+  lida", mesmo de `isMatchUnread`); grupo novo/evento novo/momento novo
+  sozinhos (sem mensagem) não acendem nada.
+- S150 — regressão: nenhum push chega por mensagem de grupo nem por
+  mensagem de acompanhamento de Momento (decisão permanente S124-B +
+  decisão desta sprint) — só os pushes já existentes de pedido/aceite
+  continuam disparando.
+- S150 — sair de um grupo (ou ter o momento de origem expirado, apagando o
+  `momentoRequest` junto — S148) não deve deixar o dot "preso" acendido: o
+  hook precisa parar de contar o grupo/pedido que saiu da lista.
 
 **S143-C — bateria de aparelho TESTADA e APROVADA em 25/08/2026** (barra de
 resposta no viewer, roteamento independente de match, mesclagem "via
@@ -1624,6 +1668,31 @@ continua na bateria geral.
   `local` e chama `setState(local)` direto (substitui o objeto inteiro, não
   funde com o state anterior). Vale pra qualquer hook novo que agregue N
   listeners de doc dinâmico (não uma única query/collectionGroup).
+- **`lastMessage`/preview de última mensagem de qualquer thread (match,
+  grupo, pedido de Momento) é SEMPRE escrito por Cloud Function (Admin
+  SDK, `onDocumentCreated` na subcoleção `messages`), NUNCA pelo client
+  direto.** Confirmado na S150 ao espelhar o mecanismo já usado por
+  `matches/{matchId}.lastMessage` (`onMessageCreated`, `chat.ts`) pra
+  `groups/{groupId}.lastMessage` (`onGroupMessageCreated`, `grupos.ts`) e
+  `momentoRequests/{requestId}.lastMessage` (`onMomentoRequestMessageCreated`,
+  `momentos.ts`) — mesmo shape `{text, senderId, createdAt}` nos três,
+  `firestore.rules` não precisa de nenhum `hasOnly` liberando o campo (Admin
+  SDK ignora rules). Qualquer thread nova com um "preview de última
+  mensagem" deve seguir a MESMA via — nunca o client escrevendo o preview
+  direto no doc pai, mesmo que pareça mais simples/rápido de implementar.
+- **Badge de "não lida" (contador que precisa DESCER de novo depois de já
+  ter zerado, ex.: mensagem nova após já ter aberto a tela) é DIFERENTE do
+  badge one-shot "vi que aconteceu algo" (S146: `seenAt` de grupo/Momento,
+  gravado só na 1ª vez que falta).** Confirmado na S150
+  (`messagesSeenAt`/`authorSeenAt`): o campo de leitura de um badge de
+  não-lidas de verdade precisa ser regravado (`serverTimestamp()`) a TODA
+  abertura da tela (mount), nunca só quando ainda está ausente — senão o
+  badge nunca reacende depois da primeira mensagem lida, mesmo com
+  mensagens novas chegando depois. Mesmo padrão já usado por `markMatchRead`
+  (`ChatScreen.tsx`/`lastReadAt`). Campo de leitura de badge one-shot e
+  campo de leitura de badge recorrente NUNCA podem ser o mesmo campo,
+  mesmo quando protegem a mesma entidade (grupo/pedido) — precisam ser
+  campos distintos com useEffects distintos.
 
 ## Padrões de UI que valem para o projeto inteiro
 

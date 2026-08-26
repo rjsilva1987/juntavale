@@ -74,6 +74,20 @@ export interface Group {
   // firestore.rules: não entra em nenhum hasOnly de client). Chave ausente =
   // contagem zero pra aquela opção.
   pollCounts?: Record<string, number>;
+  // S150 — espelho de LastMessage (matches, firestoreService.ts), escrito só
+  // pela Cloud Function onGroupMessageCreated (Admin SDK, functions/src/
+  // grupos.ts) — o client nunca grava lastMessage (ver firestore.rules).
+  // Fundação do badge "mensagem nova em grupo que participo"
+  // (useUnreadGroupMessages.ts).
+  lastMessage?: GroupMessagePreview;
+}
+
+// S150 — mesmo shape de LastMessage (matches, firestoreService.ts), schema
+// PARALELO (grupo não referencia matches/).
+export interface GroupMessagePreview {
+  text: string;
+  senderId: string;
+  createdAt: Timestamp;
 }
 
 export interface GroupMember {
@@ -84,6 +98,12 @@ export interface GroupMember {
   // GroupDetailScreen pela 1ª vez depois de aprovado (markGroupMembershipSeen
   // abaixo). Mesmo molde de lastReadAt em matches (firestoreService.ts).
   seenAt?: Timestamp;
+  // S150 — badge "mensagem nova em grupo": DISTINTO de seenAt acima (aquele é
+  // o badge "aceite→solicitante", one-shot, S146 — não mexer). Gravado a
+  // TODA abertura de GroupChatScreen (mount), não só na primeira vez —
+  // precisa acompanhar mensagens novas subsequentes, ao contrário de seenAt.
+  // Ver markGroupMessagesSeen abaixo e useUnreadGroupMessages.ts.
+  messagesSeenAt?: Timestamp;
 }
 
 export interface GroupJoinRequest {
@@ -240,6 +260,14 @@ export const listenMyMembership = (
 // firestoreService.ts, chamado por ChatScreen.tsx).
 export const markGroupMembershipSeen = async (groupId: string, uid: string): Promise<void> => {
   await updateDoc(memberRef(groupId, uid), { seenAt: serverTimestamp() });
+};
+
+// S150 — badge "mensagem nova em grupo": chamado fire-and-forget no mount de
+// GroupChatScreen, SEMPRE (não só na 1ª vez, ao contrário de
+// markGroupMembershipSeen acima) — precisa acompanhar toda mensagem nova
+// lida, mesmo padrão de markMatchRead (firestoreService.ts/ChatScreen.tsx).
+export const markGroupMessagesSeen = async (groupId: string, uid: string): Promise<void> => {
+  await updateDoc(memberRef(groupId, uid), { messagesSeenAt: serverTimestamp() });
 };
 
 export const getMyJoinRequest = async (

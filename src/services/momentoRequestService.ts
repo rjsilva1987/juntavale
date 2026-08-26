@@ -54,6 +54,25 @@ export interface MomentoRequest {
   // MomentoRequestChatScreen depois que o pedido sai de pending
   // (markMomentoRequestSeen abaixo). Mesmo molde de lastReadAt em matches.
   seenAt?: Timestamp;
+  // S150 — espelho de LastMessage (matches, firestoreService.ts), escrito só
+  // pela Cloud Function onMomentoRequestMessageCreated (Admin SDK,
+  // functions/src/momentos.ts) — o client nunca grava lastMessage. Fundação
+  // do badge "mensagem nova" pro AUTOR (useUnreadMomentoAuthorMessages.ts).
+  lastMessage?: MomentoRequestLastMessage;
+  // S150 — badge "mensagem nova" (autor): DISTINTO de seenAt acima (aquele é
+  // o badge "aceite→solicitante" do SENDER, S146 — não mexer). Gravado a
+  // TODA abertura de MomentoRequestChatScreen pelo AUTOR (mount), não só na
+  // 1ª vez — precisa acompanhar mensagens novas subsequentes. Ver
+  // markMomentoRequestAuthorSeen abaixo e useUnreadMomentoAuthorMessages.ts.
+  authorSeenAt?: Timestamp;
+}
+
+// S150 — mesmo shape de LastMessage (matches, firestoreService.ts), schema
+// PARALELO (pedido de Momento não referencia matches/).
+export interface MomentoRequestLastMessage {
+  text: string;
+  senderId: string;
+  createdAt: Timestamp;
 }
 
 export interface MomentoRequestMessage {
@@ -278,4 +297,13 @@ export const declineMomentoRequest = async (requestId: string): Promise<void> =>
 // saiu de pending (mesmo padrão de markMatchRead em firestoreService.ts).
 export const markMomentoRequestSeen = async (requestId: string): Promise<void> => {
   await updateDoc(doc(db, 'momentoRequests', requestId), { seenAt: serverTimestamp() });
+};
+
+// S150 — badge "mensagem nova" (autor): chamado fire-and-forget no mount de
+// MomentoRequestChatScreen quando o usuário logado é o AUTOR, SEMPRE (não só
+// na 1ª vez, ao contrário de markMomentoRequestSeen acima) — precisa
+// acompanhar toda mensagem nova lida, mesmo padrão de markMatchRead
+// (firestoreService.ts/ChatScreen.tsx).
+export const markMomentoRequestAuthorSeen = async (requestId: string): Promise<void> => {
+  await updateDoc(doc(db, 'momentoRequests', requestId), { authorSeenAt: serverTimestamp() });
 };

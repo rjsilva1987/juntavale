@@ -40,6 +40,7 @@ import {
   declineMomentoRequest,
   listenMomentoRequestById,
   listenMomentoRequestMessages,
+  markMomentoRequestAuthorSeen,
   markMomentoRequestSeen,
   MOMENTO_REQUEST_TEXT_MAX,
   MomentoRequest,
@@ -120,6 +121,20 @@ export default function MomentoRequestChatScreen({
     if (request.status === 'pending') return;
     if (request.seenAt) return;
     markMomentoRequestSeen(requestId).catch(() => {});
+  }, [user, request, requestId]);
+
+  // S150 — badge "mensagem nova" (autor): marca authorSeenAt no mount
+  // (fire-and-forget, mesmo padrão de markMatchRead em ChatScreen.tsx), SÓ
+  // quando o usuário logado é o AUTOR e o pedido já está 'answered' (só aí
+  // existe lastMessage pra comparar) — SEMPRE que essas condições valem, não
+  // só na 1ª vez, DISTINTO do useEffect de markMomentoRequestSeen acima
+  // (aquele é o badge "aceite→solicitante" do SENDER, S146, one-shot — não
+  // mexer).
+  useEffect(() => {
+    if (!user || !request) return;
+    if (request.authorId !== user.uid) return;
+    if (request.status !== 'answered') return;
+    markMomentoRequestAuthorSeen(requestId).catch(() => {});
   }, [user, request, requestId]);
 
   // Mensagem inicial (o comentário/pedido, sempre do senderId) + thread

@@ -24,6 +24,8 @@ import { usePendingGroupJoinRequests } from '@/hooks/usePendingGroupJoinRequests
 import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
 import { usePresenceHeartbeat } from '@/hooks/usePresenceHeartbeat';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
+import { useUnreadGroupMessages } from '@/hooks/useUnreadGroupMessages';
+import { useUnreadMomentoAuthorMessages } from '@/hooks/useUnreadMomentoAuthorMessages';
 import { useUnseenAcceptedEvents } from '@/hooks/useUnseenAcceptedEvents';
 import { useUnseenAcceptedGroups } from '@/hooks/useUnseenAcceptedGroups';
 import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomentoRequests';
@@ -193,13 +195,20 @@ function MainTabs() {
   const unseenAcceptedGroupsCount = useUnseenAcceptedGroups();
   const unseenAcceptedEventsCount = useUnseenAcceptedEvents();
   const unseenAnsweredMomentoRequestsCount = useUnseenAnsweredMomentoRequests();
+  // S150 — badge "mensagem nova" (grupo que participo / conversa de Momento
+  // onde sou autor), somado aos 6 hooks já existentes acima — mesmo
+  // raciocínio de dot único da S145: a aba não distingue a ORIGEM do aviso.
+  const unreadGroupMessagesCount = useUnreadGroupMessages();
+  const unreadMomentoAuthorMessagesCount = useUnreadMomentoAuthorMessages();
   const explorarBadgeCount =
     pendingMomentoRequestsCount +
     pendingGroupJoinRequestsCount +
     pendingEventJoinRequestsCount +
     unseenAcceptedGroupsCount +
     unseenAcceptedEventsCount +
-    unseenAnsweredMomentoRequestsCount;
+    unseenAnsweredMomentoRequestsCount +
+    unreadGroupMessagesCount +
+    unreadMomentoAuthorMessagesCount;
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.

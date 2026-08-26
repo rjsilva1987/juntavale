@@ -1,4 +1,19 @@
-// rules-stamp: S151 (25/08/2026 — teto de opções da enquete (poll) de
+// rules-stamp: S150 (25/08/2026 — badge de mensagem nova (grupo/Momento):
+// groups/{groupId}/members/{uid} allow update ganha ramo OR novo pro campo
+// `messagesSeenAt` [DISTINTO do `seenAt` já existente do S146, badge
+// "aceite→solicitante" — este é o badge "mensagem nova em grupo", marcado a
+// toda abertura de GroupChatScreen], mesma trava de só o próprio uid gravar
+// com serverTimestamp exigido; momentoRequests/{requestId} allow update
+// ganha 3º ramo OR pro campo `authorSeenAt` [DISTINTO do `seenAt` do sender,
+// S146 — badge "mensagem nova" pro AUTOR], só quando status=='answered' (só
+// aí existe lastMessage pra comparar). `lastMessage`/`lastMessageAt` de
+// groups/{groupId} e momentoRequests/{requestId} NÃO entram em rules —
+// mecanismo é Cloud Function [onGroupMessageCreated/
+// onMomentoRequestMessageCreated, Admin SDK, mesmo mecanismo de
+// onMessageCreated em matches/{matchId}.lastMessage, chat.ts], que ignora
+// rules e não precisa de hasOnly liberando o campo pro client. Zero push
+// novo (decisão de produto: PUSH fica só em pedido de entrada/aceite já
+// existentes) + S151 (25/08/2026 — teto de opções da enquete (poll) de
 // perfil [users, linha ~634] e de grupo [groups, linha ~1614] sobe de 4
 // pra 5; MAX_POLL_OPTIONS em src/constants/poll.ts é a única constante,
 // literais aqui espelham manualmente — mínimo de 2 opções não muda.) +
@@ -1663,10 +1678,20 @@ service cloud.firestore {
         // some depois que o membro abre GroupDetailScreen — ver
         // markGroupMembershipSeen/GroupDetailScreen.tsx), e só o PRÓPRIO
         // uid grava, com serverTimestamp exigido.
+        // S150 — ramo OR novo, campo `messagesSeenAt` (DISTINTO de `seenAt`
+        // acima — badge "mensagem nova em grupo", marcado a toda abertura
+        // de GroupChatScreen, não só a 1ª vez, ver markGroupMessagesSeen/
+        // GroupChatScreen.tsx), mesma trava de só o PRÓPRIO uid gravar com
+        // serverTimestamp exigido.
         allow update: if isSignedIn()
           && request.auth.uid == uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
-          && request.resource.data.seenAt == request.time;
+          && (
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
+              && request.resource.data.seenAt == request.time)
+            ||
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messagesSeenAt'])
+              && request.resource.data.messagesSeenAt == request.time)
+          );
 
         // O próprio uid pode apagar o próprio doc (sair), EXCETO se for o
         // criador (decisão de produto: criador não sai, só some via
@@ -2556,7 +2581,13 @@ service cloud.firestore {
       // padrão do update de reports/{reportId} (S96-A). (b) S146 — só o
       // SENDER grava `seenAt`, só depois que o pedido já saiu de pending
       // (dot "aceite→solicitante" some depois que o remetente abre
-      // MomentoRequestChatScreen — ver markMomentoRequestSeen).
+      // MomentoRequestChatScreen — ver markMomentoRequestSeen). (c) S150 —
+      // só o AUTHOR grava `authorSeenAt` (DISTINTO de `seenAt` do ramo (b) —
+      // badge "mensagem nova", marcado a toda abertura de
+      // MomentoRequestChatScreen pelo autor, não só a 1ª vez, ver
+      // markMomentoRequestAuthorSeen), só quando o pedido já está
+      // 'answered' (só aí existe lastMessage pra comparar, ver
+      // useUnreadMomentoAuthorMessages.ts).
       allow update: if isSignedIn()
         && (
           (request.auth.uid == resource.data.authorId
@@ -2568,6 +2599,11 @@ service cloud.firestore {
             && resource.data.status in ['answered', 'declined']
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt'])
             && request.resource.data.seenAt == request.time)
+          ||
+          (request.auth.uid == resource.data.authorId
+            && resource.data.status == 'answered'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['authorSeenAt'])
+            && request.resource.data.authorSeenAt == request.time)
         );
 
       allow delete: if false;

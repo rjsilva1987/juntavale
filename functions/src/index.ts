@@ -32,6 +32,7 @@ export {
   onMomentoLikeDeleted,
   onMomentoRequestCreated,
   onMomentoRequestUpdated,
+  onMomentoRequestMessageCreated,
 } from './momentos';
 export {
   expireGroups,
@@ -40,6 +41,7 @@ export {
   onGroupPollVoteCreated,
   onGroupPollChanged,
   getGroupActiveNowCount,
+  onGroupMessageCreated,
 } from './grupos';
 export { expireEvents, onEventJoinRequestCreated, onEventParticipantCreated } from './eventos';
 export { staleMatchReminder, reengagementPush, weeklyPromptPush } from './agendadas';

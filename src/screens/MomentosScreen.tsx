@@ -21,6 +21,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePendingEventJoinRequests } from '@/hooks/usePendingEventJoinRequests';
 import { usePendingGroupJoinRequests } from '@/hooks/usePendingGroupJoinRequests';
 import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
+import { useUnreadGroupMessages } from '@/hooks/useUnreadGroupMessages';
+import { useUnreadMomentoAuthorMessages } from '@/hooks/useUnreadMomentoAuthorMessages';
 import { useUnseenAcceptedEvents } from '@/hooks/useUnseenAcceptedEvents';
 import { useUnseenAcceptedGroups } from '@/hooks/useUnseenAcceptedGroups';
 import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomentoRequests';
@@ -64,6 +66,12 @@ export default function MomentosScreen() {
   const unseenAcceptedGroups = useUnseenAcceptedGroups();
   const unseenAcceptedEvents = useUnseenAcceptedEvents();
   const unseenAnsweredMomentoRequests = useUnseenAnsweredMomentoRequests();
+  // S150 — badge "mensagem nova": card "Grupos" acende também com mensagem
+  // nova em grupo que participo; card "Momentos" acende também com mensagem
+  // nova em conversa de Momento onde sou autor. Eventos ficam de fora
+  // (decisão de produto — sem chat, S125 decisão 10).
+  const unreadGroupMessages = useUnreadGroupMessages();
+  const unreadMomentoAuthorMessages = useUnreadMomentoAuthorMessages();
   // undefined = ainda carregando, null = sem momento ativo.
   const [myMomento, setMyMomento] = useState<MomentoWithId | null | undefined>(undefined);
   const [feed, setFeed] = useState<MomentoWithId[]>([]);
@@ -222,9 +230,9 @@ export default function MomentosScreen() {
                 >
                   <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
                   <Text style={styles.exploreCardText}>Grupos</Text>
-                  {(pendingGroupJoinRequests > 0 || unseenAcceptedGroups > 0) && (
-                    <View style={styles.pendingDot} />
-                  )}
+                  {(pendingGroupJoinRequests > 0 ||
+                    unseenAcceptedGroups > 0 ||
+                    unreadGroupMessages > 0) && <View style={styles.pendingDot} />}
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.exploreCard}
@@ -246,9 +254,9 @@ export default function MomentosScreen() {
                     color={theme.colors.textSecondary}
                   />
                   <Text style={styles.exploreCardText}>Momentos</Text>
-                  {(pendingMomentoRequests > 0 || unseenAnsweredMomentoRequests > 0) && (
-                    <View style={styles.pendingDot} />
-                  )}
+                  {(pendingMomentoRequests > 0 ||
+                    unseenAnsweredMomentoRequests > 0 ||
+                    unreadMomentoAuthorMessages > 0) && <View style={styles.pendingDot} />}
                 </AnimatedPressable>
               </View>
 

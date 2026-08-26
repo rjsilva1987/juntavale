@@ -8,6 +8,14 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S150 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA (1 ressalva não-bloqueante, ver
+  ROADMAP.md): badge dot do Explorar acende também pra mensagem nova em
+  grupo (card Grupos) e em conversa de Momento do autor (card Momentos);
+  nenhum push novo criado. 2 Cloud Functions novas
+  (`onGroupMessageCreated`, `onMomentoRequestMessageCreated`) espelhando o
+  mecanismo de `matches.lastMessage`. **EXIGE DEPLOY de rules E de
+  functions.** Ver ROADMAP.md § S150. SEM teste em aparelho.
 - S148 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA (2 ressalvas não-bloqueantes, ver
   ROADMAP.md): `expireMomentos` passa a apagar também os

@@ -45,6 +45,7 @@ import {
   getMyMembership,
   GroupMessage,
   listenGroupMessages,
+  markGroupMessagesSeen,
   sendGroupMessage,
   uploadGroupChatImage,
 } from '@/services/groupService';
@@ -90,6 +91,17 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       .then((m) => setIsMember(!!m))
       .catch((err) => console.error('[GroupChatScreen] falha ao checar participação:', err));
   }, [groupId, user]);
+
+  // S150 — badge "mensagem nova em grupo": marca messagesSeenAt no mount
+  // (fire-and-forget, mesmo padrão de markMatchRead em ChatScreen.tsx),
+  // SEMPRE que isMember é true — precisa acompanhar mensagem nova a cada
+  // vez que a tela abre, DISTINTO de markGroupMembershipSeen
+  // (GroupDetailScreen.tsx), que só marca uma vez (badge "aceite→
+  // solicitante", S146, não mexer).
+  useEffect(() => {
+    if (!user || !isMember) return;
+    markGroupMessagesSeen(groupId, user.uid).catch(() => {});
+  }, [user, isMember, groupId]);
 
   useEffect(() => {
     const unsubscribe = listenGroupMessages(groupId, (msgs) => {
