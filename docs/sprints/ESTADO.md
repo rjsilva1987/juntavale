@@ -8,6 +8,14 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S149-A — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA na 3ª rodada (2 correções: `orderBy`
+  residual excluindo grupo sem prazo de "Descobrir"; crash por acesso
+  desguardado a `expiresAt.toDate()` em 2 telas): criação de grupo ganha
+  opção "sem prazo" (campo `expiresAt` ausente do doc), revoga o teto de 1
+  mês como via única. **EXIGE DEPLOY de rules.** Ver ROADMAP.md § S149-A.
+  SEM teste em aparelho. Sub-sprints S149-B/C/D/E (paridade de chat de
+  grupo) seguem em aberto, fora desta.
 - S150 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA (1 ressalva não-bloqueante, ver
   ROADMAP.md): badge dot do Explorar acende também pra mensagem nova em

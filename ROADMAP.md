@@ -1096,12 +1096,61 @@ escopo do badge).
 **Status:** ABERTA · 2 partes independentes
 
 1. Chat de grupo ganha as funcionalidades do chat 1:1 — reações,
-   responder/replyTo, editar, apagar, "ler mais", copiar. A recon lista o
-   delta exato e propõe quebra em partes se estourar a régua da S144-D
-   (~500 linhas / ~8 arquivos).
+   responder/replyTo, editar, apagar, "ler mais", copiar. Sub-sprints
+   S149-B/C/D/E, fora do escopo desta entrada (S149-A abaixo).
 2. Criação de grupo ganha opção "sem prazo" — revoga o teto de 1 mês da
-   S124-A como via única. A recon confere o efeito na `expireGroups` e nas
-   rules pra grupos sem `expiresAt`.
+   S124-A como via única. Ver S149-A abaixo.
+
+#### S149-A — Grupo: prazo ilimitado
+**Status:** FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA na 3ª rodada (2 rodadas de correção: `orderBy`
+residual excluindo grupo sem `expiresAt` de "Descobrir"; crash por acesso
+desguardado a `.expiresAt.toDate()` em `GroupDetailScreen.tsx`/
+`GroupsScreen.tsx`). `firestore.rules` alteradas — **EXIGE DEPLOY de
+rules**. SEM teste em aparelho.
+
+**Decisão de produto (Raphael, 25/08/2026):** criação de grupo ganha opção
+"sem prazo" — revoga o teto de 1 mês da S124-A como via ÚNICA (a opção COM
+prazo, até 30 dias, continua existindo, só deixa de ser obrigatória).
+
+**Decisão técnica fechada:** "sem prazo" é o campo `expiresAt` AUSENTE do
+doc `groups/{groupId}` (nunca `null` explícito) — Firestore ignora doc sem
+o campo em filtro de desigualdade. `expireGroups`
+(`functions/src/grupos.ts`, `where('expiresAt', '<=', now)`) CONFIRMADO que
+já ignora doc sem o campo — arquivo intocado. `listDiscoverableGroups`
+(`groupService.ts`) precisou mudar: Firestore não tem como filtrar "campo
+ausente" via `where` (inequality e `!=` também excluem doc sem o campo) —
+perdeu o `where('expiresAt', '>', now)` e passou a ler a collection INTEIRA
++ filtrar no client (sem `expiresAt` OU `expiresAt` no futuro passam;
+`expiresAt` no passado fica de fora, mesmo corte de antes).
+
+**O que foi feito:**
+- `src/services/groupService.ts` — `Group.expiresAt` e o parâmetro
+  `expiresAt` de `createGroup` viram opcionais; quando ausente, a chave não
+  é gravada no doc (nunca `null`).
+- `src/screens/CreateGroupScreen.tsx` — novo chip "Sem prazo" na fileira de
+  duração (sentinela local `NO_DEADLINE`, nunca vai pro Firestore);
+  `canSubmit` aceita essa escolha; ao submeter, `createGroup` é chamado sem
+  `expiresAt`.
+- `firestore.rules` — `groups/{groupId}` `allow create`: `expiresAt` deixa
+  de ser exigido (`!('expiresAt' in ...) || (validação de sempre)`),
+  continua na lista de chaves permitidas (`hasOnly`). Rules-stamp da linha 1
+  atualizado (elo novo prefixado à cadeia).
+- **Correção 1 (`groupService.ts`):** `listDiscoverableGroups` tinha
+  `orderBy('expiresAt', 'asc')` residual — Firestore exclui da query todo
+  doc sem o campo usado em `orderBy`, igual a um filtro de desigualdade;
+  grupo "sem prazo" nunca aparecia em "Descobrir". Trocado por
+  `orderBy('createdAt', 'desc')` (campo sempre presente).
+- **Correção 2 (`GroupDetailScreen.tsx`/`GroupsScreen.tsx`):** os dois únicos
+  pontos de UI que exibem prazo de grupo acessavam `.expiresAt.toDate()`
+  sem guarda — crash em grupo "sem prazo". Renderização condicional
+  adicionada: "Sem prazo de encerramento" (detalhe) / "sem prazo" (card da
+  lista) quando `expiresAt` está ausente.
+
+**Interage com:** S124-A (revoga o teto de 1 mês como via única, o teto em
+si — 30 dias pra quem escolhe COM prazo — não muda), S150
+(`listDiscoverableGroups` é consumida por `GroupsScreen`, não tocada aqui
+além do filtro de `expiresAt`).
 
 ### S150 — Explorar: notificações (push + badge)
 **Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
@@ -1430,6 +1479,18 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
 - S150 — sair de um grupo (ou ter o momento de origem expirado, apagando o
   `momentoRequest` junto — S148) não deve deixar o dot "preso" acendido: o
   hook precisa parar de contar o grupo/pedido que saiu da lista.
+- S149-A — **depois que Raphael fizer o deploy das rules desta sprint**:
+  criar um grupo escolhendo o chip "Sem prazo" (`CreateGroupScreen`) e
+  conferir no Console que o doc nasce SEM o campo `expiresAt` (não `null`);
+  o grupo aparece em "Meus grupos" normalmente.
+- S149-A — grupo "sem prazo" aparece na aba "Descobrir" pra quem ainda não é
+  membro, junto com grupos com prazo ainda ativo; grupo com prazo JÁ
+  EXPIRADO continua fora da lista (mesmo corte de antes).
+- S149-A — criar grupo escolhendo um dos chips COM prazo (1/3/7/15/30 dias)
+  continua funcionando exatamente como antes — regressão, teto de 30 dias
+  intocado.
+- S149-A — grupo "sem prazo" NUNCA é varrido pela `expireGroups` (aguardar
+  mais de 1h, ou conferir no Console que o doc permanece intacto).
 
 **S143-C — bateria de aparelho TESTADA e APROVADA em 25/08/2026** (barra de
 resposta no viewer, roteamento independente de match, mesclagem "via

@@ -507,7 +507,9 @@ export default function GroupDetailScreen({ route, navigation }: GroupDetailScre
               <View style={styles.metaRow}>
                 <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
                 <Text style={styles.metaText}>
-                  Encerra em {dayjs(group.expiresAt.toDate()).format('DD/MM/YYYY [às] HH:mm')}
+                  {group.expiresAt
+                    ? `Encerra em ${dayjs(group.expiresAt.toDate()).format('DD/MM/YYYY [às] HH:mm')}`
+                    : 'Sem prazo de encerramento'}
                 </Text>
               </View>
               {/* S124-B (camada 3 — Selo de fundador do grupo): reusa

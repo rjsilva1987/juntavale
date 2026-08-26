@@ -46,11 +46,17 @@ type CreateGroupScreenProps = NativeStackScreenProps<RootStackParamList, 'Create
 // presente como última opção.
 const DURATION_PRESETS_DAYS = [1, 3, 7, 15, MAX_GROUP_DURATION_DAYS];
 
+// S149-A — "sem prazo" revoga o teto de 1 mês como via ÚNICA (a opção com
+// prazo, até 30 dias, continua existindo). Sentinela local, nunca vai pro
+// Firestore — ver handleSubmit abaixo (chama createGroup sem expiresAt).
+const NO_DEADLINE = 'no-deadline' as const;
+type DurationSelection = number | typeof NO_DEADLINE | null;
+
 export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [durationDays, setDurationDays] = useState<number | null>(null);
+  const [durationDays, setDurationDays] = useState<DurationSelection>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const trimmedName = name.trim();
@@ -65,7 +71,8 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
     if (!user || !canSubmit || durationDays == null) return;
     setSubmitting(true);
     try {
-      const expiresAt = dayjs().add(durationDays, 'day').toDate();
+      const expiresAt =
+        durationDays === NO_DEADLINE ? undefined : dayjs().add(durationDays, 'day').toDate();
       const groupId = await createGroup(user.uid, trimmedName, description, expiresAt);
       navigation.replace('GroupDetail', { groupId });
     } catch (err) {
@@ -149,7 +156,28 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
                   </AnimatedPressable>
                 );
               })}
+              <AnimatedPressable
+                key="no-deadline"
+                style={[
+                  styles.durationChip,
+                  durationDays === NO_DEADLINE && styles.durationChipActive,
+                ]}
+                onPress={() => setDurationDays(NO_DEADLINE)}
+                disabled={submitting}
+              >
+                <Text
+                  style={[
+                    styles.durationChipText,
+                    durationDays === NO_DEADLINE && styles.durationChipTextActive,
+                  ]}
+                >
+                  Sem prazo
+                </Text>
+              </AnimatedPressable>
             </View>
+            {durationDays === NO_DEADLINE && (
+              <Text style={styles.hint}>Esse grupo não some sozinho — só sai por sua conta.</Text>
+            )}
 
             <AnimatedPressable
               style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}

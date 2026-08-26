@@ -91,8 +91,10 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
           {item.name}
         </Text>
         <Text style={styles.cardSubtitle} numberOfLines={1}>
-          {item.memberCount} {item.memberCount === 1 ? 'membro' : 'membros'} · encerra em{' '}
-          {dayjs(item.expiresAt.toDate()).format('DD/MM')}
+          {item.memberCount} {item.memberCount === 1 ? 'membro' : 'membros'} ·{' '}
+          {item.expiresAt
+            ? `encerra em ${dayjs(item.expiresAt.toDate()).format('DD/MM')}`
+            : 'sem prazo'}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />

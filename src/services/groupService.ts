@@ -57,7 +57,9 @@ export interface Group {
   description?: string;
   creatorId: string;
   createdAt: Timestamp;
-  expiresAt: Timestamp;
+  // S149-A — opcional: "sem prazo" é o campo AUSENTE do doc (nunca `null`
+  // explícito), ver createGroup abaixo e o rules-stamp do firestore.rules.
+  expiresAt?: Timestamp;
   // Denormalizado, mantido pelo CLIENT junto com criação/entrada/saída de
   // membro (ver createGroup/approveJoinRequest/leaveGroup abaixo) — nunca
   // por Cloud Function. Início em 1 na criação (o criador já é membro).
@@ -162,11 +164,15 @@ export const listenGroup = (groupId: string, callback: (group: Group | null) => 
 // creator) no MESMO batch — exigência das rules (getAfter do doc pai no
 // create do member). memberCount nasce em 1: só o criador existe até a
 // primeira aprovação.
+//
+// S149-A — expiresAt vira OPCIONAL: ausente = "sem prazo", e o campo NÃO é
+// gravado no doc (nunca `null` explícito — Firestore ignora doc sem o campo
+// em filtro de desigualdade, ver expireGroups/listDiscoverableGroups).
 export const createGroup = async (
   creatorUid: string,
   name: string,
   description: string,
-  expiresAt: Date,
+  expiresAt?: Date,
 ): Promise<string> => {
   const ref = doc(collection(db, 'groups'));
   const batch = writeBatch(db);
@@ -175,7 +181,7 @@ export const createGroup = async (
     ...(description.trim() ? { description: description.trim() } : {}),
     creatorId: creatorUid,
     createdAt: serverTimestamp(),
-    expiresAt: Timestamp.fromDate(expiresAt),
+    ...(expiresAt ? { expiresAt: Timestamp.fromDate(expiresAt) } : {}),
     memberCount: 1,
   });
   batch.set(memberRef(ref.id, creatorUid), {
@@ -210,21 +216,32 @@ export const listMyGroups = async (uid: string): Promise<Group[]> => {
 // também), sem nenhuma tela pra voltar e ver "Pedido enviado"/cancelar. O
 // próprio `GroupDetailScreen` já resolve o estado certo (pedido pendente vs.
 // "Pedir pra entrar") ao reabrir o grupo — não precisa filtrar aqui.
+//
+// S149-A — grupo "sem prazo" (expiresAt ausente) precisa aparecer aqui do
+// mesmo jeito que um grupo com prazo futuro. Firestore não tem como filtrar
+// "campo ausente" via where (inequality, e também `!=`, excluem doc sem o
+// campo) — sem um 2º campo sentinela pra isso (fora do escopo desta
+// sprint), a saída é ler a collection INTEIRA (sem where em expiresAt) e
+// filtrar no client: passa quem não tem expiresAt OU tem expiresAt no
+// futuro; fica de fora quem tem expiresAt no passado (grupo expirado, ainda
+// não varrido por expireGroups).
+//
+// S149-A-fix (correção pós-auditoria) — `orderBy()` tem a MESMA exclusão de
+// doc-sem-campo que `where` de desigualdade (comportamento documentado do
+// Firestore): ordenar por expiresAt excluiria da query todo grupo "sem
+// prazo", justamente o caso que esta sprint existe pra resolver. NUNCA usar
+// orderBy em cima de um campo opcional aqui. createdAt é seguro porque
+// createGroup grava esse campo em TODO doc, sem exceção (linha ~183).
 export const listDiscoverableGroups = async (uid: string): Promise<Group[]> => {
   const [allSnap, myGroups] = await Promise.all([
-    getDocs(
-      query(
-        collection(db, 'groups'),
-        where('expiresAt', '>', Timestamp.now()),
-        orderBy('expiresAt', 'asc'),
-      ),
-    ),
+    getDocs(query(collection(db, 'groups'), orderBy('createdAt', 'desc'))),
     listMyGroups(uid),
   ]);
   const myGroupIds = new Set(myGroups.map((g) => g.id));
+  const nowMillis = Timestamp.now().toMillis();
   return allSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<Group, 'id'>) }))
-    .filter((g) => !myGroupIds.has(g.id));
+    .filter((g) => (!g.expiresAt || g.expiresAt.toMillis() > nowMillis) && !myGroupIds.has(g.id));
 };
 
 export const getMyMembership = async (
