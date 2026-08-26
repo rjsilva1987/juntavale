@@ -4,7 +4,7 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 26/08/2026
-**Commit atual:** commit desta sprint (S154, lote `/sprint`) — fix da
+**Commit atual:** d61a201 — fix(chat): reforça a
 rolagem inicial do ChatScreen (chat 1:1) que podia parar num ponto
 intermediário — ver ROADMAP.md.
 
