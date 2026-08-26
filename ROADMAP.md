@@ -573,14 +573,19 @@ leitura/escrita nova no Firestore, `firestore.rules`/`momentoService.ts`
 intocados.
 
 ### S142 — Fluidez do chat, com foco no Android
-**Status:** PARCIALMENTE IMPLEMENTADA (25/08/2026) — item 3 (rolagem/indicador
-"↓ nova mensagem") fechado em código e auditado adversarialmente (3 rodadas,
-2 correções, APROVADO na 3ª), client puro, único arquivo tocado
-`src/screens/ChatScreen.tsx`, sem `firestore.rules`/Cloud Functions, SEM
-teste em aparelho. Itens 1, 2, 4 e 5 (envio otimista, teclado, paginação,
-"digitando…") tiveram RECON DE DIAGNÓSTICO concluída nesta rodada (ver
-abaixo) mas SEM alteração de código — seguem em aberto pra decisão/sprint
-futura.
+**Status:** ENCERRADA (25/08/2026) — item 3 (rolagem/indicador "↓ nova
+mensagem") fechado em código e auditado adversarialmente (3 rodadas,
+2 correções, APROVADO na 3ª). Itens 1, 2 e 4 (envio otimista, teclado,
+paginação) tiveram RECON DE DIAGNÓSTICO reconfirmada numa rodada de
+continuação (ver abaixo) — nenhum bug de código encontrado nas duas
+rodadas, SEM alteração de código, seguem em aberto pra decisão/sprint
+futura (próximo passo é medir em aparelho Android real, não mexer às
+cegas). Item 5 ("digitando…") já funciona, nada a fazer. NOVO ITEM da
+continuação — opção "Copiar mensagem" no sheet de toque longo:
+IMPLEMENTADA e auditada (1 rodada, APROVADO direto), client puro
+(`expo-clipboard` nova dependência), arquivos `src/screens/ChatScreen.tsx`,
+`package.json`, `package-lock.json`, sem `firestore.rules`/Cloud
+Functions. SEM teste em aparelho (nem chat, nem "Copiar mensagem").
 
 Relatado por Raphael em 24/08/2026, testando em aparelho: o chat "ainda tem
 umas quebras" e não está tão fluido quanto o WhatsApp. E, comparando os dois
@@ -648,7 +653,14 @@ com cada achado.
    `behavior={Platform.OS === 'ios' ? 'padding' : 'height'}`,
    `keyboardVerticalOffset={0}`; Android sem tratamento adicional. Não dá
    pra confirmar só lendo código se há salto/sobreposição — exige teste em
-   aparelho Android real, ainda não feito.
+   aparelho Android real, ainda não feito. **Detalhe novo (continuação,
+   25/08/2026):** `app.json:31` define `"softwareKeyboardLayoutMode":
+   "resize"` (equivalente a `android:windowSoftInputMode="adjustResize"` —
+   projeto managed, sem `AndroidManifest.xml` próprio no repo). A
+   combinação desse `adjustResize` nativo com `behavior: 'height'` do RN é
+   candidata a dupla compensação entre o resize da janela nativa e o
+   padding do RN — ainda não confirmado, só uma pista mais específica pro
+   teste em aparelho.
 
 **Fix aplicado (item 3 — rolagem/indicador "nova mensagem"):**
 - Novo estado `hasNewMessageBelow` (+ ref espelho `hasNewMessageBelowRef`,
@@ -684,6 +696,23 @@ Expo Go. Segue sem confirmação; itens 1, 2 e 4 (envio otimista, teclado,
 paginação) não tiveram nenhum bug de código encontrado nesta recon — se a
 sensação de travamento persistir depois do build 15, o próximo passo é medir
 em aparelho Android real antes de mexer em código de novo.
+
+**Novo item — "Copiar mensagem" no sheet de toque longo (continuação,
+25/08/2026):** pedido do Raphael, sem decisão de produto em aberto (client
+puro, escopo já fechado no pedido). IMPLEMENTADO e auditado (1 rodada,
+APROVADO direto, sem correção). Nova constante `canCopy` em
+`ChatScreen.tsx` — aparece só em mensagem de texto (`!!text`), ainda não
+apagada (`!deletedAt`), sem foto/localização (`!imageUrl && !location`),
+sem exigir ser o dono e sem janela de tempo (diferente de `canEdit`/
+`canDeleteForEveryone`). Item posicionado no sheet logo após "Responder" e
+antes de "Editar". Copia `replyOptionsTarget.text` puro via
+`Clipboard.setStringAsync` (nova dependência `expo-clipboard@~8.0.8`,
+primeiro uso de Clipboard no app) — sem prefixo/metadado de `replyTo`, sem
+`Alert.alert` de confirmação (decisão de escopo mínimo). Ressalva da
+auditoria (não bloqueante): `Clipboard.setStringAsync` não tem `.catch`,
+inconsistente com o padrão de log de erro dos outros handlers do mesmo
+sheet — considerar reforçar numa próxima rodada, não é bug. Arquivos:
+`ChatScreen.tsx`, `package.json`, `package-lock.json`.
 
 ### S143-A — Momento: navegar por toque nos lados
 **Status:** IMPLEMENTADA em 25/08/2026, APROVADA na 3ª auditoria (2 rodadas

@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -1276,6 +1277,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     replyOptionsTarget.senderId !== uid &&
     !replyOptionsTarget.deletedAt;
 
+  // S142 — guarda de "copiar": vale pra mensagem de qualquer um dos dois
+  // lados, sem janela de tempo (diferente de canEdit/canDeleteForEveryone).
+  // !!replyOptionsTarget.text barra foto/localização (text === '') e
+  // mensagem apagada (lápide, sem text).
+  const canCopy =
+    !!replyOptionsTarget &&
+    !replyOptionsTarget.deletedAt &&
+    !replyOptionsTarget.imageUrl &&
+    !replyOptionsTarget.location &&
+    !!replyOptionsTarget.text;
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container}>
@@ -1615,6 +1627,25 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Responder</Text>
             </AnimatedPressable>
+            {/* S142 — "copiar mensagem": qualquer lado, sem janela de tempo,
+                só texto ainda não apagado (guarda canCopy acima). */}
+            {canCopy && (
+              <>
+                <View style={styles.sheetDivider} />
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={async () => {
+                    const target = replyOptionsTarget;
+                    setReplyOptionsTarget(null);
+                    if (!target?.text) return;
+                    await Clipboard.setStringAsync(target.text);
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={22} color={theme.colors.text} />
+                  <Text style={styles.sheetOptionText}>Copiar mensagem</Text>
+                </AnimatedPressable>
+              </>
+            )}
             {/* S92 — "editar": só em mensagem própria de texto, ainda não
                 apagada, dentro da janela de 1h. Mesma guarda que a rule. */}
             {canEdit && (

@@ -75,15 +75,18 @@ permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
   histórico completo (design revogado + decisões novas).
 - S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
   fa757f5) — a refazer.
-- S142 — PARCIALMENTE IMPLEMENTADA (25/08/2026), pendente de commit do
-  Raphael: item 3 (rolagem/indicador "↓ Nova mensagem" na `ChatScreen`,
-  decisão de produto fechada por Raphael no mesmo dia) fechado em código e
-  auditado (3 rodadas, 2 correções, APROVADO na 3ª) — único arquivo tocado
-  `src/screens/ChatScreen.tsx`, client puro, sem rules/functions. Itens 1,
-  2, 4 e 5 (envio otimista, teclado, paginação, "digitando…") tiveram só
-  RECON DE DIAGNÓSTICO concluída, nenhum bug de código encontrado, sem
-  alteração — seguem em aberto pra decisão futura. Ver ROADMAP.md § S142.
-  SEM teste em aparelho.
+- S142 — ENCERRADA (25/08/2026), pendente de commit do Raphael: item 3
+  (rolagem/indicador "↓ Nova mensagem" na `ChatScreen`, decisão de produto
+  fechada por Raphael no mesmo dia) fechado em código e auditado (3
+  rodadas, 2 correções, APROVADO na 3ª). Itens 1, 2 e 4 (envio otimista,
+  teclado, paginação) tiveram RECON DE DIAGNÓSTICO reconfirmada numa
+  continuação, nenhum bug de código encontrado nas duas rodadas — seguem em
+  aberto pra decisão futura (medir em aparelho Android depois do build 15).
+  Item 5 ("digitando…") já funciona. Continuação também IMPLEMENTOU e
+  auditou (1 rodada, APROVADO direto) a opção "Copiar mensagem" no sheet de
+  toque longo — client puro, nova dependência `expo-clipboard`, arquivos
+  `ChatScreen.tsx`/`package.json`/`package-lock.json`, sem rules/functions.
+  Ver ROADMAP.md § S142. SEM teste em aparelho.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
