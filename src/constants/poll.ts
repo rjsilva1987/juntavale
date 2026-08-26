@@ -5,6 +5,6 @@
 // opções e de tamanho espelhados manualmente em firestore.rules (Rules não
 // importa src/) — ver comentário lá.
 export const MIN_POLL_OPTIONS = 2;
-export const MAX_POLL_OPTIONS = 4;
+export const MAX_POLL_OPTIONS = 5;
 export const MAX_POLL_QUESTION_LENGTH = 100;
 export const MAX_POLL_OPTION_LENGTH = 40;

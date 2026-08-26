@@ -1101,11 +1101,17 @@ escopo do badge).
   abrir a tela correspondente.
 
 ### S151 — Enquete do perfil: até 5 opções
-**Status:** ABERTA · pequena
+**Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA sem ressalvas bloqueantes. `firestore.rules`
+alteradas — **EXIGE DEPLOY de rules** (nenhuma Cloud Function tocada). SEM
+teste em aparelho.
 
-Hoje aceita 2-4 opções; sobe o teto pra 5. Toca validação nas rules (poll
-de `users` e o de `groups` da S124-B, manter paridade), `PollEditModal` e
-constantes.
+Teto de opções da enquete (`poll`, `users` e `groups` da S124-B) sobe de
+4 pra 5 — mínimo continua 2. Única constante no client
+(`MAX_POLL_OPTIONS`, `src/constants/poll.ts`) atualizada; `PollEditModal`
+já a importava em todo lugar, não precisou de mudança própria. Dois
+literais em `firestore.rules` (paridade users/groups) atualizados junto
+com os comentários-espelho e o rules-stamp da linha 1.
 
 ---
 

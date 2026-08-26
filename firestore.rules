@@ -1,4 +1,8 @@
-// rules-stamp: S146 (25/08/2026 — badges in-app de pedidos/aceites nas 3
+// rules-stamp: S151 (25/08/2026 — teto de opções da enquete (poll) de
+// perfil [users, linha ~634] e de grupo [groups, linha ~1614] sobe de 4
+// pra 5; MAX_POLL_OPTIONS em src/constants/poll.ts é a única constante,
+// literais aqui espelham manualmente — mínimo de 2 opções não muda.) +
+// S146 (25/08/2026 — badges in-app de pedidos/aceites nas 3
 // frentes do Explorar (grupos/eventos/momentos): groups/{groupId}/
 // members/{uid} e events/{eventId}/participants/{uid} allow update saem
 // de `if false` pra permitir SÓ o próprio uid gravar SÓ `seenAt`
@@ -153,7 +157,7 @@
 // creatorId, resolvido pelo CLIENT (blockService.reportUser), nunca aqui.)
 // + S124-B (24/08/2026 — Grupos: camadas de engajamento. Enquete
 // de grupo: groups/{groupId} ganha `poll` {question,options} opcional,
-// mesmo teto de isValidProfile.poll [100/2/4, MAX_POLL_* de
+// mesmo teto de isValidProfile.poll [100/2/5, MAX_POLL_* de
 // src/constants/poll.ts, duplicado aqui de propósito — rules não importa
 // src/], liberado num RAMO NOVO do allow update restrito a
 // request.auth.uid == resource.data.creatorId, separado (OR) do ramo
@@ -612,7 +616,7 @@ service cloud.firestore {
         // leitura, o doc segue lido por qualquer isSignedIn() como hoje.
         && (!('paused' in data) || data.paused is bool)
         // S126 — Enquete no perfil: mesmo molde condicional de about/
-        // aboutHidden acima (ausente = sempre válido). Literais 100/2/4
+        // aboutHidden acima (ausente = sempre válido). Literais 100/2/5
         // espelham MAX_POLL_QUESTION_LENGTH/MIN_POLL_OPTIONS/MAX_POLL_OPTIONS
         // (src/constants/poll.ts) — Rules não importa src/, sincronize
         // manualmente, mesmo padrão do comentário em
@@ -631,7 +635,7 @@ service cloud.firestore {
             && data.poll.question.size() <= 100
             && data.poll.options is list
             && data.poll.options.size() >= 2
-            && data.poll.options.size() <= 4
+            && data.poll.options.size() <= 5
           )
         );
     }
@@ -1611,7 +1615,7 @@ service cloud.firestore {
                 && request.resource.data.poll.question.size() <= 100
                 && request.resource.data.poll.options is list
                 && request.resource.data.poll.options.size() >= 2
-                && request.resource.data.poll.options.size() <= 4
+                && request.resource.data.poll.options.size() <= 5
               )
             )
           )

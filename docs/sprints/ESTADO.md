@@ -8,6 +8,12 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S151 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA sem ressalvas bloqueantes: teto de
+  opções da enquete de perfil (`poll`, `users` e `groups`) sobe de 4 pra
+  5 — mínimo continua 2. `firestore.rules` alteradas (2 literais +
+  rules-stamp) — **EXIGE DEPLOY de rules**, nenhuma Cloud Function
+  tocada. Ver ROADMAP.md § S151. SEM teste em aparelho.
 - S147 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA sem ressalvas bloqueantes: bug do
   momento PRÓPRIO renderizando como barra azul vazia no feed do Explorar
