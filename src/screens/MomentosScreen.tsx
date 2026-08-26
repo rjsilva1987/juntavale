@@ -36,17 +36,53 @@ import {
 } from '@/services/momentoService';
 import { getDisplayName } from '@/utils/profile';
 
-// Sem dayjs/relativeTime plugin novo (nenhum outro ponto do projeto já
-// configura dayjs.extend(relativeTime)) — cálculo manual a partir da
-// diferença em ms, mesmo raciocínio de "não adicionar dependência nova sem
-// necessidade" do resto da sprint.
-function formatTimeRemaining(expiresAt: MomentoWithId['expiresAt']): string {
-  const diffMs = expiresAt.toMillis() - Date.now();
-  if (diffMs <= 0) return 'Expirando…';
-  const hours = Math.floor(diffMs / (60 * 60 * 1000));
-  if (hours >= 1) return `${hours}h restantes`;
-  const minutes = Math.max(1, Math.floor(diffMs / (60 * 1000)));
-  return `${minutes}min restantes`;
+// S147/S152 — mesmo card visual pros dois casos (momento próprio e dos
+// demais autores): a divergência de JSX entre os dois branches foi a causa
+// raiz do bug da S147 (card do dono virava barra azul vazia). Componente só,
+// reusado no branch do card próprio e no renderItem do FlatList abaixo,
+// elimina a chance de os dois voltarem a divergir — nenhum tratamento visual
+// especial pro dono, incluindo o selo de tempo restante que existia antes
+// (o card dos outros nunca mostrou esse selo).
+function MomentoFeedCard({
+  item,
+  author,
+  onPress,
+}: {
+  item: MomentoWithId;
+  author: UserProfile | null | undefined;
+  onPress: () => void;
+}) {
+  return (
+    <AnimatedPressable style={styles.feedCard} onPress={onPress}>
+      {item.type === 'photo' && item.photoUrl ? (
+        <Image
+          source={{ uri: item.photoUrl }}
+          style={styles.feedCardImage}
+          contentFit="cover"
+          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+        />
+      ) : (
+        <View style={styles.feedCardTextWrap}>
+          <Text style={styles.feedCardText} numberOfLines={5}>
+            {item.text}
+          </Text>
+        </View>
+      )}
+      <View style={styles.feedCardFooter}>
+        {author?.photoURL ? (
+          <Image
+            source={{ uri: author.photoURL }}
+            style={styles.feedCardAvatar}
+            contentFit="cover"
+            placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+          />
+        ) : null}
+        <Text style={styles.feedCardName} numberOfLines={1}>
+          {getDisplayName(author)}
+        </Text>
+      </View>
+    </AnimatedPressable>
+  );
 }
 
 export default function MomentosScreen() {
@@ -85,6 +121,9 @@ export default function MomentosScreen() {
   const [viewerIsOwn, setViewerIsOwn] = useState(false);
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, UserProfile | null>>({});
   const requestedUidsRef = useRef<Set<string>>(new Set());
+  // S152 — só pra forçar re-render a cada tick (ver useEffect abaixo); o
+  // valor em si nunca é lido.
+  const [, forceTick] = useState(0);
 
   const refreshMyMomento = () => {
     if (!user) return;
@@ -129,9 +168,33 @@ export default function MomentosScreen() {
     };
   }, [feed]);
 
+  // S152 — mesma razão do tick de useSuperLikeQuota.ts:86-97: onSnapshot
+  // (feed) e getDoc (myMomento) não reavaliam sozinhos pela passagem do
+  // tempo, só quando chega um evento novo do listener/fetch. Existe uma
+  // janela de até 59min entre expiresAt vencer e a próxima rodada da
+  // Cloud Function expireMomentos (roda de hora em hora) — sem um tick
+  // próprio, os filtros de Date.now() abaixo (visibleFeed) e o de
+  // myMomento expirado (ver ListHeaderComponent) só reavaliariam quando
+  // outro motivo forçasse um re-render. setTimeout recursivo (não
+  // setInterval — fora da allowlist de globals do eslint.config.js), ciclo
+  // de 60s.
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const scheduleNext = () => {
+      timeoutId = setTimeout(() => {
+        forceTick((t) => t + 1);
+        scheduleNext();
+      }, 60 * 1000);
+    };
+    scheduleNext();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   // Cinturão-e-suspensório: onSnapshot não reavalia sozinho por tempo, então
   // um momento que expirou entre dois eventos do listener ficaria
-  // visualmente "pendurado" sem esse filtro redundante no render.
+  // visualmente "pendurado" sem esse filtro redundante no render — o tick
+  // de 60s acima garante que esse filtro também se reavalia sozinho pela
+  // passagem do tempo, não só quando o listener empurra uma escrita nova.
   const visibleFeed = feed.filter(
     (m) => m.authorId !== user?.uid && m.expiresAt.toMillis() > Date.now(),
   );
@@ -263,7 +326,14 @@ export default function MomentosScreen() {
               <View style={styles.mySection}>
                 {myMomento === undefined ? (
                   <ActivityIndicator color={theme.colors.primary} style={styles.myLoading} />
-                ) : myMomento === null ? (
+                ) : // S152 — myMomento vem de um getDoc único (sem listener), então uma
+                // vez que expiresAt vence não há nada reavaliando isso sozinho; sem
+                // essa checagem o card ficaria pendurado/clicável indefinidamente até
+                // refreshMyMomento ser chamado de novo (só acontece ao publicar um
+                // novo momento). Trata como "sem momento" só pra fins de RENDER — não
+                // apaga o state nem chama Firestore. Se beneficia do tick de 60s
+                // acima pra se reavaliar sozinho pela passagem do tempo.
+                myMomento === null || myMomento.expiresAt.toMillis() <= Date.now() ? (
                   <AnimatedPressable
                     style={styles.createBtn}
                     onPress={() => setComposerVisible(true)}
@@ -272,30 +342,11 @@ export default function MomentosScreen() {
                     <Text style={styles.createBtnText}>Criar momento</Text>
                   </AnimatedPressable>
                 ) : (
-                  <AnimatedPressable style={styles.myCard} onPress={openMine}>
-                    {myMomento.type === 'photo' && myMomento.photoUrl ? (
-                      <View style={styles.myCardPhotoWrap}>
-                        <Image
-                          source={{ uri: myMomento.photoUrl }}
-                          style={styles.myCardImage}
-                          contentFit="cover"
-                          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                        />
-                        <Text style={styles.myCardTimeOverlay}>
-                          {formatTimeRemaining(myMomento.expiresAt)}
-                        </Text>
-                      </View>
-                    ) : (
-                      <>
-                        <Text style={styles.myCardText} numberOfLines={3}>
-                          {myMomento.text}
-                        </Text>
-                        <Text style={styles.myCardTime}>
-                          {formatTimeRemaining(myMomento.expiresAt)}
-                        </Text>
-                      </>
-                    )}
-                  </AnimatedPressable>
+                  <MomentoFeedCard
+                    item={myMomento}
+                    author={user ? authorProfiles[user.uid] : undefined}
+                    onPress={openMine}
+                  />
                 )}
               </View>
             </>
@@ -310,40 +361,13 @@ export default function MomentosScreen() {
               />
             )
           }
-          renderItem={({ item }) => {
-            const author = authorProfiles[item.authorId];
-            return (
-              <AnimatedPressable style={styles.feedCard} onPress={() => openFeedItem(item)}>
-                {item.type === 'photo' && item.photoUrl ? (
-                  <Image
-                    source={{ uri: item.photoUrl }}
-                    style={styles.feedCardImage}
-                    contentFit="cover"
-                    placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                  />
-                ) : (
-                  <View style={styles.feedCardTextWrap}>
-                    <Text style={styles.feedCardText} numberOfLines={5}>
-                      {item.text}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.feedCardFooter}>
-                  {author?.photoURL ? (
-                    <Image
-                      source={{ uri: author.photoURL }}
-                      style={styles.feedCardAvatar}
-                      contentFit="cover"
-                      placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                    />
-                  ) : null}
-                  <Text style={styles.feedCardName} numberOfLines={1}>
-                    {getDisplayName(author)}
-                  </Text>
-                </View>
-              </AnimatedPressable>
-            );
-          }}
+          renderItem={({ item }) => (
+            <MomentoFeedCard
+              item={item}
+              author={authorProfiles[item.authorId]}
+              onPress={() => openFeedItem(item)}
+            />
+          )}
         />
       </SafeAreaView>
 
@@ -420,43 +444,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   createBtnText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.primary },
-  myCard: {
-    borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.primaryDark,
-    padding: theme.spacing.md,
-    minHeight: 96,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-  },
-  myCardPhotoWrap: {
-    position: 'relative',
-    width: '100%',
-    height: 110,
-  },
-  myCardImage: { width: '100%', height: '100%' },
-  myCardText: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.white },
-  myCardTime: {
-    alignSelf: 'flex-start',
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.white,
-    fontWeight: '700',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.borderRadius.full,
-  },
-  myCardTimeOverlay: {
-    position: 'absolute',
-    left: 8,
-    bottom: 8,
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.white,
-    fontWeight: '700',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: theme.borderRadius.full,
-  },
 
   feedCard: {
     flex: 1,

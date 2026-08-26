@@ -95,6 +95,32 @@ export default function MomentoRequestsScreen({ navigation }: MomentoRequestsScr
     return item.isReceived ? 'Toque pra responder ou recusar' : 'Aguardando resposta';
   };
 
+  // S152 — dot de "novidade não vista" por item, mutuamente exclusivo pelos
+  // dois papéis possíveis (isReceived decide qual). Lado recebido replica o
+  // mesmo predicado agregado de useUnreadMomentoAuthorMessages.ts:29-34;
+  // lado enviado ESTENDE o predicado agregado de
+  // useUnseenAnsweredMomentoRequests.ts:24 (que só cobre "nunca visto") pra
+  // cobrir também "já vi o desfecho, mas chegou mensagem nova depois". Os
+  // dois hooks agregados continuam intocados — isto é só o item da lista.
+  const hasUnseenDot = (item: RequestRow): boolean => {
+    if (!user) return false;
+    if (item.isReceived) {
+      return (
+        item.status === 'answered' &&
+        !!item.lastMessage &&
+        item.lastMessage.senderId !== user.uid &&
+        (!item.authorSeenAt || item.lastMessage.createdAt.toMillis() > item.authorSeenAt.toMillis())
+      );
+    }
+    return (
+      item.status !== 'pending' &&
+      (!item.seenAt ||
+        (!!item.lastMessage &&
+          item.lastMessage.senderId !== user.uid &&
+          item.lastMessage.createdAt.toMillis() > item.seenAt.toMillis()))
+    );
+  };
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -133,9 +159,14 @@ export default function MomentoRequestsScreen({ navigation }: MomentoRequestsScr
                   onPress={() => navigation.navigate('MomentoRequestChat', { requestId: item.id })}
                 >
                   <View style={styles.cardTopRow}>
-                    <Text style={styles.otherName} numberOfLines={1}>
-                      {item.isReceived ? `${otherName} comentou` : `Você comentou em ${otherName}`}
-                    </Text>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.otherName} numberOfLines={1}>
+                        {item.isReceived
+                          ? `${otherName} comentou`
+                          : `Você comentou em ${otherName}`}
+                      </Text>
+                      {hasUnseenDot(item) && <View style={styles.unreadDot} />}
+                    </View>
                     <View
                       style={[
                         styles.badge,
@@ -208,12 +239,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
   otherName: {
     fontSize: theme.fontSize.sm,
     fontWeight: '700',
     color: theme.colors.text,
     flexShrink: 1,
   },
+  // S152 — dot vermelho de "novidade não vista" por item da lista, mesmo
+  // valor exato do pendingDot (MomentosScreen.tsx:431)/verificationAlertDot
+  // (ProfileScreen.tsx) — este arquivo não compartilha StyleSheet com os
+  // outros, cópia local do mesmo padrão. Regra de ouro do tema não se aplica
+  // (dot é vermelho, error, não secondary/amarelo).
+  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.error },
   commentText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   subtitle: { fontSize: theme.fontSize.xs, color: theme.colors.primary, fontWeight: '600' },
   date: { fontSize: theme.fontSize.xs, color: theme.colors.textLight },

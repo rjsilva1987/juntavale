@@ -73,6 +73,13 @@ export default function MomentoRequestChatScreen({
   const [sending, setSending] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  // S152 correção pós-auditoria — guard de dedup do write-storm de seenAt,
+  // ver comentário no useEffect de markMomentoRequestSeen abaixo.
+  const seenMarkSignalRef = useRef<string | null>(null);
+  // S152 correção pós-auditoria (2ª rodada) — mesmo guard, agora pro
+  // authorSeenAt; ver comentário no useEffect de markMomentoRequestAuthorSeen
+  // abaixo.
+  const authorSeenMarkSignalRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsub = listenMomentoRequestById(requestId, setRequest);
@@ -112,14 +119,36 @@ export default function MomentoRequestChatScreen({
 
   // S146 — badge "aceite→solicitante": marca o pedido como visto (fire-and-
   // forget, mesmo padrão de markMatchRead em ChatScreen.tsx) quando o
-  // usuário logado é o SENDER, o pedido já saiu de pending (answered ou
-  // declined) e ainda não tem `seenAt`. O autor nunca marca aqui — o dot
-  // dele é outro ("solicitação→dono"), some ao ver os pedidos pendentes.
+  // usuário logado é o SENDER e o pedido já saiu de pending (answered ou
+  // declined). O autor nunca marca aqui — o dot dele é outro
+  // ("solicitação→dono"), some ao ver os pedidos pendentes.
+  // S152 — SEMPRE que essas condições valem (não só na 1ª vez, guard de
+  // `!request.seenAt` removido): o dot novo da lista
+  // (MomentoRequestsScreen.tsx) cobre também "já vi o desfecho, mas chegou
+  // mensagem nova depois" — se seenAt só gravasse uma vez, reabrir a
+  // conversa depois de uma mensagem nova nunca voltaria a zerar esse dot.
+  // Mesmo padrão do useEffect de authorSeenAt logo abaixo (já era "toda
+  // montagem"); firestore.rules (momentoRequests/{requestId} allow update,
+  // ramo do sender) já não tinha guarda de "só se ainda não existir" no
+  // servidor, só o client tinha.
+  // S152 correção pós-auditoria — write-storm: `request` (listenMomentoRequestById)
+  // monta objeto novo a CADA evento de onSnapshot, e a própria escrita de
+  // seenAt (serverTimestamp) gera pelo menos 2 ecos de snapshot (valor local
+  // pendente + confirmado do servidor). Sem freio, cada eco reexecutava este
+  // efeito e regravava seenAt de novo, em loop, enquanto a tela ficasse
+  // aberta num pedido answered/declined. `seenMarkSignalRef` guarda o
+  // "sinal" real de novidade (status + timestamp da última mensagem) e só
+  // deixa escrever quando ele muda de fato — ecos onde só seenAt mudou
+  // (o próprio campo que este efeito escreve) não alteram o sinal e são
+  // ignorados. Mesmo padrão de dedup por ref já usado no projeto
+  // (requestedUidsRef em MomentosScreen.tsx/MomentoRequestsScreen.tsx).
   useEffect(() => {
     if (!user || !request) return;
     if (request.senderId !== user.uid) return;
     if (request.status === 'pending') return;
-    if (request.seenAt) return;
+    const signal = `${request.status}:${request.lastMessage?.createdAt.toMillis() ?? 0}`;
+    if (seenMarkSignalRef.current === signal) return;
+    seenMarkSignalRef.current = signal;
     markMomentoRequestSeen(requestId).catch(() => {});
   }, [user, request, requestId]);
 
@@ -127,13 +156,23 @@ export default function MomentoRequestChatScreen({
   // (fire-and-forget, mesmo padrão de markMatchRead em ChatScreen.tsx), SÓ
   // quando o usuário logado é o AUTOR e o pedido já está 'answered' (só aí
   // existe lastMessage pra comparar) — SEMPRE que essas condições valem, não
-  // só na 1ª vez, DISTINTO do useEffect de markMomentoRequestSeen acima
-  // (aquele é o badge "aceite→solicitante" do SENDER, S146, one-shot — não
-  // mexer).
+  // só na 1ª vez. DISTINTO do useEffect de markMomentoRequestSeen acima
+  // (aquele é o badge "aceite→solicitante" do SENDER, S146) só pelo PAPEL
+  // que marca (autor vs. sender) — desde a S152 os dois já gravam a toda
+  // montagem, nenhum dos dois é mais one-shot.
+  // S152 correção pós-auditoria (2ª rodada) — mesmo write-storm do
+  // useEffect de markMomentoRequestSeen acima (ver comentário lá): este
+  // efeito controla o MESMO documento momentoRequests/{requestId}, só que
+  // pelo campo authorSeenAt, e sofre do mesmo loop de ecos de onSnapshot
+  // sem o guard. `authorSeenMarkSignalRef` aplica o idêntico dedup por
+  // sinal (status + timestamp da última mensagem).
   useEffect(() => {
     if (!user || !request) return;
     if (request.authorId !== user.uid) return;
     if (request.status !== 'answered') return;
+    const signal = `${request.status}:${request.lastMessage?.createdAt.toMillis() ?? 0}`;
+    if (authorSeenMarkSignalRef.current === signal) return;
+    authorSeenMarkSignalRef.current = signal;
     markMomentoRequestAuthorSeen(requestId).catch(() => {});
   }, [user, request, requestId]);
 

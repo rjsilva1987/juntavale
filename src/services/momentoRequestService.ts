@@ -53,17 +53,22 @@ export interface MomentoRequest {
   // S146 — badge "aceite→solicitante": ausente até o SENDER abrir
   // MomentoRequestChatScreen depois que o pedido sai de pending
   // (markMomentoRequestSeen abaixo). Mesmo molde de lastReadAt em matches.
+  // S152 — gravado a TODA abertura da tela pelo sender (não só a 1ª vez):
+  // o dot da lista (MomentoRequestsScreen.tsx) precisa distinguir "nunca vi
+  // o desfecho" de "já vi, mas chegou mensagem nova depois", então seenAt
+  // precisa acompanhar reaberturas subsequentes, igual authorSeenAt abaixo.
   seenAt?: Timestamp;
   // S150 — espelho de LastMessage (matches, firestoreService.ts), escrito só
   // pela Cloud Function onMomentoRequestMessageCreated (Admin SDK,
   // functions/src/momentos.ts) — o client nunca grava lastMessage. Fundação
   // do badge "mensagem nova" pro AUTOR (useUnreadMomentoAuthorMessages.ts).
   lastMessage?: MomentoRequestLastMessage;
-  // S150 — badge "mensagem nova" (autor): DISTINTO de seenAt acima (aquele é
-  // o badge "aceite→solicitante" do SENDER, S146 — não mexer). Gravado a
-  // TODA abertura de MomentoRequestChatScreen pelo AUTOR (mount), não só na
-  // 1ª vez — precisa acompanhar mensagens novas subsequentes. Ver
-  // markMomentoRequestAuthorSeen abaixo e useUnreadMomentoAuthorMessages.ts.
+  // S150 — badge "mensagem nova" (autor): papel DISTINTO de seenAt acima
+  // (aquele é o badge "aceite→solicitante" do SENDER, S146) — os dois
+  // campos são de usuários diferentes no mesmo pedido, não de comportamento
+  // (desde a S152 os dois são gravados a toda abertura da tela, não só na
+  // 1ª vez). Ver markMomentoRequestAuthorSeen abaixo e
+  // useUnreadMomentoAuthorMessages.ts.
   authorSeenAt?: Timestamp;
 }
 
@@ -295,15 +300,19 @@ export const declineMomentoRequest = async (requestId: string): Promise<void> =>
 // S146 — badge "aceite→solicitante": chamado fire-and-forget no mount de
 // MomentoRequestChatScreen quando o usuário logado é o SENDER e o pedido já
 // saiu de pending (mesmo padrão de markMatchRead em firestoreService.ts).
+// S152 — SEMPRE que essas condições valem, não só na 1ª vez (guard de
+// `!request.seenAt` removido do useEffect chamador) — precisa acompanhar
+// mensagem nova subsequente, mesmo raciocínio de markMomentoRequestAuthorSeen
+// abaixo.
 export const markMomentoRequestSeen = async (requestId: string): Promise<void> => {
   await updateDoc(doc(db, 'momentoRequests', requestId), { seenAt: serverTimestamp() });
 };
 
 // S150 — badge "mensagem nova" (autor): chamado fire-and-forget no mount de
 // MomentoRequestChatScreen quando o usuário logado é o AUTOR, SEMPRE (não só
-// na 1ª vez, ao contrário de markMomentoRequestSeen acima) — precisa
-// acompanhar toda mensagem nova lida, mesmo padrão de markMatchRead
-// (firestoreService.ts/ChatScreen.tsx).
+// na 1ª vez) — precisa acompanhar toda mensagem nova lida, mesmo padrão de
+// markMatchRead (firestoreService.ts/ChatScreen.tsx). Desde a S152,
+// markMomentoRequestSeen acima segue o mesmo "sempre, não só 1ª vez".
 export const markMomentoRequestAuthorSeen = async (requestId: string): Promise<void> => {
   await updateDoc(doc(db, 'momentoRequests', requestId), { authorSeenAt: serverTimestamp() });
 };
