@@ -1378,6 +1378,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
                   }, 100);
                 }}
+                onContentSizeChange={() => {
+                  if (isNearBottomRef.current && !pendingScrollTarget) {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }
+                }}
                 // S101 — página anterior só sob toque (decisão de produto:
                 // nada de auto-load ao chegar perto do topo).
                 ListHeaderComponent={
