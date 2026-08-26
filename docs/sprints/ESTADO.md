@@ -8,6 +8,13 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S147 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA sem ressalvas bloqueantes: bug do
+  momento PRÓPRIO renderizando como barra azul vazia no feed do Explorar
+  (`MomentosScreen.tsx` — `myCardImage` saía do fluxo via
+  `StyleSheet.absoluteFillObject` sem nada dimensionando o card no caso
+  `photo`). Client puro, sem deploy. Ver ROADMAP.md § S147. SEM teste em
+  aparelho.
 - S146 — FECHADA em código (25/08/2026), auditoria APROVADA sem ressalvas
   bloqueantes, pendente de commit do Raphael: badge in-app (dot vermelho)
   de pedidos/aprovações nas 3 frentes do Explorar (grupos, eventos,

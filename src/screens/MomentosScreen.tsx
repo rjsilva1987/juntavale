@@ -266,20 +266,27 @@ export default function MomentosScreen() {
                 ) : (
                   <AnimatedPressable style={styles.myCard} onPress={openMine}>
                     {myMomento.type === 'photo' && myMomento.photoUrl ? (
-                      <Image
-                        source={{ uri: myMomento.photoUrl }}
-                        style={styles.myCardImage}
-                        contentFit="cover"
-                        placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                      />
+                      <View style={styles.myCardPhotoWrap}>
+                        <Image
+                          source={{ uri: myMomento.photoUrl }}
+                          style={styles.myCardImage}
+                          contentFit="cover"
+                          placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+                        />
+                        <Text style={styles.myCardTimeOverlay}>
+                          {formatTimeRemaining(myMomento.expiresAt)}
+                        </Text>
+                      </View>
                     ) : (
-                      <Text style={styles.myCardText} numberOfLines={3}>
-                        {myMomento.text}
-                      </Text>
+                      <>
+                        <Text style={styles.myCardText} numberOfLines={3}>
+                          {myMomento.text}
+                        </Text>
+                        <Text style={styles.myCardTime}>
+                          {formatTimeRemaining(myMomento.expiresAt)}
+                        </Text>
+                      </>
                     )}
-                    <Text style={styles.myCardTime}>
-                      {formatTimeRemaining(myMomento.expiresAt)}
-                    </Text>
                   </AnimatedPressable>
                 )}
               </View>
@@ -413,10 +420,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     overflow: 'hidden',
   },
-  myCardImage: { ...StyleSheet.absoluteFillObject },
+  myCardPhotoWrap: {
+    position: 'relative',
+    width: '100%',
+    height: 110,
+  },
+  myCardImage: { width: '100%', height: '100%' },
   myCardText: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.white },
   myCardTime: {
     alignSelf: 'flex-start',
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.white,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: theme.borderRadius.full,
+  },
+  myCardTimeOverlay: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
     fontSize: theme.fontSize.xs,
     color: theme.colors.white,
     fontWeight: '700',

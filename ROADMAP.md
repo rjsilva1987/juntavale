@@ -1041,12 +1041,21 @@ listeners de doc único, não 1 query nova).
 ---
 
 ### S147 — Bug: momento PRÓPRIO renderiza como barra azul vazia no feed do Explorar
-**Status:** ABERTA · sem decisões · sem recon
+**Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA sem ressalvas bloqueantes. Client puro, sem
+deploy necessário. SEM teste em aparelho.
 
 Reportado por Raphael em 25/08/2026 (print anexo): no feed do Explorar, o
-card do momento PRÓPRIO aparece como uma barra azul vazia, sem conteúdo —
-tocar nele abre o viewer normal (o conteúdo existe, só o card do feed não
-renderiza). Provável bug de render no `MomentosScreen`. Client puro.
+card do momento PRÓPRIO aparecia como uma barra azul vazia, sem conteúdo —
+tocar nele abria o viewer normal (o conteúdo existia, só o card do feed
+não renderizava). Causa CONFIRMADA: `myCardImage` usava
+`StyleSheet.absoluteFillObject` (fora do fluxo) sem nenhum elemento em
+fluxo dimensionando o card no caso `type === 'photo'`, que colapsava pro
+`minHeight: 96` preenchido só pela cor de fundo `primaryDark` (`#1E3A8A`).
+Corrigido em `MomentosScreen.tsx`: a foto passa a ficar em fluxo
+(`myCardPhotoWrap`, molde de `feedCardImage`, height 110) e o selo de
+tempo restante vira overlay absoluto (`myCardTimeOverlay`) sobre ela; o
+ramo de texto do card não foi alterado estruturalmente.
 
 ### S148 — Momento: ciclo de vida da conversa
 **Status:** ABERTA
