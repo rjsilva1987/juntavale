@@ -1040,6 +1040,66 @@ listeners de doc único, não 1 query nova).
 
 ---
 
+### S147 — Bug: momento PRÓPRIO renderiza como barra azul vazia no feed do Explorar
+**Status:** ABERTA · sem decisões · sem recon
+
+Reportado por Raphael em 25/08/2026 (print anexo): no feed do Explorar, o
+card do momento PRÓPRIO aparece como uma barra azul vazia, sem conteúdo —
+tocar nele abre o viewer normal (o conteúdo existe, só o card do feed não
+renderiza). Provável bug de render no `MomentosScreen`. Client puro.
+
+### S148 — Momento: ciclo de vida da conversa
+**Status:** ABERTA
+
+**Decisões de produto tomadas (Raphael, 25/08/2026):**
+1. Conversa/pedido do Momento é APAGADA junto com a expiração do momento —
+   CONFIRMADO, sem contar a partir da última mensagem. `expireMomentos`
+   passa a varrer também os `momentoRequests` do autor expirado (docs e
+   subcoleção `messages`).
+2. Conversas de Momento SAEM da aba Conversas — revoga a mesclagem "via
+   Momento" da S143-C (commit `0447db6`); código a remover.
+3. O card "Pedidos" do Explorar (S145/S146) é renomeado pra "Momentos" e
+   passa a concentrar pedidos pendentes E conversas já respondidas.
+4. Ao abrir a conversa, exibir o momento de origem — `momentoSnapshot` já
+   existe nos docs (S143-B/C); é exibição nova, não modelo novo.
+
+**Interage com:** S143-C (mesclagem revogada), S145/S146 (card renomeado,
+escopo do badge).
+
+### S149 — Grupo: paridade do chat + prazo ilimitado
+**Status:** ABERTA · 2 partes independentes
+
+1. Chat de grupo ganha as funcionalidades do chat 1:1 — reações,
+   responder/replyTo, editar, apagar, "ler mais", copiar. A recon lista o
+   delta exato e propõe quebra em partes se estourar a régua da S144-D
+   (~500 linhas / ~8 arquivos).
+2. Criação de grupo ganha opção "sem prazo" — revoga o teto de 1 mês da
+   S124-A como via única. A recon confere o efeito na `expireGroups` e nas
+   rules pra grupos sem `expiresAt`.
+
+### S150 — Explorar: notificações (push + badge)
+**Status:** ABERTA — decisão fechada, sem recon
+
+**Decisão fechada (Raphael, 25/08/2026):**
+- PUSH fica SÓ no que pede ação da pessoa (pedido de entrada recebido,
+  pedido aceito) — já existe 100% (S124-A/S125/S143-B), nada a criar no
+  push; a decisão permanente de zero push por mensagem de grupo (S124-B)
+  SEGUE VALENDO.
+- BADGE dot (padrão S145/S146: aba Explorar + card) SÓ pro que envolve a
+  pessoa: mensagem nova em grupo que ela participa → card Grupos;
+  mensagem nova em conversa de Momento dela → card Momentos; grupo
+  novo/evento novo NÃO acendem; momento novo não acende nada. Dot some ao
+  abrir a tela correspondente.
+
+### S151 — Enquete do perfil: até 5 opções
+**Status:** ABERTA · pequena
+
+Hoje aceita 2-4 opções; sobe o teto pra 5. Toca validação nas rules (poll
+de `users` e o de `groups` da S124-B, manter paridade), `PollEditModal` e
+constantes.
+
+---
+
 ## Fechadas recentemente
 
 | Sprint | O que era |
