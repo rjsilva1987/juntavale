@@ -4,170 +4,44 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 26/08/2026
-**Commit atual:** b68a6b1 — fix(momentos): card do dono sem moldura,
-expiracao no feed via client e badge por conversa (S152) — ver
-ROADMAP.md.
+**Commit atual:** d384f65 — fix(momentos): card do dono usa listener em
+vez de getDoc unico (S153) — ver ROADMAP.md.
 
 ## Sprints em andamento
-- S153 — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA na 2ª rodada (1 rodada de correção: um
-  `onSnapshot` sobre rule com condição de tempo mutável morre
-  permanentemente ao 1º `permission-denied` e nunca revive sozinho —
-  corrigido com contador `listenGeneration` que força o listener a se
-  reinscrever a cada publish bem-sucedido). Continuação da S152: o card do
-  momento PRÓPRIO ficava pendurado depois de expirar porque `myMomento`
-  vinha de um `getDoc` único (nunca atualizado); agora vem de um listener
-  (`listenMyMomento`, `momentoService.ts`) que reflete o Firestore de
-  verdade. `getMyMomento` removida (código morto). Client puro, sem
-  rules/functions tocadas, SEM deploy necessário. Ver ROADMAP.md § S153.
-  SEM teste em aparelho.
-- S152 — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA na 3ª rodada (2 rodadas de correção: um
-  write-storm de escritas repetidas em `seenAt`/`authorSeenAt` de
-  `momentoRequests/{requestId}`, corrigido com guard por `useRef` nos dois
-  efeitos de `MomentoRequestChatScreen.tsx`): card do momento próprio no
-  feed do Explorar sem moldura azul (render idêntico ao dos outros
-  usuários); filtro de client pra momento vencido não aparecer no feed nem
-  no card próprio (tick de 60s, `expireMomentos` confirmada sem bug via
-  logs reais do Firebase); dot vermelho por item na lista do card
-  Momentos, nos dois sentidos (autor/solicitante). Client puro, sem
-  rules/functions tocadas, SEM deploy necessário. Ver ROADMAP.md § S152.
-  SEM teste em aparelho.
-- S149-A — FECHADA em código e COMMITADA (26/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA na 3ª rodada (2 correções: `orderBy`
-  residual excluindo grupo sem prazo de "Descobrir"; crash por acesso
-  desguardado a `expiresAt.toDate()` em 2 telas): criação de grupo ganha
-  opção "sem prazo" (campo `expiresAt` ausente do doc), revoga o teto de 1
-  mês como via única. **EXIGE DEPLOY de rules.** Ver ROADMAP.md § S149-A.
-  SEM teste em aparelho. Sub-sprints S149-B/C/D/E (paridade de chat de
-  grupo) seguem em aberto, fora desta.
-- S150 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA (1 ressalva não-bloqueante, ver
-  ROADMAP.md): badge dot do Explorar acende também pra mensagem nova em
-  grupo (card Grupos) e em conversa de Momento do autor (card Momentos);
-  nenhum push novo criado. 2 Cloud Functions novas
-  (`onGroupMessageCreated`, `onMomentoRequestMessageCreated`) espelhando o
-  mecanismo de `matches.lastMessage`. **EXIGE DEPLOY de rules E de
-  functions.** Ver ROADMAP.md § S150. SEM teste em aparelho.
-- S148 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA (2 ressalvas não-bloqueantes, ver
-  ROADMAP.md): `expireMomentos` passa a apagar também os
-  `momentoRequests` do autor do momento expirado; mesclagem "via Momento"
-  da S143-C revogada na aba Conversas (`useAnsweredMomentoRequests.ts`
-  deletado); card do Explorar renomeado de "Pedidos" pra "Momentos";
-  conversa de Momento passa a exibir o momento de origem. **EXIGE DEPLOY
-  da Cloud Function `expireMomentos`.** Ver ROADMAP.md § S148. SEM teste
-  em aparelho.
-- S151 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA sem ressalvas bloqueantes: teto de
-  opções da enquete de perfil (`poll`, `users` e `groups`) sobe de 4 pra
-  5 — mínimo continua 2. `firestore.rules` alteradas (2 literais +
-  rules-stamp) — **EXIGE DEPLOY de rules**, nenhuma Cloud Function
-  tocada. Ver ROADMAP.md § S151. SEM teste em aparelho.
-- S147 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
-  --commit`), auditoria APROVADA sem ressalvas bloqueantes: bug do
-  momento PRÓPRIO renderizando como barra azul vazia no feed do Explorar
-  (`MomentosScreen.tsx` — `myCardImage` saía do fluxo via
-  `StyleSheet.absoluteFillObject` sem nada dimensionando o card no caso
-  `photo`). Client puro, sem deploy. Ver ROADMAP.md § S147. SEM teste em
-  aparelho.
-- S146 — FECHADA em código (25/08/2026), auditoria APROVADA sem ressalvas
-  bloqueantes, pendente de commit do Raphael: badge in-app (dot vermelho)
-  de pedidos/aprovações nas 3 frentes do Explorar (grupos, eventos,
-  momentos). Estende o badge "solicitação→dono" (S145) pra grupos/eventos
-  e cria do zero o badge "aceite→solicitante" nas 3 frentes (`seenAt` novo
-  em `groups/{groupId}/members/{uid}`, `events/{eventId}/participants/{uid}`,
-  `momentoRequests/{requestId}`). `firestore.rules` alteradas (2
-  `allow update` saem de `if false` pra liberar só `seenAt` do próprio uid;
-  `momentoRequests` ganha ramo OR pro sender) — **EXIGE DEPLOY de rules**,
-  nenhuma Cloud Function tocada. Ver ROADMAP.md § S146. SEM teste em
-  aparelho.
-- S138 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
-  nome completo (`legalName`) e apelido (`nickname`) viram IMUTÁVEIS pelo
-  usuário no app, sempre (inclusive pré-verificação) — única via de
-  correção é o admin, a partir de um chamado de suporte
-  (`AdminSupportDetailScreen`, ação nova "Editar nome/apelido", exceção
-  estreita à regra S135 de nunca mostrar `legalName` fora da verificação,
-  ver ROADMAP.md § "Decisões de produto que valem para o projeto inteiro").
-  `firestore.rules` alteradas: `nickname` sai do `hasOnly` livre do dono,
-  `private/legalName allow update` do dono vira `if false`; duas vias novas
-  isoladas pra admin (`isAdmin() && affectedKeys().hasOnly([...])`, com
-  validação de tipo/tamanho e `allow create` pro subdocumento que ainda não
-  existir). **EXIGE DEPLOY de rules**, nenhuma function afetada. Script de
-  migração `scripts/migrarNomeCompleto.js` (molde de `limpeza.js`,
-  dry-run/`--confirm`/`--project`) escrito, NÃO executado. Auditoria
-  bloqueou 1ª rodada (rules de admin sem validação de tipo/tamanho + sem
-  `allow create` pro `legalName`, e `nickname` incondicional no
-  `updateUserProfile` do `ProfileScreen` quebrava save de perfil inteiro
-  pra conta legada) — corrigido e APROVADO na 2ª rodada. Correção adicional
-  (25/08/2026): dry-run real zerava (base legada sem `nickname`) porque o
-  script só olhava `nickname`; critério corrigido pra espelhar o fallback
-  `nickname ?? name` do `getDisplayName`, com idempotência (não sobrescreve
-  `legalName` já migrado) e relatório de dry-run por conta — auditoria
-  APROVADA, script ainda NÃO rodado com `--confirm`. Ver ROADMAP.md § S138.
-  SEM teste em aparelho.
-- S138-B — FECHADA em código (25/08/2026), auditoria APROVADA sem
-  ressalvas, pendente de commit do Raphael: copy do RegisterScreen ganha
-  helper curto por campo explicando o papel de nome completo (interno) e
-  apelido (público), sem mexer em obrigatoriedade/labels/placeholders nem
-  no aviso de imutabilidade da S138. Client puro, sem rules/functions. Ver
-  ROADMAP.md § S138-B. SEM teste em aparelho.
-- S145 — FECHADA em código (25/08/2026), pendente de commit do Raphael:
-  aba Explorar (não-admin) ganha acesso a Grupos, Eventos e "Pedidos de
-  conversa" via fileira de cards no topo do feed de Momentos, com badge
-  (dot) na própria aba quando há pedido de Momento pendente
-  (`usePendingMomentoRequests`, novo hook reusado em 3 pontos). Grupos e
-  Eventos saíram do menu da ProfileScreen (relocados); "Pedidos de
-  conversa" na ProfileScreen ficou só pro admin (aba Explorar não existe
-  pra admin). Client puro, sem rules/functions, auditoria APROVADA. Ver
-  ROADMAP.md § S145. SEM teste em aparelho.
-- S143-C — FECHADA e TESTADA em aparelho (25/08/2026): responder a um
-  Momento (emoji, chip, texto) é INDEPENDENTE de match — sempre pedido
-  (`momentoRequests`), nunca mensagem direta em
-  `matches/{matchId}/messages`, nunca curtida; a aba Conversas mescla
-  conversas de match + conversas de Momento respondidas ("via Momento",
-  `useAnsweredMomentoRequests.ts`). Causa do permission-denied CONFIRMADA
-  e corrigida: `allow get` de `momentoRequests/{requestId}` negava doc
-  inexistente (`resource != null &&` vira `&&` inteiro false quando
-  resource é null) — corrigido pro padrão `resource == null || dono`
-  (mesmo molde do swipe da S49, ver ROADMAP.md § "Padrões de escrita no
-  Firestore"). Instrumentação `TEMP-DIAG S143-C` removida de
-  `momentoRequestService.ts` após o teste passar — mudança no working
-  tree, pendente de commit do Raphael. `firestore.rules` já **deployadas**
-  (correção de semântica em produção). Ver ROADMAP.md § S143-C pro
-  histórico completo (design revogado + decisões novas).
-- S144-B — enxugar carimbo do `firestore.rules`: revertida (commit
-  fa757f5) — a refazer.
-- S142 — ENCERRADA (25/08/2026), pendente de commit do Raphael: item 3
-  (rolagem/indicador "↓ Nova mensagem" na `ChatScreen`, decisão de produto
-  fechada por Raphael no mesmo dia) fechado em código e auditado (3
-  rodadas, 2 correções, APROVADO na 3ª). Itens 1, 2 e 4 (envio otimista,
-  teclado, paginação) tiveram RECON DE DIAGNÓSTICO reconfirmada numa
-  continuação, nenhum bug de código encontrado nas duas rodadas — seguem em
-  aberto pra decisão futura (medir em aparelho Android depois do build 15).
-  Item 5 ("digitando…") já funciona. Continuação também IMPLEMENTOU e
-  auditou (1 rodada, APROVADO direto) a opção "Copiar mensagem" no sheet de
-  toque longo — client puro, nova dependência `expo-clipboard`, arquivos
-  `ChatScreen.tsx`/`package.json`/`package-lock.json`, sem rules/functions.
-  Ver ROADMAP.md § S142. SEM teste em aparelho.
+Nenhuma sprint em código pendente de fechamento. Bateria de testes do
+Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia:
+S121-S153 (lote de sprints anteriores + o lote da madrugada S147-S153)
+migradas pra "Fechadas recentemente". Ver ROADMAP.md § "Fechadas
+recentemente" pra detalhe por sprint.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
-- S140 — bug: conta do build 14 quebra ao salvar perfil com nome editado —
-  REAVALIADA (25/08/2026): a S138 pode ter eliminado a causa por outro
-  caminho (`name`/`nickname` imutáveis pelo dono); decisão de fechar ou
-  manter aberta ainda PENDENTE, ver ROADMAP.md § S140.
+- S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
+  fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
+  tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.
+- S140 — bug do build 14 ao salvar perfil com nome editado — REAVALIADA,
+  possivelmente obsoleta após a S138; decisão de fechar ou manter aberta
+  PENDENTE. Ver ROADMAP.md § S140.
+- S144-B — enxugar carimbo do `firestore.rules` — a refazer (commit
+  `db12492` revertido em `fa757f5`). Ver ROADMAP.md § S144-B.
+- S149-B/C/D/E — paridade do chat de grupo com o 1:1 (reações, replyTo,
+  editar, apagar, "ler mais", copiar) — sem recon/decisão própria ainda.
+  Ver ROADMAP.md § S149.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de
   formato/tamanho nas rules (ver ROADMAP § "Dívidas técnicas").
 - S132 — enquete ficou acima do "Prompt da semana" no perfil; risco
   aceito ao fechar.
+- S148 — `momentoRequests` órfãos de momentos expirados ANTES do deploy
+  desta sprint não são varridos pela lógica nova de `expireMomentos` (ver
+  ROADMAP § "Dívidas técnicas").
 
 ## Pendências vivas
-- Volume grande de sprints fechadas em código mas SEM teste em aparelho —
-  lista completa e acumulativa em ROADMAP.md § "Testes pendentes"
-  (aguardando build 15).
+- **Aguardando o BUILD 15** (push ou múltiplos aparelhos, Expo Go não
+  entrega push no SDK 54): S124-A (push de pedido/aprovação), S126 (push
+  anônimo da enquete), S135 (nickname no push), S129-B (3 estados do
+  tique em 2 aparelhos) — ver ROADMAP.md § "Testes pendentes".
 
 ## Onde olhar antes de mexer
 - ROADMAP.md § "Decisões de produto que valem para o projeto inteiro" e
