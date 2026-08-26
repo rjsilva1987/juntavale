@@ -29,6 +29,7 @@ import { httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 
 import { db, functions, storage } from '@/services/firebase';
+import { ReactionEmoji } from '@/services/firestoreService';
 
 // Mesmo teto de nickname (firestore.rules) — nome do grupo.
 export const MAX_GROUP_NAME_LENGTH = 120;
@@ -420,6 +421,42 @@ export const sendGroupMessage = async (
     createdAt: serverTimestamp(),
     ...(imageUrl ? { imageUrl } : {}),
   });
+};
+
+// ─── Reações ──────────────────────────────────────────────
+//
+// S149-B — reações, mirror de setMessageReaction/listenReactions
+// (firestoreService.ts, S80-A), adaptado pra groups/{groupId}/reactions.
+export const setGroupMessageReaction = async (
+  groupId: string,
+  messageId: string,
+  uid: string,
+  emoji: ReactionEmoji | null,
+) => {
+  await setDoc(
+    doc(db, 'groups', groupId, 'reactions', messageId),
+    { [uid]: emoji === null ? deleteField() : emoji },
+    { merge: true },
+  );
+};
+
+export const listenGroupReactions = (
+  groupId: string,
+  callback: (reactions: Record<string, Record<string, ReactionEmoji>>) => void,
+) => {
+  return onSnapshot(
+    collection(db, 'groups', groupId, 'reactions'),
+    (snap) => {
+      const reactions: Record<string, Record<string, ReactionEmoji>> = {};
+      snap.docs.forEach((d) => {
+        reactions[d.id] = d.data() as Record<string, ReactionEmoji>;
+      });
+      callback(reactions);
+    },
+    (error) => {
+      console.error('[listenGroupReactions] erro no listener:', error);
+    },
+  );
 };
 
 // Mesmo molde de uploadChatImage (firestoreService.ts), path próprio

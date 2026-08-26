@@ -18,6 +18,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { Group, listDiscoverableGroups, listMyGroups } from '@/services/groupService';
+import { hasValidLastMessage } from '@/utils/matches';
 
 type GroupsScreenProps = NativeStackScreenProps<RootStackParamList, 'Groups'>;
 
@@ -96,6 +97,12 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
             ? `encerra em ${dayjs(item.expiresAt.toDate()).format('DD/MM')}`
             : 'sem prazo'}
         </Text>
+        {hasValidLastMessage(item) && (
+          <Text style={styles.cardPreview} numberOfLines={1}>
+            {item.lastMessage.senderId === user?.uid ? 'Você: ' : ''}
+            {item.lastMessage.text}
+          </Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
     </AnimatedPressable>
@@ -208,4 +215,10 @@ const styles = StyleSheet.create({
   cardTextWrap: { flex: 1, gap: 2 },
   cardTitle: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
   cardSubtitle: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
+  // S149-B — prévia da última mensagem, mesmo padrão de cardSubtitle.
+  cardPreview: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
 });

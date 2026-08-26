@@ -99,14 +99,15 @@ valendo — o que muda é onde o histórico antigo mora.
 
 ---
 
-### S149 — Grupo: paridade do chat (sub-sprints B/C/D/E)
+### S149 — Grupo: paridade do chat (sub-sprints C/D/E)
 **Status:** ABERTA · S149-A (prazo ilimitado) já FECHADA e commitada (ver
-"Fechadas recentemente", `16a1cf5`) — as sub-sprints abaixo continuam em
-aberto, sem recon/decisão própria ainda.
+"Fechadas recentemente", `16a1cf5`) e S149-B (reações + sheet de toque
+longo) já FECHADA e commitada nesta sessão (ver "Fechadas recentemente")
+— S149-C/D/E continuam em aberto, sem recon/decisão própria ainda.
 
-Chat de grupo ganha as funcionalidades do chat 1:1 — reações,
-responder/replyTo, editar, apagar, "ler mais", copiar. Sub-sprints
-S149-B/C/D/E, escopo ainda não quebrado por item individual.
+Chat de grupo ganha as funcionalidades do chat 1:1 — responder/replyTo,
+editar, apagar, "ler mais", copiar (reações já entregues na S149-B).
+Sub-sprints S149-C/D/E, escopo ainda não quebrado por item individual.
 
 ---
 
@@ -114,6 +115,7 @@ S149-B/C/D/E, escopo ainda não quebrado por item individual.
 
 | Sprint | O que era |
 |---|---|
+| S149-B | Chat de grupo ganha reações e sheet de toque longo, mirror do chat 1:1 (S80) — `groups/{groupId}/reactions/{messageId}` novo em `firestore.rules` (membership via `groupAllowsPost`), `setGroupMessageReaction`/`listenGroupReactions` em `groupService.ts`. De caminho (itens novos pedidos pelo Raphael em 26/08/2026, mesma área): rolagem inicial corrigida em `MomentoRequestChatScreen` (corrida entre `listenMomentoRequestById`/`listenMomentoRequestMessages`, `onContentSizeChange` de reforço — `GroupChatScreen` já funcionava, não foi tocado nesse mecanismo); prévia da última mensagem em `GroupsScreen` ("Meus grupos"/"Descobrir", via `hasValidLastMessage`) e em `MomentoRequestsScreen` (card "Momentos", `rowSubtitle` mostra `lastMessage` real quando `status==='answered'`, mantém fallback genérico sem `lastMessage`) — commit desta sprint (S149-B, lote `/sprint`). `firestore.rules` **precisa ser deployada** (bloco novo de reações; nenhuma Cloud Function nova). **Fechada em código, SEM teste em aparelho.** Ressalva da auditoria (não bloqueante): a prévia em `GroupsScreen` aparece também na seção "Descobrir" (grupos que o usuário ainda não integra) — sem vazamento de permissão (rules já liberam leitura ampla de `groups/{groupId}`), mas vale confirmar com o Raphael se é o comportamento desejado. |
 | S153 | Card do momento PRÓPRIO ficava pendurado depois de expirar — `myMomento` passa a vir de um listener (`onSnapshot`, `listenMyMomento`) em vez de um `getDoc` único; corrigido também o listener morrendo permanentemente após o 1º `permission-denied` (guard `listenGeneration`, revive a cada publish) — commit `d384f65`. Client puro, sem deploy necessário. **Fechada em código, SEM teste em aparelho.** |
 | S152 | Card do momento próprio no Explorar sem moldura azul (render idêntico aos demais); feed e card próprio param de mostrar momento com `expiresAt` vencido (tick de 60s no client — `expireMomentos` confirmada sem bug via logs reais do Firebase); dot vermelho por conversa na lista do card Momentos, nos dois sentidos. Corrigido write-storm em `seenAt`/`authorSeenAt` (guard por `useRef`) — commits `15bd288`/`b68a6b1`. Client puro, sem deploy necessário. **Fechada em código, SEM teste em aparelho.** |
 | S151 | Teto de opções da enquete (perfil e grupo) sobe de 4 pra 5 — commit `a364b49`. `firestore.rules` **deployadas em 26/08/2026** (`firebase deploy --only firestore:rules`). **Fechada em código, TESTADA em aparelho e aprovada em 26/08/2026.** |

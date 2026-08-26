@@ -39,14 +39,21 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { getUserProfile, UserProfile } from '@/services/firestoreService';
+import {
+  getUserProfile,
+  REACTION_EMOJIS,
+  ReactionEmoji,
+  UserProfile,
+} from '@/services/firestoreService';
 import {
   getGroup,
   getMyMembership,
   GroupMessage,
   listenGroupMessages,
+  listenGroupReactions,
   markGroupMessagesSeen,
   sendGroupMessage,
+  setGroupMessageReaction,
   uploadGroupChatImage,
 } from '@/services/groupService';
 import { getDisplayName } from '@/utils/profile';
@@ -67,6 +74,8 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [creatorId, setCreatorId] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<Record<string, Record<string, ReactionEmoji>>>({});
+  const [reactionTarget, setReactionTarget] = useState<GroupMessage | null>(null);
   const flatListRef = useRef<FlatList<GroupMessage>>(null);
 
   // S124-B (camada 3 — Selo de fundador do grupo) — a tela hoje só recebe
@@ -108,6 +117,13 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       setMessages(msgs);
       setLoading(false);
     });
+    return unsubscribe;
+  }, [groupId]);
+
+  // S149-B — reações, mirror do listener de matches/{matchId}/reactions
+  // (ChatScreen.tsx, S80-B).
+  useEffect(() => {
+    const unsubscribe = listenGroupReactions(groupId, setReactions);
     return unsubscribe;
   }, [groupId]);
 
@@ -195,6 +211,10 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     const senderProfile = senderProfiles[item.senderId];
     const senderName = senderProfile === undefined ? '' : getDisplayName(senderProfile);
     const imageUrl = item.imageUrl;
+    // S149-B — mirror de reactionEntries (ChatScreen.tsx:214-216).
+    const reactionEntries = reactions[item.id]
+      ? Object.entries(reactions[item.id]).sort(([a], [b]) => a.localeCompare(b))
+      : [];
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
@@ -205,7 +225,10 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
             </View>
           )}
           {imageUrl ? (
-            <Pressable onPress={() => setViewerImage(imageUrl)}>
+            <Pressable
+              onPress={() => setViewerImage(imageUrl)}
+              onLongPress={() => setReactionTarget(item)}
+            >
               <Image
                 source={{ uri: imageUrl }}
                 style={styles.bubbleImage}
@@ -215,11 +238,25 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               />
             </Pressable>
           ) : (
-            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+            <Text
+              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+              onLongPress={() => setReactionTarget(item)}
+            >
+              {item.text}
+            </Text>
           )}
           <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
             {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
           </Text>
+          {reactionEntries.length > 0 && (
+            <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
+              {reactionEntries.map(([uid, emoji]) => (
+                <Text key={uid} style={styles.reactionBadge}>
+                  {emoji}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
       </View>
     );
@@ -349,6 +386,41 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
             >
               <Text style={styles.sheetCancelText}>Cancelar</Text>
             </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* S149-B — sheet do toque longo: mirror do sheet de reação do
+          ChatScreen.tsx (1:1, S80-A/B), sem opção de responder/copiar
+          (fora do escopo desta sprint). */}
+      <Modal
+        visible={!!reactionTarget}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReactionTarget(null)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setReactionTarget(null)}>
+          <View style={styles.sheet}>
+            <View style={styles.reactionRow}>
+              {REACTION_EMOJIS.map((emoji) => (
+                <AnimatedPressable
+                  key={emoji}
+                  style={styles.reactionButton}
+                  onPress={() => {
+                    if (reactionTarget && user?.uid) {
+                      const current = reactions[reactionTarget.id]?.[user.uid];
+                      const next = current === emoji ? null : emoji;
+                      setGroupMessageReaction(groupId, reactionTarget.id, user.uid, next).catch(
+                        (err) => console.warn('[GroupChatScreen] falha ao gravar reação', err),
+                      );
+                    }
+                    setReactionTarget(null);
+                  }}
+                >
+                  <Text style={styles.reactionEmoji}>{emoji}</Text>
+                </AnimatedPressable>
+              ))}
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -515,4 +587,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewerImage: { width: '100%', height: '80%' },
+
+  // S149-B — mirror EXATO de ChatScreen.tsx:2013-2015 (badge) e :2060-2070
+  // (sheet de reação).
+  reactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.sm,
+  },
+  reactionButton: {
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+  },
+  reactionEmoji: { fontSize: theme.fontSize.xl },
+  reactionBadgeRow: { flexDirection: 'row', gap: 2, alignSelf: 'flex-start' },
+  reactionBadgeRowMe: { alignSelf: 'flex-end' },
+  reactionBadge: { fontSize: theme.fontSize.sm },
 });

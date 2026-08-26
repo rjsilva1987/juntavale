@@ -89,8 +89,16 @@ export default function MomentoRequestsScreen({ navigation }: MomentoRequestsScr
     ...sent.map((r) => ({ ...r, isReceived: false })),
   ].sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
 
+  // S149-B — prévia da última mensagem quando existir (status answered),
+  // texto genérico como fallback (doc antigo sem lastMessage, S150).
   const rowSubtitle = (item: RequestRow): string => {
-    if (item.status === 'answered') return 'Conversa liberada — toque pra abrir';
+    if (item.status === 'answered') {
+      if (item.lastMessage) {
+        const prefix = item.lastMessage.senderId === user?.uid ? 'Você: ' : '';
+        return `${prefix}${item.lastMessage.text}`;
+      }
+      return 'Conversa liberada — toque pra abrir';
+    }
     if (item.status === 'declined') return 'Pedido recusado';
     return item.isReceived ? 'Toque pra responder ou recusar' : 'Aguardando resposta';
   };

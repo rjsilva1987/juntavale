@@ -340,6 +340,7 @@ export default function MomentoRequestChatScreen({
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.messagesList}
               renderItem={renderMessage}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
             />
           )}
 

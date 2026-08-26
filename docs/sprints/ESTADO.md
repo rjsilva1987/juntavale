@@ -4,8 +4,10 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 26/08/2026
-**Commit atual:** d384f65 — fix(momentos): card do dono usa listener em
-vez de getDoc unico (S153) — ver ROADMAP.md.
+**Commit atual:** commit desta sprint (S149-B, lote `/sprint`) — reações
+e sheet de toque longo no chat de grupo (mirror S80), rolagem inicial
+corrigida em MomentoRequestChatScreen, prévia de lastMessage em
+GroupsScreen/MomentoRequestsScreen — ver ROADMAP.md.
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. Bateria de testes do
@@ -24,9 +26,9 @@ recentemente" pra detalhe por sprint.
   PENDENTE. Ver ROADMAP.md § S140.
 - S144-B — enxugar carimbo do `firestore.rules` — a refazer (commit
   `db12492` revertido em `fa757f5`). Ver ROADMAP.md § S144-B.
-- S149-B/C/D/E — paridade do chat de grupo com o 1:1 (reações, replyTo,
-  editar, apagar, "ler mais", copiar) — sem recon/decisão própria ainda.
-  Ver ROADMAP.md § S149.
+- S149-C/D/E — paridade do chat de grupo com o 1:1 (replyTo, editar,
+  apagar, "ler mais", copiar) — sem recon/decisão própria ainda. Reações
+  (S149-B) já fechadas. Ver ROADMAP.md § S149.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de
@@ -38,6 +40,11 @@ recentemente" pra detalhe por sprint.
   ROADMAP § "Dívidas técnicas").
 
 ## Pendências vivas
+- **S149-B** — `firestore.rules` com o bloco novo de reações de grupo
+  ainda NÃO deployada; sem teste em aparelho. Ressalva da auditoria pra
+  confirmar com o Raphael: a prévia de última mensagem em GroupsScreen
+  aparece também na seção "Descobrir" (grupos que o usuário não integra)
+  — ver ROADMAP.md § "Fechadas recentemente" (linha S149-B).
 - **Aguardando o BUILD 15** (push ou múltiplos aparelhos, Expo Go não
   entrega push no SDK 54): S124-A (push de pedido/aprovação), S126 (push
   anônimo da enquete), S135 (nickname no push), S129-B (3 estados do

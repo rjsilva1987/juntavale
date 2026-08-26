@@ -380,7 +380,7 @@
 // S80-B) ou presente com valor na lista fixa de 6 emoji; create+update
 // juntos pois o doc pode não existir na 1ª reação, mesmo padrão do presence
 // (S79-C2-A); delete negado; lista de emoji precisa ficar em sincronia com
-// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) + S-Matricula (troca "Chave F" pra "Matrícula", regex ^F\d{7}$ pra ^[A-Z]?\d{1,7}$ — F+7 continua casando, sem migração) — 2026-08-03
+// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) + S-Matricula (troca "Chave F" pra "Matrícula", regex ^F\d{7}$ pra ^[A-Z]?\d{1,7}$ — F+7 continua casando, sem migração) + S149-B (26/08/2026 — reações no chat de grupo: groups/{groupId}/reactions/{messageId} novo, mirror de matches/{matchId}/reactions [S80-A], mesma lista de 6 emojis, membership via groupAllowsPost em vez de getMatch(matchId).users) — 2026-08-03
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -1768,6 +1768,39 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl']);
 
         allow update, delete: if false;
+      }
+
+      // ─────────────── groups/{groupId}/reactions (S149-B) ───────────────
+      //
+      // Um doc por MENSAGEM (id = messageId), map de uid -> emoji (mesmo
+      // desenho de matches/{matchId}.typing, S79-C1, só que num doc próprio
+      // em vez de campo dentro do match — reações são por mensagem, typing é
+      // por conversa). create+update juntos: o doc não existe até a primeira
+      // reação naquela mensagem (mesmo motivo do presence/{userId} criado sob
+      // demanda, S79-C2-A) — `resource == null` no create normaliza pra {}
+      // antes do diff, senão dereferenciar resource.data quebraria.
+      //
+      // Lista de emoji abaixo TEM que ficar em sincronia manual com
+      // REACTION_EMOJIS (src/services/firestoreService.ts) — rules não
+      // importa nada do client, os dois lados são mantidos à mão.
+      match /reactions/{messageId} {
+        allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
+
+        allow create, update: if isSignedIn()
+          && groupAllowsPost(groupId, request.auth.uid)
+          && (resource == null ? {} : resource.data)
+               .diff(request.resource.data).affectedKeys().hasOnly([request.auth.uid])
+          // Três ramos, mesmo padrão do guard de `typing` (S79-C1): (1) nada
+          // mudou na chave do próprio uid; (2) ela está AUSENTE no
+          // resultado — deleteField(), remoção de reação, é o que o S80-B
+          // vai usar; (3) está presente e o valor é um dos 6 emoji fixos.
+          && ((resource == null ? {} : resource.data)
+                .diff(request.resource.data).affectedKeys().size() == 0
+              || !(request.auth.uid in request.resource.data)
+              || request.resource.data[request.auth.uid]
+                   in ['👍', '❤️', '😂', '😮', '😢', '🙏']);
+
+        allow delete: if false;
       }
 
       // ─── groups/{groupId}/pollVotes (S124-B, camada 1) ───
