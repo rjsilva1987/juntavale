@@ -67,12 +67,30 @@ export const expireMomentos = onSchedule(
         // existe mais nenhuma referência a ela depois que o doc pai sumiu
         // (best-effort, mesmo padrão do bucket.deleteFiles acima — órfã no
         // Firestore custa armazenamento, não corrompe dado nenhum).
-        // momentoRequests NUNCA é tocado aqui (decisão 8: tem cópia própria
-        // em momentoSnapshot e sobrevive à expiração do momento por design).
         try {
           await db.recursiveDelete(ref.collection('likes'));
         } catch (error) {
           console.error('[expireMomentos] falha ao apagar likes do momento:', ref.id, error);
+        }
+        // S148 — momentoRequests é apagado junto com a expiração do momento
+        // do autor (decisão 8 revogada: a cópia em momentoSnapshot não
+        // justifica mais manter o pedido vivo depois que o momento original
+        // some). ref.id é o uid do autor (doc id de momentos/{uid}), mesmo
+        // best-effort de likes acima — não derruba a expiração se falhar.
+        try {
+          const requestsSnap = await db
+            .collection('momentoRequests')
+            .where('authorId', '==', ref.id)
+            .get();
+          await Promise.all(
+            requestsSnap.docs.map((requestDoc) => db.recursiveDelete(requestDoc.ref)),
+          );
+        } catch (error) {
+          console.error(
+            '[expireMomentos] falha ao apagar momentoRequests do momento:',
+            ref.id,
+            error,
+          );
         }
       }
     }

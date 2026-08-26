@@ -1058,19 +1058,36 @@ tempo restante vira overlay absoluto (`myCardTimeOverlay`) sobre ela; o
 ramo de texto do card não foi alterado estruturalmente.
 
 ### S148 — Momento: ciclo de vida da conversa
-**Status:** ABERTA
+**Status:** FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+--commit`), auditoria APROVADA (2 ressalvas não-bloqueantes: comentários
+desatualizados em `momentoRequestService.ts` fora do escopo desta sprint,
+citando a mesclagem revogada e o hook deletado — não corrigidas nesta
+sprint). **EXIGE DEPLOY da Cloud Function `expireMomentos`** (nenhuma
+rule tocada). SEM teste em aparelho.
+
+`expireMomentos` (`functions/src/momentos.ts`) passa a varrer também os
+`momentoRequests` do AUTOR do momento expirado e apagar cada um com
+`db.recursiveDelete` (doc + subcoleção `messages`), mesmo padrão
+best-effort já usado pra `likes`; revoga a decisão antiga
+("momentoRequests nunca é tocado aqui"). Revogada a mesclagem "via
+Momento" da S143-C na aba Conversas: `useAnsweredMomentoRequests.ts`
+DELETADO, `MatchesScreen.tsx` volta a listar só conversas de match. Card
+do Explorar renomeado de "Pedidos" pra "Momentos" (`MomentosScreen.tsx`);
+mesmo nome no header de `MomentoRequestsScreen.tsx` (antes "Pedidos de
+conversa") e empty state reescrito sem citar "match".
+`MomentoRequestChatScreen.tsx` passa a exibir `momentoSnapshot` (autor +
+texto ou miniatura de foto) no topo da conversa, sem `Pressable`.
+`firestore.rules` intocadas (deleção via Admin SDK ignora rules).
 
 **Decisões de produto tomadas (Raphael, 25/08/2026):**
 1. Conversa/pedido do Momento é APAGADA junto com a expiração do momento —
-   CONFIRMADO, sem contar a partir da última mensagem. `expireMomentos`
-   passa a varrer também os `momentoRequests` do autor expirado (docs e
-   subcoleção `messages`).
+   CONFIRMADO, sem contar a partir da última mensagem.
 2. Conversas de Momento SAEM da aba Conversas — revoga a mesclagem "via
-   Momento" da S143-C (commit `0447db6`); código a remover.
+   Momento" da S143-C (commit `0447db6`).
 3. O card "Pedidos" do Explorar (S145/S146) é renomeado pra "Momentos" e
    passa a concentrar pedidos pendentes E conversas já respondidas.
 4. Ao abrir a conversa, exibir o momento de origem — `momentoSnapshot` já
-   existe nos docs (S143-B/C); é exibição nova, não modelo novo.
+   existe nos docs (S143-B/C).
 
 **Interage com:** S143-C (mesclagem revogada), S145/S146 (card renomeado,
 escopo do badge).
@@ -1352,6 +1369,24 @@ Seção acumulativa: o que ainda falta testar, por onde dá pra testar.
   ~24h, ou reduzir `expiresAt` manualmente no Console pra simular) some do
   feed de B sem erro.
 
+- S148 — **depois que Raphael fizer o deploy da `expireMomentos`
+  atualizada**: com um momento expirando (aguardar o TTL de 24h, ou
+  reduzir `expiresAt` manualmente no Console pra simular), conferir que os
+  `momentoRequests` daquele AUTOR somem junto (pendentes, respondidos e
+  recusados — doc e subcoleção `messages`), sem derrubar o resto da
+  expiração se algum falhar.
+- S148 — aba Conversas: conferir que nenhuma conversa de Momento aparece
+  mais ali (nem com etiqueta "via Momento"), mesmo com match ativo entre
+  as duas contas — só conversas de match.
+- S148 — aba Explorar: card renomeado pra "Momentos" continua abrindo
+  `MomentoRequestsScreen` normalmente, com pedidos pendentes E conversas
+  já respondidas juntos na mesma lista; header e empty state também
+  mostram o texto novo.
+- S148 — abrir uma conversa de Momento (`MomentoRequestChatScreen`):
+  o momento de origem aparece no topo, com o autor certo (você ou o outro
+  lado), texto ou miniatura de foto conforme o tipo, sem responder a
+  toque (não deve abrir nenhum viewer).
+
 **S143-C — bateria de aparelho TESTADA e APROVADA em 25/08/2026** (barra de
 resposta no viewer, roteamento independente de match, mesclagem "via
 Momento" na aba Conversas, bloqueio ativo, teclado/timer de auto-avanço —
@@ -1408,6 +1443,12 @@ continua na bateria geral.
   ProfileScreen; o push semanal de segunda 12h do S50 convida a responder o
   prompt, e esse convite deixou de ser o primeiro chamado à ação do perfil.
   Risco aceito ao fechar a sprint; revisitar se virar problema real.
+- **S148** — `momentoRequests` cujo `momento` original já expirou ANTES do
+  deploy desta sprint (S148) não são varridos pela lógica nova de
+  `expireMomentos` (ela só dispara a partir da query em `momentos`, que já
+  não existe mais pra esses casos) — ficam órfãos permanentemente no
+  Firestore, sem limpeza automática. Script de limpeza avulso ficou fora do
+  escopo, decisão deliberada.
 
 ---
 
@@ -1438,6 +1479,18 @@ continua na bateria geral.
   chamado de suporte (nome e apelido ficaram imutáveis pelo usuário nessa
   sprint), e editar às cegas sem ver o valor atual não é viável. Fora dessa
   ação, a tela segue mostrando só o `nickname`, como qualquer outra.
+- **S148 — ciclo de vida da conversa de Momento é ATRELADO ao momento, não
+  independente dele.** Revoga a decisão da S143-C que separava a conversa
+  de Momento (`momentoRequests`) da expiração do momento original: quando
+  o momento expira, `expireMomentos` apaga junto TODOS os
+  `momentoRequests` daquele autor (pendentes, respondidos e recusados —
+  doc + subcoleção `messages`), independente de terem cópia própria em
+  `momentoSnapshot`. Conversas de Momento NUNCA aparecem na aba Conversas
+  (matches/{matchId}), só na aba Explorar; o card que leva a elas se chama
+  "Momentos" (não mais "Pedidos"), e lista pedidos pendentes E conversas
+  já respondidas no mesmo lugar. Qualquer sprint nova que reabra esse
+  desenho (ex.: reintroduzir mesclagem na aba Conversas) é decisão de
+  produto nova — não decidir sozinho, perguntar ao Raphael.
 
 ## Armadilhas do chat (valem pra qualquer sprint que mexa em ChatScreen/listenMessages)
 

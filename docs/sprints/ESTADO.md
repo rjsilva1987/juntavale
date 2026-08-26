@@ -8,6 +8,15 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 permite doc inexistente na checagem previa (S143-C) — ver ROADMAP.md.
 
 ## Sprints em andamento
+- S148 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
+  --commit`), auditoria APROVADA (2 ressalvas não-bloqueantes, ver
+  ROADMAP.md): `expireMomentos` passa a apagar também os
+  `momentoRequests` do autor do momento expirado; mesclagem "via Momento"
+  da S143-C revogada na aba Conversas (`useAnsweredMomentoRequests.ts`
+  deletado); card do Explorar renomeado de "Pedidos" pra "Momentos";
+  conversa de Momento passa a exibir o momento de origem. **EXIGE DEPLOY
+  da Cloud Function `expireMomentos`.** Ver ROADMAP.md § S148. SEM teste
+  em aparelho.
 - S151 — FECHADA em código e COMMITADA (25/08/2026, via `/sprint lote
   --commit`), auditoria APROVADA sem ressalvas bloqueantes: teto de
   opções da enquete de perfil (`poll`, `users` e `groups`) sobe de 4 pra

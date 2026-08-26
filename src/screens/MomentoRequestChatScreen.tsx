@@ -240,6 +240,32 @@ export default function MomentoRequestChatScreen({
           )}
         </View>
 
+        {/* S148 — momento de origem do pedido: cópia guardada em
+            momentoSnapshot (sobrevive mesmo se o momento original já
+            expirou). Mesmo molde visual do bloco item.momentoRef de
+            ChatScreen.tsx (replyQuoteBox/replyQuoteName/replyQuoteText),
+            SEM Pressable — não há como abrir o viewer de um momento que
+            pode já ter expirado. */}
+        {request && (
+          <View style={styles.momentoQuoteBox}>
+            <Text style={styles.momentoQuoteName} numberOfLines={1}>
+              {isAuthor ? 'Seu momento' : `Momento de ${getDisplayName(otherProfile)}`}
+            </Text>
+            {request.momentoSnapshot.type === 'photo' && request.momentoSnapshot.photoUrl ? (
+              <Image
+                source={{ uri: request.momentoSnapshot.photoUrl }}
+                style={styles.momentoQuoteThumb}
+                contentFit="cover"
+                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+              />
+            ) : (
+              <Text style={styles.momentoQuoteText} numberOfLines={2}>
+                {request.momentoSnapshot.text}
+              </Text>
+            )}
+          </View>
+        )}
+
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -344,6 +370,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: theme.colors.text,
     flexShrink: 1,
+  },
+
+  // S148 — molde do momento de origem no topo, mesmo vocabulário de
+  // replyQuoteBox/replyQuoteName/replyQuoteText (ChatScreen.tsx): borda à
+  // esquerda em primaryLight + itálico no texto.
+  momentoQuoteBox: {
+    paddingLeft: 8,
+    paddingVertical: 8,
+    paddingRight: theme.spacing.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.primaryLight,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.sm,
+  },
+  momentoQuoteName: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
+  momentoQuoteText: {
+    fontSize: theme.fontSize.sm,
+    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  momentoQuoteThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: 4,
   },
 
   messagesList: { padding: theme.spacing.md, gap: 10, flexGrow: 1 },

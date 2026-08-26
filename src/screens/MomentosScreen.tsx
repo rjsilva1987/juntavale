@@ -245,7 +245,7 @@ export default function MomentosScreen() {
                     size={20}
                     color={theme.colors.textSecondary}
                   />
-                  <Text style={styles.exploreCardText}>Pedidos</Text>
+                  <Text style={styles.exploreCardText}>Momentos</Text>
                   {(pendingMomentoRequests > 0 || unseenAnsweredMomentoRequests > 0) && (
                     <View style={styles.pendingDot} />
                   )}

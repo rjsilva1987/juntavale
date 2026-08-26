@@ -105,7 +105,7 @@ export default function MomentoRequestsScreen({ navigation }: MomentoRequestsScr
           >
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
-          <Text style={styles.headerTitle}>Pedidos de conversa</Text>
+          <Text style={styles.headerTitle}>Momentos</Text>
           <View style={styles.backBtn} />
         </View>
 
@@ -117,7 +117,7 @@ export default function MomentoRequestsScreen({ navigation }: MomentoRequestsScr
           <EmptyState
             icon="chatbubble-ellipses-outline"
             title="Nenhum pedido de conversa"
-            subtitle="Comentários em momentos de quem ainda não é seu match aparecem aqui."
+            subtitle="Comentários e conversas de momentos aparecem aqui."
           />
         ) : (
           <FlatList
