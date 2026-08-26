@@ -4,7 +4,7 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 26/08/2026
-**Commit atual:** commit desta sprint (S149-B, lote `/sprint`) — reações
+**Commit atual:** c80de63 — feat(grupos): reações
 e sheet de toque longo no chat de grupo (mirror S80), rolagem inicial
 corrigida em MomentoRequestChatScreen, prévia de lastMessage em
 GroupsScreen/MomentoRequestsScreen — ver ROADMAP.md.
