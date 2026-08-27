@@ -59,6 +59,38 @@ Sub-sprints S149-C/D/E, escopo ainda não quebrado por item individual.
 
 ---
 
+### S155 — Pipeline: /sprint ganha um segundo eixo de pergunta (modo de git)
+**Status:** ABERTA · decisão de produto já tomada (Raphael, 26/08/2026,
+DESENHO abaixo) · sem recon/implementação ainda — não rodar sem pedido
+explícito
+
+Hoje a exceção de git de escrita em `/sprint` só existe na sintaxe exata
+`lote --commit S<NN> ...`. Toda tarefa de manutenção fora dela (atualizar
+ROADMAP, corrigir marcas de teste, ajustes pontuais) termina com o agente
+devolvendo o bloco de comandos pro Raphael executar à mão — aconteceu 5
+vezes só em 26/08/2026. O eixo novo resolve isso sem afrouxar nenhuma
+guarda.
+
+DESENHO: Fase 0 do `/sprint` passa a fazer DUAS perguntas — modo de
+decisão (AUTOMÁTICO/MANUAL, já existente, inalterado) e modo de git (GIT
+MANUAL, padrão atual, imprime o bloco pro Raphael; ou GIT AUTOMÁTICO, o
+orquestrador roda `git add <caminhos exatos>`/`commit`/`push` ele mesmo,
+só depois de auditoria aprovada). No lote, as duas respostas valem pro
+lote inteiro e a flag `lote --commit` continua aceita como atalho
+(equivale a git automático, pula a segunda pergunta). Subagentes
+(`jv-recon`/`jv-implementa`/`jv-audita`) continuam proibidos de qualquer
+git de escrita em qualquer modo — a exceção é só do orquestrador. Deploy
+continua proibido sempre, nos dois modos. Git de escrita destrutivo
+(reset/checkout/restore/revert/stash) continua fora da exceção, sempre.
+
+Arquivos prováveis: `.claude/commands/sprint.md`,
+`.claude/skills/juntavale-sprint/SKILL.md`, `CLAUDE.md`. Sem
+`firestore.rules`, sem Cloud Function — o commit desta sprint é
+inerentemente manual, já que é o próprio mecanismo de commit automático
+que está sendo criado.
+
+---
+
 ## Fechadas recentemente
 
 | Sprint | O que era |
