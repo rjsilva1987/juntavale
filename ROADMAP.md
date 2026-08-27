@@ -45,58 +45,6 @@ possivelmente a categoria na App Store — e colide com a defesa do nicho
 enviada à Apple no 4.3(b), que descreve o app pela comunidade credenciada.
 Nada de recon ou implementação antes dessa decisão.
 
-### S140 — Bug: conta do build 14 quebra ao salvar perfil com nome editado
-**Status:** REAVALIADA (25/08/2026) — possivelmente obsoleta. A S138, no
-mesmo dia, tornou `name`/`nickname` imutáveis pelo dono em QUALQUER
-circunstância — o `allow update` do dono pode não precisar mais aceitar
-`name` nunca, o que eliminaria a causa desta sprint por um caminho
-diferente do previsto originalmente abaixo. Decisão de fechar de vez ou
-manter aberta fica PENDENTE — não decidida aqui, só registrada a
-reavaliação e a pergunta em aberto. Conteúdo original (causa raiz,
-ressalvas, recon) mantido abaixo sem alteração.
-
-A S137 corrigiu o `allow create` de `users/{uid}` pra aceitar `name` do
-cliente antigo (build 14 Android / 1.0.5 iOS), mas NÃO tocou no
-`allow update` — que segue sem `name` no `hasOnly`.
-
-Consequência: conta criada pelo cliente antigo consegue se cadastrar, mas
-o primeiro "salvar perfil" que edite o nome derruba o save INTEIRO — bio,
-fotos, interesses, tudo junto, não só o nome. Foi registrado no comentário
-da S137 no `firestore.rules`.
-
-Duas ressalvas ligadas, também achadas pela auditoria da S137:
-1. Conta criada pelo cliente antigo nasce com o nome real no doc PÚBLICO,
-   sem o subdoc privado que a S135 criou pra proteger isso — é justamente
-   a exposição que a S135 existia pra fechar.
-2. O `functions/scripts/migrateNicknames.js` (S135) vai precisar rodar de
-   novo depois do build 15, e o cabeçalho dele hoje assume que não existem
-   contas pós-S135 sem `nickname` — premissa que a S137 invalidou.
-
-**Recon quando a sprint abrir:**
-1. O `allow update` de `users/{uid}` em `firestore.rules` — o `hasOnly` e o
-   que a `isValidProfile` valida hoje.
-2. Se a correção deve espelhar a da S137 (aceitar os dois formatos,
-   temporariamente) ou se é melhor esperar o build 15 substituir os dois
-   nas lojas e nunca tocar no update.
-3. Quantas contas na base hoje têm `name` sem `nickname`.
-
-### S144-B — Enxugar o carimbo do `firestore.rules`
-**Status:** ABERTA · a refazer — 1ª tentativa commitada (`db12492`) e
-revertida (`fa757f5`) · S144-A e S144-C já FECHADAS e commitadas (ver
-"Fechadas recentemente" — `3dd5ad9` criou `ARQUITETURA.md`, `f679098`
-quebrou `functions/src/index.ts` em módulos); S144-D (política de sprint
-pequena — quebrar em partes quando a recon indicar mais de ~500 linhas ou
-~8 arquivos) já foi adotada como prática nas sprints seguintes, sem
-pendência própria.
-
-O `rules-stamp` é uma cadeia contínua de comentários da linha 1 até ~105,
-com uma entrada por sprint desde a S-Matrícula. Ele entra em toda leitura
-do arquivo, em toda sprint que toca rules. Manter no topo só as ~5
-entradas mais recentes e mover o histórico pro FIM do arquivo (ou pro
-`ARQUITETURA.md`).
-⚠️ A regra da casa de atualizar o carimbo a cada sprint de rules CONTINUA
-valendo — o que muda é onde o histórico antigo mora.
-
 ---
 
 ### S149 — Grupo: paridade do chat (sub-sprints C/D/E)
@@ -165,6 +113,23 @@ Sub-sprints S149-C/D/E, escopo ainda não quebrado por item individual.
 
 **S99 — DESCARTADA.** Era filtro de distância social (não mostrar quem é da
 mesma agência/cidade). Decidido que não vamos fazer. Não repropor.
+
+**S140 — FECHADA como OBSOLETA (Raphael, 26/08/2026).** Era o bug do build
+14 que derrubava o save do perfil inteiro ao editar o nome. Fechada sem
+implementação própria: a S138 tornou `name`/`nickname` imutáveis pelo dono
+em QUALQUER circunstância, então o `allow update` de `users/{uid}` nunca
+mais precisa aceitar `name` — a causa raiz deixou de existir por esse
+caminho, não pelo previsto no recon original da sprint. As duas ressalvas
+que a auditoria da S137 achou e que NÃO dependem dessa causa (exposição do
+nome real de conta legada; `migrateNicknames.js` a rerodar) sobrevivem à
+S140 — ver "Dívidas técnicas".
+
+**S144-B — DESCARTADA (Raphael, 26/08/2026), mesmo tratamento da S99.** Era
+enxugar o `rules-stamp` do `firestore.rules` (~5 entradas mais recentes no
+topo, histórico movido pro fim do arquivo ou pro `ARQUITETURA.md`). O
+histórico fica onde está — não repropor a reorganização. ⚠️ A regra da casa
+de ATUALIZAR o carimbo a cada sprint que toca rules CONTINUA valendo; só a
+reorganização do histórico antigo foi descartada, não a prática.
 
 ---
 
@@ -238,6 +203,17 @@ push no SDK 54):
   não existe mais pra esses casos) — ficam órfãos permanentemente no
   Firestore, sem limpeza automática. Script de limpeza avulso ficou fora do
   escopo, decisão deliberada.
+- **S135** — conta criada pelo cliente antigo (build 14 Android / 1.0.5 iOS,
+  aceita pelo `allow create` desde a S137) nasce com o nome real no doc
+  PÚBLICO `users/{uid}`, sem o subdoc privado que a S135 criou pra proteger
+  isso — é justamente a exposição que a S135 existia pra fechar. Achado pela
+  auditoria da S137; sobrevive ao fechamento da S140 (obsoleta por outro
+  motivo — ver "Fechadas recentemente").
+- **S135** — `functions/scripts/migrateNicknames.js` vai precisar rodar de
+  novo depois do build 15: o cabeçalho dele hoje assume que não existem
+  contas pós-S135 sem `nickname`, premissa que a S137 invalidou (contas do
+  cliente antigo aceitas pela S137 nascem sem passar pela migração). Achado
+  pela auditoria da S137; sobrevive ao fechamento da S140.
 
 ---
 
