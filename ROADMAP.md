@@ -203,6 +203,9 @@ push no SDK 54):
 - S126 — dono recebe o push anônimo quando alguém vota na enquete.
 - S135 — título/corpo do push de match e de mensagem mostram o NICKNAME
   (nunca o nome real).
+- S122 — a correção é justamente sobre push chegar com o app em primeiro
+  plano; o Expo Go não entrega push no SDK 54, então só dá pra confirmar
+  com o build 15.
 - S129-B — com duas contas em dois aparelhos (ou emuladores), conferir os
   3 estados do tique na conversa de quem MANDOU a mensagem: 1 tique cinza
   (enviado) assim que o outro lado ainda não abriu o app/tela de
