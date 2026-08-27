@@ -25,9 +25,10 @@ recentemente" pra detalhe por sprint.
   PENDENTE. Ver ROADMAP.md § S140.
 - S144-B — enxugar carimbo do `firestore.rules` — a refazer (commit
   `db12492` revertido em `fa757f5`). Ver ROADMAP.md § S144-B.
-- S149-D/E — paridade do chat de grupo com o 1:1 (editar, apagar, "ler
-  mais", copiar) — sem recon/decisão própria ainda. Reações (S149-B) e
-  responder/replyTo (S149-C) já fechadas. Ver ROADMAP.md § S149.
+- S149-E — paridade do chat de grupo com o 1:1 (apagar, "ler mais",
+  copiar) — sem recon/decisão própria ainda. Reações (S149-B),
+  responder/replyTo (S149-C) e editar (S149-D) já fechadas. Ver
+  ROADMAP.md § S149.
 - S155 — `/sprint` ganha segundo eixo de pergunta (modo de git
   manual/automático) — decisão já tomada, sem recon/implementação ainda;
   NÃO rodar sem pedido explícito do Raphael. Ver ROADMAP.md § S155.
@@ -48,6 +49,8 @@ recentemente" pra detalhe por sprint.
   aparece também na seção "Descobrir" (grupos que o usuário não integra)
   — ver ROADMAP.md § "Fechadas recentemente" (linha S149-B).
 - **S149-C** — `firestore.rules` com a validação nova de `replyTo` em
+  `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
+- **S149-D** — `firestore.rules` com o ramo novo de editar em
   `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
 - **Aguardando o BUILD 15** (push ou múltiplos aparelhos, Expo Go não
   entrega push no SDK 54): S124-A (push de pedido/aprovação), S126 (push

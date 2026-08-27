@@ -9,8 +9,8 @@
 // separar só o subconjunto de texto+foto exigiria desmontar esse componente
 // inteiro, mais caro do que escrever a versão mínima aqui. O CONTRATO DE
 // DADOS fica restrito ao mínimo (ver groupService.ts/firestore.rules):
-// reações (S149-B) e replyTo (S149-C) já existem; SEM read-receipts, edição
-// ou exclusão de mensagem.
+// reações (S149-B), replyTo (S149-C) e edição (S149-D) já existem; SEM
+// read-receipts ou exclusão de mensagem (S149-E).
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -47,6 +47,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import {
+  editGroupMessage,
   getGroup,
   getMyMembership,
   GroupMessage,
@@ -64,6 +65,10 @@ import { countCodePoints } from '@/utils/text';
 type GroupChatScreenProps = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
 const MAX_MESSAGE_LENGTH = 2000;
+// S149-D — decisão do Raphael (26/08/2026): a janela de editar em grupo é a
+// MESMA do 1:1 (EDIT_WINDOW_MS, ChatScreen.tsx:111) — mesmo valor literal,
+// não existe fonte única compartilhada entre 1:1 e grupo hoje.
+const GROUP_EDIT_WINDOW_MS = 60 * 60 * 1000;
 // S149-C — mesma regra de truncamento de ChatScreen.tsx:74-82 (100 code
 // points na citação; rules aceitam até 400, guarda de abuso — ver
 // firestore.rules). Não reimporta de lá (const local, não exportada em
@@ -107,6 +112,11 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   // padrão do 1:1: handleSendImage NUNCA anexa replyTo), limpo depois do
   // envio.
   const [replyTarget, setReplyTarget] = useState<GroupMessageReplyTo | null>(null);
+  // S149-D — editTarget: mensagem escolhida pra editar (mostra a barra de
+  // edição acima do input, espelhando replyTarget), mirror de editTarget
+  // (ChatScreen.tsx:537-539). Guarda a GroupMessage inteira (não só o texto)
+  // porque canEdit/handleSend precisam de id/senderId/createdAt/imageUrl.
+  const [editTarget, setEditTarget] = useState<GroupMessage | null>(null);
   const flatListRef = useRef<FlatList<GroupMessage>>(null);
 
   // S124-B (camada 3 — Selo de fundador do grupo) — a tela hoje só recebe
@@ -158,6 +168,14 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     return unsubscribe;
   }, [groupId]);
 
+  // S149-D — preenche o input com o texto quando entra em modo edição,
+  // mirror de ChatScreen.tsx:863-868.
+  useEffect(() => {
+    if (editTarget) {
+      setText(editTarget.text);
+    }
+  }, [editTarget]);
+
   useEffect(() => {
     const missing = Array.from(new Set(messages.map((m) => m.senderId))).filter(
       (uid) => !(uid in senderProfiles),
@@ -182,6 +200,26 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const handleSend = useCallback(async () => {
     if (!user || !text.trim()) return;
     const value = text.trim();
+
+    // S149-D — modo edição: chama editGroupMessage em vez de
+    // sendGroupMessage, mirror de handleSend (ChatScreen.tsx:994-1006).
+    // editTarget e replyTarget podem coexistir em estado (o 1:1 não os
+    // exclui mutuamente — ver ChatScreen.tsx), mas edição tem precedência
+    // aqui do mesmo jeito que lá.
+    if (editTarget) {
+      try {
+        await editGroupMessage(groupId, editTarget.id, value);
+        setText('');
+        setEditTarget(null);
+      } catch (err) {
+        // Falha mantém texto e modo de edição de propósito: a rule pode
+        // negar (fora da janela de 1h) e o usuário não pode perder o que
+        // digitou — mesmo raciocínio do 1:1.
+        console.warn('[GroupChatScreen] falha ao editar mensagem:', err);
+      }
+      return;
+    }
+
     // S149-C — mirror de handleSend (ChatScreen.tsx:1011-1027): consome
     // replyTarget aqui, limpa depois do envio (independente de sucesso, mesmo
     // padrão do 1:1 — corrigir a resposta errada exige tocar em "Responder"
@@ -196,7 +234,7 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       console.error('[GroupChatScreen] falha ao enviar mensagem:', err);
       Alert.alert('Erro', 'Não foi possível enviar a mensagem.');
     }
-  }, [groupId, replyTarget, text, user]);
+  }, [editTarget, groupId, replyTarget, text, user]);
 
   const handleSendImage = useCallback(
     async (localUri: string) => {
@@ -253,6 +291,21 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     const p = senderProfiles[senderId];
     return p === undefined ? '' : getDisplayName(p);
   };
+
+  // S149-D — guarda de UI, mirror de canEdit (ChatScreen.tsx:1261-1269):
+  // verdadeiro só pra mensagem própria de texto, ainda não editada fora da
+  // janela, dentro de GROUP_EDIT_WINDOW_MS. GroupMessage não tem campo
+  // deletedAt ainda (apagar é S149-E, sprint separada) — sem ramo
+  // equivalente a "!replyOptionsTarget.deletedAt" do 1:1 por não existir
+  // esse estado possível hoje. reactionTarget é o mesmo state usado pelo
+  // sheet de toque longo (mensagem tocada), papel equivalente a
+  // replyOptionsTarget no 1:1.
+  const canEdit =
+    !!reactionTarget &&
+    reactionTarget.senderId === user?.uid &&
+    !reactionTarget.imageUrl &&
+    (!reactionTarget.createdAt ||
+      Date.now() - reactionTarget.createdAt.toMillis() < GROUP_EDIT_WINDOW_MS);
 
   const renderMessage = ({ item }: { item: GroupMessage }) => {
     const isMe = item.senderId === user?.uid;
@@ -314,9 +367,19 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               {item.text}
             </Text>
           )}
-          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-            {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
-          </Text>
+          <View style={styles.bubbleTimeRow}>
+            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+              {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
+            </Text>
+            {/* S149-D — "editada" ao lado da hora, mirror de
+                ChatScreen.tsx:454-466. GroupMessage não tem campo deletedAt
+                ainda (apagar é S149-E, sprint separada) — sem o ramo
+                "!item.deletedAt" do 1:1 por não existir esse estado possível
+                hoje. */}
+            {item.editedAt && (
+              <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>editada</Text>
+            )}
+          </View>
           {reactionEntries.length > 0 && (
             <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
               {reactionEntries.map(([uid, emoji]) => (
@@ -429,6 +492,26 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
                   </AnimatedPressable>
                 </View>
               )}
+              {/* S149-D — barra de edição, mirror exato de
+                  ChatScreen.tsx:1498-1515. */}
+              {editTarget && (
+                <View style={styles.replyBar}>
+                  <View style={styles.replyBarAccent} />
+                  <View style={styles.replyBarTextWrap}>
+                    <Text style={styles.replyBarName}>Editando mensagem</Text>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => {
+                      setEditTarget(null);
+                      setText('');
+                    }}
+                    hitSlop={8}
+                    accessibilityLabel="Cancelar edição"
+                  >
+                    <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                  </AnimatedPressable>
+                </View>
+              )}
               <View style={styles.inputRow}>
                 <AnimatedPressable
                   style={styles.inputIcon}
@@ -491,9 +574,9 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       </Modal>
 
       {/* S149-B — sheet do toque longo: mirror do sheet de reação do
-          ChatScreen.tsx (1:1, S80-A/B). S149-C acrescentou "Responder"
-          (mesmo sheet, sem Modal paralelo) — copiar/editar/apagar continuam
-          fora do escopo. */}
+          ChatScreen.tsx (1:1, S80-A/B). S149-C acrescentou "Responder" e
+          S149-D acrescentou "Editar" (mesmo sheet, sem Modal paralelo) —
+          copiar/apagar continuam fora do escopo. */}
       <Modal
         visible={!!reactionTarget}
         transparent
@@ -543,6 +626,25 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Responder</Text>
             </AnimatedPressable>
+            {/* S149-D — "Editar": só em mensagem própria de texto, ainda não
+                editada fora da janela — mirror exato de
+                ChatScreen.tsx:1654-1670 (sheetDivider + sheetOption, ícone
+                pencil). */}
+            {canEdit && (
+              <>
+                <View style={styles.sheetDivider} />
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    setEditTarget(reactionTarget);
+                    setReactionTarget(null);
+                  }}
+                >
+                  <Ionicons name="pencil" size={22} color={theme.colors.text} />
+                  <Text style={styles.sheetOptionText}>Editar</Text>
+                </AnimatedPressable>
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>
@@ -644,9 +746,11 @@ const styles = StyleSheet.create({
   bubbleTime: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textLight,
-    alignSelf: 'flex-end',
   },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.6)' },
+  // S149-D — mirror de bubbleTimeRow (ChatScreen.tsx:2013): agrupa hora +
+  // indicador "editada" na mesma linha, alinhados à direita da bolha.
+  bubbleTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-end' },
 
   progressRow: {
     flexDirection: 'row',

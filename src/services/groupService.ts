@@ -126,8 +126,8 @@ export interface GroupMessageReplyTo {
 }
 
 // S124-A decisão 11 — mesmo mínimo do chat 1:1 (matches/{matchId}/messages),
-// SEM reações/read-receipts/edição/exclusão: só texto, foto e (S149-C)
-// replyTo.
+// SEM read-receipts/exclusão: só texto, foto, (S149-C) replyTo e (S149-D)
+// editedAt.
 export interface GroupMessage {
   id: string;
   text: string;
@@ -136,6 +136,9 @@ export interface GroupMessage {
   imageUrl?: string;
   // S149-C — opcional, mirror de replyTo em matches/{matchId}/messages.
   replyTo?: GroupMessageReplyTo;
+  // S149-D — mirror de Message.editedAt (firestoreService.ts:262): presente
+  // só em mensagem editada.
+  editedAt?: Timestamp;
 }
 
 const groupRef = (groupId: string) => doc(db, 'groups', groupId);
@@ -438,6 +441,18 @@ export const sendGroupMessage = async (
     createdAt: serverTimestamp(),
     ...(imageUrl ? { imageUrl } : {}),
     ...(replyTo ? { replyTo } : {}),
+  });
+};
+
+// S149-D — mirror exato de editMessage (firestoreService.ts:1028-1033).
+export const editGroupMessage = async (
+  groupId: string,
+  messageId: string,
+  text: string,
+): Promise<void> => {
+  await updateDoc(doc(db, 'groups', groupId, 'messages', messageId), {
+    text,
+    editedAt: serverTimestamp(),
   });
 };
 

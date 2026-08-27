@@ -1,4 +1,12 @@
-// rules-stamp: S149-A (25/08/2026 — Grupo: prazo ilimitado. groups/{groupId}
+// rules-stamp: S149-D (26/08/2026 — editar mensagem no chat de grupo:
+// groups/{groupId}/messages/{messageId} allow update ganha ramo novo,
+// unido por `||` ao `if false` que já existia, mirror EXATO do bloco de
+// editar do 1:1 [matches/{matchId}/messages, linha ~1478-1494]: autor
+// (request.auth.uid == resource.data.senderId), sem `deletedAt`/`imageUrl`
+// em resource.data, janela de 1h a partir de createdAt (mesma duração do
+// 1:1), affectedKeys().hasOnly(['text','editedAt']), text.size()<=500
+// (mesmo teto do 1:1), editedAt==request.time. `allow delete` continua
+// `if false` — apagar é S149-E, sprint separada.) + S149-A (25/08/2026 — Grupo: prazo ilimitado. groups/{groupId}
 // allow create: `expiresAt` deixa de ser obrigatório — vira `!('expiresAt' in
 // request.resource.data) || (validação de timestamp/teto de 30d de sempre)`,
 // mesmo molde condicional já usado pra `description` na mesma regra;
@@ -1749,11 +1757,11 @@ service cloud.firestore {
       // ─────────────── groups/{groupId}/messages ───────────────
       //
       // Mesmo MOLDE de campos/validação de matches/{matchId}/messages acima
-      // (S124-A decisão 11), restrito ao mínimo: texto, foto e (S149-C)
-      // replyTo, SEM reações-no-doc/read-receipts/edição/exclusão (reações
-      // vivem em groups/{groupId}/reactions, S149-B, bloco abaixo). allow
-      // update, delete ficam se false — não existe "apagar pros dois" nem
-      // editar aqui nesta sprint (ao contrário do chat 1:1).
+      // (S124-A decisão 11), restrito ao mínimo: texto, foto, (S149-C)
+      // replyTo e (S149-D) edição de texto, SEM reações-no-doc/read-receipts
+      // (reações vivem em groups/{groupId}/reactions, S149-B, bloco abaixo).
+      // allow delete continua if false — "apagar pros dois" fica pra S149-E,
+      // sprint separada.
       match /messages/{messageId} {
         allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
 
@@ -1779,7 +1787,29 @@ service cloud.firestore {
                && request.resource.data.replyTo.text.size() <= 400))
           && request.resource.data.keys().hasOnly(['text', 'senderId', 'createdAt', 'imageUrl', 'replyTo']);
 
-        allow update, delete: if false;
+        // S149-D — editar texto de mensagem, mirror exato do bloco 1:1
+        // (matches/{matchId}/messages, linha ~1478-1494): autor, sem
+        // deletedAt/imageUrl em resource.data, dentro da janela, só
+        // text+editedAt mudam, teto de 500 (mesmo teto do 1:1), editedAt
+        // carimbado com request.time. GroupMessage não tem campo location
+        // (ver groupService.ts) — sem ramo equivalente a
+        // !('location' in resource.data) do 1:1 por não existir esse campo
+        // aqui.
+        allow update: if (
+          request.auth.uid == resource.data.senderId
+          && !('deletedAt' in resource.data)
+          && !('imageUrl' in resource.data)
+          // janela de 1h a partir do createdAt original — MESMA duração de
+          // matches/{matchId}/messages linha ~1488 (bloco 1:1 de editar).
+          && request.time < resource.data.createdAt + duration.value(1, 'h')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.editedAt == request.time
+        );
+
+        allow delete: if false;
       }
 
       // ─────────────── groups/{groupId}/reactions (S149-B) ───────────────
