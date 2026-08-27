@@ -4,8 +4,8 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 27/08/2026
-**Commit atual:** 9ed6baa — feat(grupo): chat de grupo ganha apagar
-mensagem pra todos, mirror do 1:1 (S149-E) — ver ROADMAP.md.
+**Commit atual:** c813cbd — fix(chat): iguala teto de editar mensagem ao
+de criar, 500->2000 (S156) — ver ROADMAP.md.
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. Bateria de testes do
@@ -39,24 +39,17 @@ recentemente" pra detalhe por sprint.
   ROADMAP § "Dívidas técnicas").
 
 ## Pendências vivas
-- **S149-B** — `firestore.rules` com o bloco novo de reações de grupo
-  ainda NÃO deployada; sem teste em aparelho. Ressalva da auditoria pra
-  confirmar com o Raphael: a prévia de última mensagem em GroupsScreen
-  aparece também na seção "Descobrir" (grupos que o usuário não integra)
-  — ver ROADMAP.md § "Fechadas recentemente" (linha S149-B).
-- **S149-C** — `firestore.rules` com a validação nova de `replyTo` em
-  `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
-- **S149-D** — `firestore.rules` com o ramo novo de editar em
-  `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
-- **S149-E** — `firestore.rules` com o ramo novo de apagar em
-  `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
-- **S156** — `firestore.rules` com o teto de editar mensagem corrigido
-  (500→2000, `matches/{matchId}/messages` e `groups/{groupId}/messages`)
-  ainda NÃO deployada; sem teste em aparelho.
-- **Aguardando o BUILD 15** (push ou múltiplos aparelhos, Expo Go não
+- **S149-B** — Ressalva da auditoria pra confirmar com o Raphael: a
+  prévia de última mensagem em GroupsScreen aparece também na seção
+  "Descobrir" (grupos que o usuário não integra) — ver ROADMAP.md §
+  "Fechadas recentemente" (linha S149-B). `firestore.rules` já
+  deployadas e testadas em 27/08/2026; só essa ressalva de produto
+  segue em aberto.
+- **Aguardando o BUILD 15/16** (push ou múltiplos aparelhos, Expo Go não
   entrega push no SDK 54): S124-A (push de pedido/aprovação), S126 (push
   anônimo da enquete), S135 (nickname no push), S129-B (3 estados do
-  tique em 2 aparelhos) — ver ROADMAP.md § "Testes pendentes".
+  tique em 2 aparelhos); S152/S153/S154 também seguem sem teste em
+  aparelho — ver ROADMAP.md § "Testes pendentes".
 
 ## Onde olhar antes de mexer
 - ROADMAP.md § "Decisões de produto que valem para o projeto inteiro" e
