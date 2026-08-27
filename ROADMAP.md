@@ -48,14 +48,14 @@ Nada de recon ou implementação antes dessa decisão.
 ---
 
 ### S149 — Grupo: paridade do chat (sub-sprints C/D/E)
-**Status:** ABERTA · S149-A (prazo ilimitado) já FECHADA e commitada (ver
-"Fechadas recentemente", `16a1cf5`) e S149-B (reações + sheet de toque
-longo) já FECHADA e commitada nesta sessão (ver "Fechadas recentemente")
-— S149-C/D/E continuam em aberto, sem recon/decisão própria ainda.
+**Status:** ABERTA · S149-A e S149-B já FECHADAS (ver "Fechadas
+recentemente") · S149-C (responder/replyTo) FECHADA em código nesta
+sessão (ver "Fechadas recentemente") · S149-D (editar) e S149-E (apagar)
+continuam em aberto.
 
 Chat de grupo ganha as funcionalidades do chat 1:1 — responder/replyTo,
 editar, apagar, "ler mais", copiar (reações já entregues na S149-B).
-Sub-sprints S149-C/D/E, escopo ainda não quebrado por item individual.
+Sub-sprints S149-D/E, escopo ainda não quebrado por item individual.
 
 ---
 
@@ -95,6 +95,7 @@ que está sendo criado.
 
 | Sprint | O que era |
 |---|---|
+| S149-C | Chat de grupo ganha responder/replyTo, mirror byte a byte do molde do 1:1 (S79-C/S79-B) — `GroupMessage.replyTo`/`sendGroupMessage` em `groupService.ts`, opção "Responder" no sheet de toque longo já existente (S149-B, sem Modal paralelo), barra de citação no composer e preview na bolha em `GroupChatScreen.tsx`; `buildGroupReplyQuote` cobre o caso de responder mensagem só-com-foto (rótulo `'📷 Foto'`, mesmo valor do 1:1) — achado e corrigido em auditoria. `firestore.rules` bloco `groups/{groupId}/messages` ganhou validação do campo `replyTo` no `allow create` (mirror do bloco 1:1) — **rules NÃO deployadas**. Sem scroll-to-original-message e sem swipe-to-reply (fora do escopo desta sub-sprint). **Fechada em código, SEM teste em aparelho.** |
 | S154 | Bug: ao abrir `ChatScreen` (chat 1:1) com muitas mensagens, a rolagem inicial podia parar num ponto intermediário (`setTimeout` único do S101 podia acertar um `contentSize` ainda não estabilizado) em vez de ir até o fim real. Corrigido com `onContentSizeChange` na FlatList principal, gateado por `isNearBottomRef.current && !pendingScrollTarget` (reusa estado 100% já existente do S142/S129-A, nada novo declarado) — `setTimeout` original preservado, os dois mecanismos convivem, mesmo padrão de reforço já usado em `GroupChatScreen`/`MomentoRequestChatScreen` (S149-B). Client puro, sem rules/functions. **Fechada em código, commit `d61a201`, SEM teste em aparelho.** |
 | S149-B | Chat de grupo ganha reações e sheet de toque longo, mirror do chat 1:1 (S80) — `groups/{groupId}/reactions/{messageId}` novo em `firestore.rules` (membership via `groupAllowsPost`), `setGroupMessageReaction`/`listenGroupReactions` em `groupService.ts`. De caminho (itens novos pedidos pelo Raphael em 26/08/2026, mesma área): rolagem inicial corrigida em `MomentoRequestChatScreen` (corrida entre `listenMomentoRequestById`/`listenMomentoRequestMessages`, `onContentSizeChange` de reforço — `GroupChatScreen` já funcionava, não foi tocado nesse mecanismo); prévia da última mensagem em `GroupsScreen` ("Meus grupos"/"Descobrir", via `hasValidLastMessage`) e em `MomentoRequestsScreen` (card "Momentos", `rowSubtitle` mostra `lastMessage` real quando `status==='answered'`, mantém fallback genérico sem `lastMessage`) — commit `c80de63`. `firestore.rules` **precisa ser deployada** (bloco novo de reações; nenhuma Cloud Function nova). **Fechada em código, SEM teste em aparelho.** Ressalva da auditoria (não bloqueante): a prévia em `GroupsScreen` aparece também na seção "Descobrir" (grupos que o usuário ainda não integra) — sem vazamento de permissão (rules já liberam leitura ampla de `groups/{groupId}`), mas vale confirmar com o Raphael se é o comportamento desejado. |
 | S153 | Card do momento PRÓPRIO ficava pendurado depois de expirar — `myMomento` passa a vir de um listener (`onSnapshot`, `listenMyMomento`) em vez de um `getDoc` único; corrigido também o listener morrendo permanentemente após o 1º `permission-denied` (guard `listenGeneration`, revive a cada publish) — commit `d384f65`. Client puro, sem deploy necessário. **Fechada em código, SEM teste em aparelho.** |

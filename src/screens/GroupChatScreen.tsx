@@ -9,7 +9,8 @@
 // separar só o subconjunto de texto+foto exigiria desmontar esse componente
 // inteiro, mais caro do que escrever a versão mínima aqui. O CONTRATO DE
 // DADOS fica restrito ao mínimo (ver groupService.ts/firestore.rules):
-// SEM reações, replyTo, read-receipts, edição ou exclusão de mensagem.
+// reações (S149-B) e replyTo (S149-C) já existem; SEM read-receipts, edição
+// ou exclusão de mensagem.
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -49,6 +50,7 @@ import {
   getGroup,
   getMyMembership,
   GroupMessage,
+  GroupMessageReplyTo,
   listenGroupMessages,
   listenGroupReactions,
   markGroupMessagesSeen,
@@ -57,10 +59,34 @@ import {
   uploadGroupChatImage,
 } from '@/services/groupService';
 import { getDisplayName } from '@/utils/profile';
+import { countCodePoints } from '@/utils/text';
 
 type GroupChatScreenProps = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
 const MAX_MESSAGE_LENGTH = 2000;
+// S149-C — mesma regra de truncamento de ChatScreen.tsx:74-82 (100 code
+// points na citação; rules aceitam até 400, guarda de abuso — ver
+// firestore.rules). Não reimporta de lá (const local, não exportada em
+// ChatScreen.tsx) — mesma lógica via countCodePoints, sem slice por índice
+// UTF-16.
+const REPLY_QUOTE_LENGTH = 100;
+const truncateReplyQuote = (value: string): string =>
+  countCodePoints(value) > REPLY_QUOTE_LENGTH
+    ? Array.from(value).slice(0, REPLY_QUOTE_LENGTH).join('')
+    : value;
+
+// S149-C (correção) — mensagem de foto é gravada com text: '' (ver
+// sendGroupMessage/groupService.ts); sem isso a citação de uma resposta a
+// foto saía em branco. Mesmo rótulo fixo, byte a byte, do preview de push
+// (functions/src/index.ts) e do 1:1 (ChatScreen.tsx REPLY_QUOTE_PHOTO_LABEL).
+// GroupMessage não tem campo `location` (ver groupService.ts) — sem ramo de
+// localização aqui, ao contrário do buildReplyQuote do 1:1.
+const REPLY_QUOTE_PHOTO_LABEL = '📷 Foto';
+const buildGroupReplyQuote = (message: GroupMessage): string => {
+  if (message.text) return truncateReplyQuote(message.text);
+  if (message.imageUrl) return REPLY_QUOTE_PHOTO_LABEL;
+  return '';
+};
 
 export default function GroupChatScreen({ route, navigation }: GroupChatScreenProps) {
   const { groupId, groupName } = route.params;
@@ -76,6 +102,11 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const [creatorId, setCreatorId] = useState<string | null>(null);
   const [reactions, setReactions] = useState<Record<string, Record<string, ReactionEmoji>>>({});
   const [reactionTarget, setReactionTarget] = useState<GroupMessage | null>(null);
+  // S149-C — mirror de replyTarget (ChatScreen.tsx): setado pelo sheet de
+  // toque longo (opção "Responder"), consumido em handleSend abaixo (mesmo
+  // padrão do 1:1: handleSendImage NUNCA anexa replyTo), limpo depois do
+  // envio.
+  const [replyTarget, setReplyTarget] = useState<GroupMessageReplyTo | null>(null);
   const flatListRef = useRef<FlatList<GroupMessage>>(null);
 
   // S124-B (camada 3 — Selo de fundador do grupo) — a tela hoje só recebe
@@ -151,15 +182,21 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const handleSend = useCallback(async () => {
     if (!user || !text.trim()) return;
     const value = text.trim();
+    // S149-C — mirror de handleSend (ChatScreen.tsx:1011-1027): consome
+    // replyTarget aqui, limpa depois do envio (independente de sucesso, mesmo
+    // padrão do 1:1 — corrigir a resposta errada exige tocar em "Responder"
+    // de novo, não guardar o estado numa falha de rede).
+    const replyTo = replyTarget ?? undefined;
     setText('');
+    setReplyTarget(null);
     try {
-      await sendGroupMessage(groupId, user.uid, value);
+      await sendGroupMessage(groupId, user.uid, value, undefined, replyTo);
       flatListRef.current?.scrollToEnd({ animated: true });
     } catch (err) {
       console.error('[GroupChatScreen] falha ao enviar mensagem:', err);
       Alert.alert('Erro', 'Não foi possível enviar a mensagem.');
     }
-  }, [groupId, text, user]);
+  }, [groupId, replyTarget, text, user]);
 
   const handleSendImage = useCallback(
     async (localUri: string) => {
@@ -206,11 +243,23 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     handleSendImage(result.assets[0].uri);
   };
 
+  // S149-C — mirror de `replyTo.senderId === currentUid ? 'Você' : otherName`
+  // (ChatScreen.tsx:337/1478), adaptado: grupo tem N remetentes possíveis
+  // (1:1 só tem "eu" e "otherName" fixo), então resolve por senderProfiles em
+  // vez de um nome único. Mesma regra de "ainda carregando" de senderName
+  // acima (undefined = '', não 'Usuário').
+  const getReplySenderLabel = (senderId: string): string => {
+    if (senderId === user?.uid) return 'Você';
+    const p = senderProfiles[senderId];
+    return p === undefined ? '' : getDisplayName(p);
+  };
+
   const renderMessage = ({ item }: { item: GroupMessage }) => {
     const isMe = item.senderId === user?.uid;
     const senderProfile = senderProfiles[item.senderId];
     const senderName = senderProfile === undefined ? '' : getDisplayName(senderProfile);
     const imageUrl = item.imageUrl;
+    const replyTo = item.replyTo;
     // S149-B — mirror de reactionEntries (ChatScreen.tsx:214-216).
     const reactionEntries = reactions[item.id]
       ? Object.entries(reactions[item.id]).sort(([a], [b]) => a.localeCompare(b))
@@ -222,6 +271,26 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
             <View style={styles.senderNameRow}>
               <Text style={styles.senderName}>{senderName}</Text>
               {!!creatorId && item.senderId === creatorId && <GroupFounderTag />}
+            </View>
+          )}
+          {/* S149-C — preview compacto da mensagem citada, mirror visual de
+              ChatScreen.tsx:330-343. Sem Pressable/onJumpToReply: scroll até
+              a mensagem original é EXPLICITAMENTE fora do escopo desta
+              sprint (spec S149-C item 7). */}
+          {replyTo && (
+            <View style={styles.replyQuoteBox}>
+              <Text
+                style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+                numberOfLines={1}
+              >
+                {getReplySenderLabel(replyTo.senderId)}
+              </Text>
+              <Text
+                style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+                numberOfLines={2}
+              >
+                {replyTo.text}
+              </Text>
             </View>
           )}
           {imageUrl ? (
@@ -330,34 +399,65 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               <Text style={styles.blockedBannerText}>Verifique seu perfil para conversar</Text>
             </Pressable>
           ) : (
-            <View style={styles.inputRow}>
-              <AnimatedPressable
-                style={styles.inputIcon}
-                onPress={() => setAttachSheetVisible(true)}
-              >
-                <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
-              </AnimatedPressable>
-              <TextInput
-                style={styles.input}
-                placeholder={`Mensagem para ${groupName}…`}
-                placeholderTextColor={theme.colors.textLight}
-                value={text}
-                onChangeText={setText}
-                multiline
-                maxLength={MAX_MESSAGE_LENGTH}
-              />
-              <AnimatedPressable
-                style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
-                onPress={handleSend}
-                disabled={!text.trim()}
-              >
-                <Ionicons
-                  name="send"
-                  size={18}
-                  color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+            <>
+              {/* S149-C — barra de citação, mirror exato de
+                  ChatScreen.tsx:1473-1496. Cancelar (X) só limpa o estado —
+                  nada é persistido. */}
+              {replyTarget && (
+                <View style={styles.replyBar}>
+                  <View style={styles.replyBarAccent} />
+                  <View style={styles.replyBarTextWrap}>
+                    <Text style={styles.replyBarName}>
+                      {getReplySenderLabel(replyTarget.senderId)}
+                    </Text>
+                    {/* S149-C (correção) — replyTarget: GroupMessageReplyTo não
+                        tem imageUrl (mirror reduzido de GroupMessage); o
+                        rótulo "📷 Foto" já vem pronto de buildGroupReplyQuote
+                        no ponto em que replyTarget é montado (sheet
+                        "Responder" acima), então .text aqui já é o valor
+                        final — sem recomputar. */}
+                    <Text style={styles.replyBarText} numberOfLines={1}>
+                      {replyTarget.text}
+                    </Text>
+                  </View>
+                  <AnimatedPressable
+                    onPress={() => setReplyTarget(null)}
+                    hitSlop={8}
+                    accessibilityLabel="Cancelar resposta"
+                  >
+                    <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+                  </AnimatedPressable>
+                </View>
+              )}
+              <View style={styles.inputRow}>
+                <AnimatedPressable
+                  style={styles.inputIcon}
+                  onPress={() => setAttachSheetVisible(true)}
+                >
+                  <Ionicons name="camera-outline" size={24} color={theme.colors.textSecondary} />
+                </AnimatedPressable>
+                <TextInput
+                  style={styles.input}
+                  placeholder={`Mensagem para ${groupName}…`}
+                  placeholderTextColor={theme.colors.textLight}
+                  value={text}
+                  onChangeText={setText}
+                  multiline
+                  maxLength={MAX_MESSAGE_LENGTH}
                 />
-              </AnimatedPressable>
-            </View>
+                <AnimatedPressable
+                  style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+                  onPress={handleSend}
+                  disabled={!text.trim()}
+                >
+                  <Ionicons
+                    name="send"
+                    size={18}
+                    color={text.trim() ? theme.colors.onSecondary : theme.colors.textLight}
+                  />
+                </AnimatedPressable>
+              </View>
+            </>
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -391,8 +491,9 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       </Modal>
 
       {/* S149-B — sheet do toque longo: mirror do sheet de reação do
-          ChatScreen.tsx (1:1, S80-A/B), sem opção de responder/copiar
-          (fora do escopo desta sprint). */}
+          ChatScreen.tsx (1:1, S80-A/B). S149-C acrescentou "Responder"
+          (mesmo sheet, sem Modal paralelo) — copiar/editar/apagar continuam
+          fora do escopo. */}
       <Modal
         visible={!!reactionTarget}
         transparent
@@ -421,6 +522,27 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
                 </AnimatedPressable>
               ))}
             </View>
+            {/* S149-C — "Responder", mirror exato de ChatScreen.tsx:1624-1634
+                (sheetDivider + sheetOption, ícone arrow-undo). Fecha o sheet
+                e monta o replyTarget com o texto já truncado (mesma regra do
+                1:1) a partir da mensagem tocada. */}
+            <View style={styles.sheetDivider} />
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                if (reactionTarget) {
+                  setReplyTarget({
+                    messageId: reactionTarget.id,
+                    text: buildGroupReplyQuote(reactionTarget),
+                    senderId: reactionTarget.senderId,
+                  });
+                }
+                setReactionTarget(null);
+              }}
+            >
+              <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
+              <Text style={styles.sheetOptionText}>Responder</Text>
+            </AnimatedPressable>
           </View>
         </Pressable>
       </Modal>
@@ -499,6 +621,25 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S149-C — mirror EXATO de ChatScreen.tsx:1990-2006 (citação dentro da
+  // bolha: borda à esquerda em primaryLight + itálico).
+  replyQuoteBox: {
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: theme.colors.primaryLight,
+    marginBottom: 4,
+  },
+  replyQuoteName: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
+  replyQuoteText: {
+    fontSize: theme.fontSize.xs,
+    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
+  },
+  replyQuoteTextMe: { color: 'rgba(255,255,255,0.85)' },
   bubbleImage: { width: 200, height: 200, borderRadius: theme.borderRadius.md },
   bubbleTime: {
     fontSize: theme.fontSize.xs,
@@ -528,6 +669,36 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   blockedBannerText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+
+  // S149-C — mirror EXATO de ChatScreen.tsx:2105-2131 (barra de citação
+  // acima do input).
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  replyBarAccent: {
+    width: 2,
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.primaryLight,
+    borderRadius: 1,
+  },
+  replyBarTextWrap: { flex: 1 },
+  replyBarName: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  replyBarText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+  },
 
   inputRow: {
     flexDirection: 'row',

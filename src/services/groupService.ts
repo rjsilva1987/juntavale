@@ -114,14 +114,28 @@ export interface GroupJoinRequest {
   requestedAt: Timestamp;
 }
 
+// S149-C — mirror de MessageReplyTo (firestoreService.ts:227-231): cópia
+// truncada (não referência viva) da mensagem original, só existe pra
+// mensagem de TEXTO, já cortada em 100 code points pelo client antes de
+// chamar sendGroupMessage (ver GroupChatScreen.tsx). Sem scroll-to-original
+// nem swipe-to-reply nesta sprint — fora do escopo (spec S149-C).
+export interface GroupMessageReplyTo {
+  messageId: string;
+  text: string;
+  senderId: string;
+}
+
 // S124-A decisão 11 — mesmo mínimo do chat 1:1 (matches/{matchId}/messages),
-// SEM reações/replyTo/read-receipts/edição/exclusão: só texto e foto.
+// SEM reações/read-receipts/edição/exclusão: só texto, foto e (S149-C)
+// replyTo.
 export interface GroupMessage {
   id: string;
   text: string;
   senderId: string;
   createdAt: Timestamp;
   imageUrl?: string;
+  // S149-C — opcional, mirror de replyTo em matches/{matchId}/messages.
+  replyTo?: GroupMessageReplyTo;
 }
 
 const groupRef = (groupId: string) => doc(db, 'groups', groupId);
@@ -409,17 +423,21 @@ export const listenGroupMessages = (
   );
 };
 
+// S149-C — replyTo opcional, mirror de sendMessage (firestoreService.ts:
+// 961-986): parâmetro novo no FIM da assinatura, gravado condicionalmente.
 export const sendGroupMessage = async (
   groupId: string,
   senderId: string,
   text: string,
   imageUrl?: string,
+  replyTo?: GroupMessageReplyTo,
 ): Promise<void> => {
   await addDoc(messagesCollection(groupId), {
     text,
     senderId,
     createdAt: serverTimestamp(),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(replyTo ? { replyTo } : {}),
   });
 };
 
