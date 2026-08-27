@@ -3,10 +3,9 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 26/08/2026
-**Commit atual:** d61a201 — fix(chat): reforça a
-rolagem inicial do ChatScreen (chat 1:1) que podia parar num ponto
-intermediário — ver ROADMAP.md.
+**Atualizado:** 27/08/2026
+**Commit atual:** 9ed6baa — feat(grupo): chat de grupo ganha apagar
+mensagem pra todos, mirror do 1:1 (S149-E) — ver ROADMAP.md.
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. Bateria de testes do
