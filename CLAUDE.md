@@ -29,14 +29,21 @@
 1. **Recon é só-leitura.** jv-recon só tem Read/Grep/Glob; nunca edita nem
    roda Bash de escrita.
 2. **Claude Code nunca roda git de escrita** (add/commit/push/reset/
-   checkout/restore/revert) **nem deploy** (firebase deploy, eas build/
-   submit) — isso é sempre do Raphael. EXCEÇÃO ÚNICA: modo lote do
-   `/sprint` (`/sprint lote --commit S<NN> S<NN> ...`) pode rodar
-   `git add`/`commit`/`push` — nunca reset/checkout/restore/revert, nunca
-   deploy — e só depois de auditoria aprovada de cada sprint da lista.
-   Fora dessa sintaxe exata, vale a proibição normal. Guardas completas
-   (parada em auditoria bloqueada, parada em decisão de produto nova,
-   deploy sempre proibido): seção "Modo LOTE" de
+   checkout/restore/revert/stash) **nem deploy** (firebase deploy, eas
+   build/submit) — isso é sempre do Raphael, por padrão. Essa proibição
+   vale SEMPRE, sem exceção, em qualquer modo, para qualquer SUBAGENTE
+   (jv-recon/jv-implementa/jv-audita). Para o ORQUESTRADOR, existe uma
+   exceção com DUAS portas de entrada equivalentes: (a)
+   `/sprint lote --commit S<NN> S<NN> ...`, ou (b) modo de git =
+   GIT AUTOMATICO escolhido na Fase 0 de uma sprint avulsa. Em qualquer
+   uma das duas, o orquestrador pode rodar `git add <caminhos exatos>`/
+   `commit`/`push` — nunca `git add .`, nunca reset/checkout/restore/
+   revert/stash, nunca deploy — e só depois de auditoria aprovada da
+   sprint em questão. Fora dessas duas portas (modo de git = GIT MANUAL),
+   vale a proibição normal: a Fase 6 só imprime o bloco git, nunca
+   executa. Guardas completas (parada em auditoria bloqueada, parada em
+   decisão de produto nova, deploy sempre proibido): seções "Fase 0 —
+   Modo", "Modo LOTE" e "Fase 6 — Entrega" de
    `.claude/commands/sprint.md`.
 3. **Prova de escrita obrigatória** depois de CADA edição: Select-String
    (ou grep) das linhas-chave alteradas, com `arquivo:linha` e saída

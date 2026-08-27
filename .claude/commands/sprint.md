@@ -11,12 +11,14 @@ faca o trabalho deles por conta propria.
 
 ANTES DE QUALQUER OUTRA COISA, verifique se `$ARGUMENTS` comeca com
 `lote --commit` seguido de uma lista de sprints (`S<NN> S<NN> ...`). Se
-sim, isso e o MODO LOTE — pule a pergunta abaixo (o modo lote roda toda
-sprint da lista em AUTOMATICO, sempre, por definicao) e va direto pra
-secao "Modo LOTE", logo apos esta, que substitui as Fases 0 a 6 por
-sprint da lista, em sequencia. Se nao, pergunte ao Raphael via
-AskUserQuestion:
-"Modo AUTOMATICO ou MANUAL?" — com as opcoes:
+sim, isso e o MODO LOTE — pule as duas perguntas abaixo (o modo lote fixa
+os dois eixos de uma vez, sempre, por definicao: decisao = AUTOMATICO,
+git = GIT AUTOMATICO) e va direto pra secao "Modo LOTE", logo apos esta,
+que substitui as Fases 0 a 6 por sprint da lista, em sequencia. Se nao,
+pergunte ao Raphael via AskUserQuestion, as duas perguntas abaixo na
+MESMA chamada:
+
+Pergunta 1 — "Modo AUTOMATICO ou MANUAL?" — com as opcoes:
 - AUTOMATICO: sem nenhuma interacao ate o fim. Todo portao de decisao
   (Portao 1 e Portao 2) e resolvido por voce mesmo, escolhendo sempre a
   opcao recomendada. Cada escolha feita assim fica registrada, um item
@@ -26,16 +28,31 @@ AskUserQuestion:
   Raphael; se ele responder "recomendado", aceita todas as recomendacoes
   de uma vez.
 
-Valem no AUTOMATICO, sem excecao — o modo automatico decide o COMO, nunca
-o O QUE:
-- Nenhum comando git de escrita nem deploy — so imprime, nunca executa
-  (Regras invariantes do CLAUDE.md, item 2, vale nos dois modos).
+Pergunta 2 — "Git MANUAL ou AUTOMATICO?" — com as opcoes:
+- GIT MANUAL: comportamento padrao (o de hoje). A Fase 6 so imprime o
+  bloco de comandos git; o Raphael roda a mao.
+- GIT AUTOMATICO: voce mesmo roda `git add <caminhos exatos>`/`commit`/
+  `push` da sprint, so depois do veredito APROVADO da Fase 5 daquela
+  sprint — mesma excecao que hoje so existia no modo lote, agora tambem
+  pra sprint avulsa. Nunca `reset`/`checkout`/`restore`/`revert`/`stash`.
+  Nunca deploy. Subagentes continuam proibidos de git de escrita nesse
+  modo tambem — a excecao e so do orquestrador.
+
+Valem no AUTOMATICO (eixo de decisao), sem excecao — o modo automatico
+decide o COMO, nunca o O QUE:
 - Se um portao for sobre ABRIR UMA FRENTE NOVA de produto — uma feature
   sem nenhuma decisao ja tomada no ROADMAP.md (ex.: grupos, eventos) —
   PARE e pergunte mesmo no automatico. Automatico nunca decide "o que"
   construir, so "como" construir o que ja foi pedido.
 
-Guarde o modo escolhido: ele vale para a sprint inteira, Fase 1 a 6.
+O eixo de git (Pergunta 2) e independente do eixo de decisao (Pergunta
+1): o comportamento de git na Fase 6 segue o que foi escolhido na
+Pergunta 2 (ou herdado do lote), nao o que foi escolhido na Pergunta 1.
+Deploy continua proibido sempre, nos dois modos de git (Regras
+invariantes do CLAUDE.md, item 2).
+
+Guarde os dois modos escolhidos (decisao e git): valem para a sprint
+inteira, Fase 1 a 6.
 
 ## Modo LOTE (`lote --commit S<NN> S<NN> ...`)
 
@@ -43,11 +60,13 @@ Só ativa com essa sintaxe exata em `$ARGUMENTS`. Fora dela, `/sprint` segue
 100% como hoje — sem excecao alguma ao item 2 do CLAUDE.md.
 
 Processe cada `S<NN>` da lista, EM SEQUENCIA. Cada uma roda o ciclo inteiro
-(Fase 0-B a Fase 6) no modo AUTOMATICO — a pergunta da Fase 0 nao se
-repete, o modo ja esta decidido pra lista toda. O objetivo de cada sprint
-da lista e o que ja esta registrado pra ela no ROADMAP.md/ESTADO.md; se
-faltar spec suficiente pra rodar sem uma decisao de produto nova, cai na
-mesma guarda de "frente nova" de baixo.
+(Fase 0-B a Fase 6) com os dois eixos fixos: decisao = AUTOMATICO, git =
+GIT AUTOMATICO — as duas perguntas da Fase 0 nao se repetem, os dois
+modos ja estao decididos pra lista toda; a flag `lote --commit` e o
+atalho que fixa os dois de uma vez. O objetivo de cada sprint da lista e
+o que ja esta registrado pra ela no ROADMAP.md/ESTADO.md; se faltar spec
+suficiente pra rodar sem uma decisao de produto nova, cai na mesma guarda
+de "frente nova" de baixo.
 
 Guardas do modo lote — somam-se a tudo que ja vale no automatico, nunca
 substituem:
@@ -56,9 +75,10 @@ substituem:
   final da Fase 5 de cada sprint da lista, se o veredito for APROVADO,
   antes de commitar faca os dois passos obrigatorios da Fase 6 (reescrever
   o status no ROADMAP.md e atualizar o ESTADO.md) e so entao rode, voce
-  mesmo — esta e a UNICA excecao ao item 2 do CLAUDE.md, escopo exato:
-  `add`/`commit`/`push`, nunca `reset`/`checkout`/`restore`/`revert`,
-  nunca deploy:
+  mesmo — esta e uma das duas portas de entrada da excecao ao item 2 do
+  CLAUDE.md (a outra e GIT AUTOMATICO avulso, Fase 0), escopo exato:
+  `add`/`commit`/`push`, nunca `reset`/`checkout`/`restore`/`revert`/
+  `stash`, nunca deploy:
   ```powershell
   $root = git rev-parse --show-toplevel 2>$null
   if ($root -match 'juntavale$') {
@@ -85,10 +105,13 @@ substituem:
   desses, acumule o nome da sprint e o que precisa de deploy numa lista;
   nunca deploye. Essa lista acumulada entra inteira no relatorio final do
   lote.
-- **Fora do modo lote, git de escrita continua proibido como hoje** — so a
-  sintaxe exata `lote --commit S<NN> ...` ativa a excecao acima; qualquer
-  outra chamada de `/sprint` segue imprimindo os comandos git no fim (Fase
-  6 normal) e NUNCA os executando.
+- **Fora do modo lote, git de escrita segue o modo de git da Pergunta 2 da
+  Fase 0 daquela sprint** — GIT MANUAL imprime os comandos git no fim
+  (Fase 6 normal) e NUNCA os executa; GIT AUTOMATICO avulso e a sintaxe
+  exata `lote --commit S<NN> ...` sao as duas portas de entrada
+  equivalentes da mesma excecao, cada uma com as mesmas guardas (add/
+  commit/push apos auditoria aprovada, nunca `git add .`, nunca reset/
+  checkout/restore/revert/stash, nunca deploy).
 
 Ao terminar — todas as sprints da lista commitadas, ou parado numa
 guarda — produza UM relatorio final cobrindo o lote inteiro, entre
@@ -170,24 +193,45 @@ porque o auditor chega no codigo sem saber o que o autor pensou.
   nos dois modos.
 
 ## Fase 6 — Entrega
-NO MODO LOTE, o commit/push de cada sprint ja acontece dentro do proprio
-loop (ver secao "Modo LOTE") — os passos abaixo, incluindo o bloco de
-comandos git impresso (nunca executado), valem so pra sprint rodada FORA
-do lote.
+Tres ramos, pelo modo de git decidido na Fase 0 (ou herdado do lote):
+
+- **NO MODO LOTE**: sem mudanca de comportamento — o commit/push de cada
+  sprint ja acontece dentro do proprio loop (ver secao "Modo LOTE").
+- **GIT AUTOMATICO fora do lote**: depois do veredito APROVADO da Fase 5,
+  faca os dois passos obrigatorios abaixo (reescrever o Status no
+  ROADMAP.md, atualizar o ESTADO.md) e SO ENTAO rode, voce mesmo, o
+  mirror do bloco git do modo lote — adaptado pra uma sprint so:
+  ```powershell
+  $root = git rev-parse --show-toplevel 2>$null
+  if ($root -match 'juntavale$') {
+    Set-Location $root
+    git add <caminhos exatos da sprint, incluindo ROADMAP.md e ESTADO.md quando fizerem parte>
+    git commit -m "<tipo>(<escopo>): <resumo> (S<NN>)"
+    git push
+  } else { Write-Host 'nao estamos no repo do juntavale' }
+  ```
+  Mesmas restricoes: nunca `git add .`, nunca `reset`/`checkout`/
+  `restore`/`revert`/`stash`, nunca deploy. O relatorio desta fase
+  (formato de sempre, entre os marcadores de copia) continua obrigatorio
+  mesmo quando o git roda de verdade.
+- **GIT MANUAL fora do lote** (padrao, comportamento de hoje): os passos
+  abaixo, incluindo o bloco de comandos git impresso (nunca executado),
+  valem integralmente.
 
 Tudo desta fase, do inicio ao fim do bloco de comandos git, vai entre
 `=== COPIAR A PARTIR DAQUI ===` e `=== FIM ===` (Regras invariantes do
 CLAUDE.md, item 6), pra ficar facil de colar em outro lugar.
 
-Primeira linha do relatorio: em qual modo a sprint rodou (AUTOMATICO ou
-MANUAL). Se rodou no AUTOMATICO, inclua logo em seguida a secao "Decisoes
-tomadas no automatico", uma linha por decisao — o que foi escolhido e por
-que; se nenhum portao precisou de decisao, diga isso em vez de omitir a
-secao. Depois, resuma em ate 10 linhas: o que mudou, o que a auditoria
-pegou, o que falta testar em aparelho.
+Primeira linha do relatorio: em quais modos a sprint rodou — decisao
+(AUTOMATICO ou MANUAL) e git (GIT AUTOMATICO ou GIT MANUAL). Se rodou no
+AUTOMATICO (decisao), inclua logo em seguida a secao "Decisoes tomadas no
+automatico", uma linha por decisao — o que foi escolhido e por que; se
+nenhum portao precisou de decisao, diga isso em vez de omitir a secao.
+Depois, resuma em ate 10 linhas: o que mudou, o que a auditoria pegou, o
+que falta testar em aparelho.
 
 PASSO OBRIGATORIO — REESCREVER O STATUS NO ROADMAP.md: antes de imprimir
-qualquer comando git, reescreva a linha **Status:** da sprint no
+OU RODAR qualquer comando git, reescreva a linha **Status:** da sprint no
 ROADMAP.md para o estado FINAL. Isso vale sempre, inclusive quando a
 sprint terminou sem alterar codigo (caso "nada a fazer") — nao pule este
 passo so porque nao houve implementacao. O status final deve conter,
@@ -201,9 +245,9 @@ O status NAO pode ficar descrevendo uma fase intermediaria ("aguardando
 auditoria", "EM CORRECAO", "fix aplicado, nao deployado") depois que a
 sprint terminou — estados intermediarios so valem ENQUANTO a sprint esta
 rodando. Essa reescrita e so uma edicao de arquivo: nao e um commit, nao e
-git de escrita, e nao muda a regra de que o commit e sempre do Raphael —
-ela so entra no `git add` do bloco de comandos abaixo, junto com o resto
-da sprint.
+git de escrita por si so — ela entra no `git add` do bloco de comandos
+abaixo (impresso em GIT MANUAL, rodado por voce mesmo em GIT AUTOMATICO),
+junto com o resto da sprint.
 
 PASSO OBRIGATORIO — ATUALIZAR `docs/sprints/ESTADO.md`: logo depois de
 reescrever o status no ROADMAP.md, atualize o ESTADO.md substituindo as
@@ -212,7 +256,8 @@ resolvida sai da lista, commit atual atualiza) — nunca acumule, o arquivo
 fica curto (ver "Estado do projeto" no CLAUDE.md). Tambem entra no
 `git add` do bloco abaixo.
 
-Depois imprima os comandos git — e SO isso, voce nunca os executa:
+Em GIT MANUAL fora do lote, depois imprima os comandos git — e SO isso,
+voce nunca os executa:
 
 ```powershell
 $root = git rev-parse --show-toplevel 2>$null

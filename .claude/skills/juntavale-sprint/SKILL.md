@@ -6,12 +6,22 @@ description: Ciclo de sprint do JuntaVale e formato de relatorio. Use em toda ro
 # Ciclo de sprint
 
 recon (so leitura, so na trilha completa) -> implementacao -> auditoria ->
-commit/push/deploy pelo Raphael -> teste em device. Uma sprint por sessao —
-excecao: modo lote do `/sprint` (`lote --commit S<NN> S<NN> ...`) processa
-varias sprints em sequencia na mesma sessao, cada uma pelo ciclo completo
-em automatico, com commit/push proprio so apos auditoria aprovada daquela
-sprint (guardas completas em `.claude/commands/sprint.md`). Deploy fica
-proibido sempre, dentro ou fora do lote — so o Raphael deploya.
+commit/push/deploy pelo Raphael -> teste em device. Isso e o padrao (modo
+de git = GIT MANUAL, escolhido na Fase 0 de cada sprint). Quando o modo de
+git da Fase 0 for GIT AUTOMATICO — seja numa sprint avulsa, seja via
+`lote --commit` — quem roda commit/push e o proprio orquestrador, nunca um
+subagente, e sempre so depois de auditoria aprovada daquela sprint. Deploy
+continua sendo sempre do Raphael, em qualquer modo de git.
+
+Uma sprint por sessao — excecao: modo lote do `/sprint`
+(`lote --commit S<NN> S<NN> ...`) processa varias sprints em sequencia na
+mesma sessao, cada uma pelo ciclo completo em automatico, com commit/push
+proprio so apos auditoria aprovada daquela sprint. A excecao de git de
+escrita ao item 2 do CLAUDE.md tem hoje duas portas de entrada
+equivalentes — modo lote, ou GIT AUTOMATICO escolhido avulso na Fase 0 —
+ambas com a mesma guarda: so apos auditoria aprovada da sprint em questao
+(guardas completas em `.claude/commands/sprint.md`). Deploy fica proibido
+sempre, em qualquer modo de git — so o Raphael deploya.
 
 Quem escreve o codigo nao e quem aprova. A auditoria existe pra achar o que
 o implementador nao viu; se ela so confirmar o proprio trabalho, perdeu a

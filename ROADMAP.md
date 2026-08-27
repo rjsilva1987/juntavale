@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 26/08/2026
+**Última atualização:** 27/08/2026
 
 ---
 
@@ -59,42 +59,11 @@ em sub-sprint própria.
 
 ---
 
-### S155 — Pipeline: /sprint ganha um segundo eixo de pergunta (modo de git)
-**Status:** ABERTA · decisão de produto já tomada (Raphael, 26/08/2026,
-DESENHO abaixo) · sem recon/implementação ainda — não rodar sem pedido
-explícito
-
-Hoje a exceção de git de escrita em `/sprint` só existe na sintaxe exata
-`lote --commit S<NN> ...`. Toda tarefa de manutenção fora dela (atualizar
-ROADMAP, corrigir marcas de teste, ajustes pontuais) termina com o agente
-devolvendo o bloco de comandos pro Raphael executar à mão — aconteceu 5
-vezes só em 26/08/2026. O eixo novo resolve isso sem afrouxar nenhuma
-guarda.
-
-DESENHO: Fase 0 do `/sprint` passa a fazer DUAS perguntas — modo de
-decisão (AUTOMÁTICO/MANUAL, já existente, inalterado) e modo de git (GIT
-MANUAL, padrão atual, imprime o bloco pro Raphael; ou GIT AUTOMÁTICO, o
-orquestrador roda `git add <caminhos exatos>`/`commit`/`push` ele mesmo,
-só depois de auditoria aprovada). No lote, as duas respostas valem pro
-lote inteiro e a flag `lote --commit` continua aceita como atalho
-(equivale a git automático, pula a segunda pergunta). Subagentes
-(`jv-recon`/`jv-implementa`/`jv-audita`) continuam proibidos de qualquer
-git de escrita em qualquer modo — a exceção é só do orquestrador. Deploy
-continua proibido sempre, nos dois modos. Git de escrita destrutivo
-(reset/checkout/restore/revert/stash) continua fora da exceção, sempre.
-
-Arquivos prováveis: `.claude/commands/sprint.md`,
-`.claude/skills/juntavale-sprint/SKILL.md`, `CLAUDE.md`. Sem
-`firestore.rules`, sem Cloud Function — o commit desta sprint é
-inerentemente manual, já que é o próprio mecanismo de commit automático
-que está sendo criado.
-
----
-
 ## Fechadas recentemente
 
 | Sprint | O que era |
 |---|---|
+| S155 | Pipeline: `/sprint` ganha um segundo eixo de pergunta na Fase 0 — modo de git (GIT MANUAL x GIT AUTOMATICO), independente do eixo de decisão (AUTOMATICO/MANUAL) já existente. GIT AUTOMATICO estende pra sprint AVULSA a mesma exceção de commit/push que antes só existia via `lote --commit` — orquestrador roda `git add <caminhos exatos>`/`commit`/`push`, só depois de auditoria aprovada daquela sprint; guardas inalteradas: subagentes (`jv-recon`/`jv-implementa`/`jv-audita`) seguem sempre proibidos de git de escrita em qualquer modo, deploy proibido sempre, `reset`/`checkout`/`restore`/`revert`/`stash` fora da exceção sempre, nunca `git add .`. A flag `lote --commit` virou o atalho que fixa os dois eixos de uma vez (equivale a decisão=AUTOMATICO + git=GIT AUTOMATICO). Editados `.claude/commands/sprint.md` (Fase 0, Modo LOTE, Fase 6), `.claude/skills/juntavale-sprint/SKILL.md` e `CLAUDE.md` (item 2 das Regras invariantes) — commit desta própria sprint rodado via `lote --commit S155` (pedido explícito do Raphael), estreando o próprio mecanismo. Sem `firestore.rules`, sem Cloud Function — mudança de processo/documentação, não de app. **Fechada em código, SEM "teste em aparelho" aplicável (não é feature de app).** |
 | S149-E | Chat de grupo ganha apagar mensagem PRA TODOS (lápide + limpeza da foto no Storage), mirror do molde do 1:1 (S85-B; "apagar só pra mim"/S85-A ficou fora do escopo) — `deleteGroupMessageForEveryone` em `groupService.ts` (update da lápide primeiro, `deleteObject` do Storage só depois de confirmado); `GROUP_DELETE_FOR_EVERYONE_WINDOW_MS` = 1h, mesmo valor de `ChatScreen.tsx:107` (decisão do Raphael); só o AUTOR apaga (decisão do Raphael: criador/dono do grupo SEM poder de moderação sobre mensagem alheia — regra nova sem nenhuma referência a `creatorId`); placeholder "Esta mensagem foi apagada" sem reações/ações; `canEdit` (S149-D) ganhou `!deletedAt`. `firestore.rules` bloco `groups/{groupId}/messages` ganhou terceiro ramo no `allow update` (mirror do bloco 1:1: autor, dentro de 1h, via única, `hasOnly(['senderId','createdAt','deletedAt'])`, `deletedAt == request.time`). **`firestore.rules` NÃO deployadas.** **Fechada em código, SEM teste em aparelho.** |
 | S149-D | Chat de grupo ganha editar mensagem, mirror do molde do 1:1 (S92) — `GroupMessage.editedAt`/`editGroupMessage` em `groupService.ts`; `GROUP_EDIT_WINDOW_MS` = 1h, mesmo valor de `ChatScreen.tsx:111` (decisão do Raphael de manter a mesma janela); opção "Editar" no sheet de toque longo (só autor, só mensagem de texto, dentro da janela); barra de composição reusada em modo de edição; indicador "(editada)" na bolha. `firestore.rules` bloco `groups/{groupId}/messages` ganhou ramo novo no `allow update` (mirror do bloco 1:1: autor, sem imageUrl, dentro de 1h, `hasOnly(['text','editedAt'])`, `text is string`, `text.size() > 0 && <= 500`, `editedAt == request.time`) — achado em auditoria e corrigido: faltavam `text is string`/`text.size() > 0` na primeira versão. **`firestore.rules` NÃO deployadas.** **Fechada em código, SEM teste em aparelho.** |
 | S149-C | Chat de grupo ganha responder/replyTo, mirror byte a byte do molde do 1:1 (S79-C/S79-B) — `GroupMessage.replyTo`/`sendGroupMessage` em `groupService.ts`, opção "Responder" no sheet de toque longo já existente (S149-B, sem Modal paralelo), barra de citação no composer e preview na bolha em `GroupChatScreen.tsx`; `buildGroupReplyQuote` cobre o caso de responder mensagem só-com-foto (rótulo `'📷 Foto'`, mesmo valor do 1:1) — achado e corrigido em auditoria. `firestore.rules` bloco `groups/{groupId}/messages` ganhou validação do campo `replyTo` no `allow create` (mirror do bloco 1:1) — **rules NÃO deployadas**. Sem scroll-to-original-message e sem swipe-to-reply (fora do escopo desta sub-sprint). **Fechada em código, SEM teste em aparelho.** |

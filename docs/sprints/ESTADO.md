@@ -28,9 +28,6 @@ recentemente" pra detalhe por sprint.
   paridade do chat de grupo — sem letra própria nem recon/decisão ainda.
   Reações (S149-B), responder/replyTo (S149-C), editar (S149-D) e apagar
   (S149-E) já fechadas. Ver ROADMAP.md § S149.
-- S155 — `/sprint` ganha segundo eixo de pergunta (modo de git
-  manual/automático) — decisão já tomada, sem recon/implementação ainda;
-  NÃO rodar sem pedido explícito do Raphael. Ver ROADMAP.md § S155.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de
