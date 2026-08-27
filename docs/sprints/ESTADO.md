@@ -50,6 +50,9 @@ recentemente" pra detalhe por sprint.
   `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
 - **S149-E** — `firestore.rules` com o ramo novo de apagar em
   `groups/{groupId}/messages` ainda NÃO deployada; sem teste em aparelho.
+- **S156** — `firestore.rules` com o teto de editar mensagem corrigido
+  (500→2000, `matches/{matchId}/messages` e `groups/{groupId}/messages`)
+  ainda NÃO deployada; sem teste em aparelho.
 - **Aguardando o BUILD 15** (push ou múltiplos aparelhos, Expo Go não
   entrega push no SDK 54): S124-A (push de pedido/aprovação), S126 (push
   anônimo da enquete), S135 (nickname no push), S129-B (3 estados do

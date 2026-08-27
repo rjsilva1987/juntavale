@@ -1,4 +1,11 @@
-// rules-stamp: S149-E (26/08/2026 — apagar mensagem pra todos no chat de
+// rules-stamp: S156 (27/08/2026 — teto de editar mensagem sobe de 500
+// para 2000: matches/{matchId}/messages [S92] e groups/{groupId}/messages
+// [S149-D] allow update, igualando ao allow create do mesmo bloco (2000,
+// valendo desde S77); tetos do client (MAX_MESSAGE_LENGTH/maxLength em
+// GroupChatScreen.tsx e ChatScreen.tsx) já eram 2000 — o bug era
+// mensagem de 501 a 2000 caracteres podia ser criada mas não editada,
+// permission-denied silencioso) + S149-E (26/08/2026 — apagar mensagem
+// pra todos no chat de
 // grupo: groups/{groupId}/messages/{messageId} allow update ganha 3º ramo
 // OR, unido por `||` aos dois já existentes (editar S149-D e o `if false`
 // inicial), mirror EXATO do bloco de apagar-pra-todos do 1:1
@@ -402,7 +409,7 @@
 // S80-B) ou presente com valor na lista fixa de 6 emoji; create+update
 // juntos pois o doc pode não existir na 1ª reação, mesmo padrão do presence
 // (S79-C2-A); delete negado; lista de emoji precisa ficar em sincronia com
-// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) + S-Matricula (troca "Chave F" pra "Matrícula", regex ^F\d{7}$ pra ^[A-Z]?\d{1,7}$ — F+7 continua casando, sem migração) + S149-B (26/08/2026 — reações no chat de grupo: groups/{groupId}/reactions/{messageId} novo, mirror de matches/{matchId}/reactions [S80-A], mesma lista de 6 emojis, membership via groupAllowsPost em vez de getMatch(matchId).users) + S149-C (26/08/2026 — replyTo no chat de grupo: groups/{groupId}/messages/{messageId} allow create ganha validação de replyTo opcional, mirror EXATO de matches/{matchId}/messages [S79, linha ~1417-1428] — map com messageId/senderId string e text.size()<=400; hasOnly da mensagem ganha 'replyTo' na lista de chaves permitidas) — 2026-08-03
+// REACTION_EMOJIS em src/services/firestoreService.ts) + S79-C2-A (presence/{userId} nova, raiz: heartbeat de última vez visto — create/update só do dono com lastSeenAt == request.time (só serverTimestamp) e hasOnly(['lastSeenAt']); read do dono OU de quem tem match com ele, checando as duas ordens de matchId com exists(); delete negado) + S79-C1 (matches/{matchId} update: guarda de tipo pro carimbo de typing — quando a chave typing.{uid} do próprio usuário permanece no resultado, exige timestamp E igual a request.time, mesmo padrão de lastReadAt; remoção da chave (deleteField, ao parar de digitar) continua liberada, sem essa exigência) + S79 (matches/{matchId}/messages ganha replyTo opcional — citacao de mensagem, so texto v1: map com messageId/senderId/text, text.size()<=400 = 4x o limite do client de 100 code points, mesma logica do S77; cap de 2000 do text da mensagem em si, verified e blockedBy continuam intocados) + S77 (contagem de texto: client passa a contar CODE POINTS (Array.from), rules deixam de ser regua de UX e viram guarda de abuso — todo teto de campo de texto livre subiu pra 4x o limite do client: note 150->600, prompt/weeklyPromptAnswer answer 150->600, places 40->160, events 60->240, details da denuncia 500->2000, suporte (ticket+thread) 1000->4000, bio 500->2000, nome 60->240; chat ficou como estava, ja tinha folga) + S75 (users/{uid}/private/registration deixa de ser imutavel: dono pode corrigir o chaveF quando verifications/{uid}.status=='rejected', createdAt preservado, get() cruzado com verifications) + S74 (contador proprio de resposta, users/{uid}/replies/usage, espelhando superLikes/usage; S74-A criou/gravou o contador, S74-B passou a EXIGIR a quota dentro do bloco do note, ramo direction=='like', com o mesmo getAfter/exists/get do superlike) + S73 (bilhete tambem em direction=='like', verified checado dentro do proprio bloco do note so pro caminho like — superlike continua pegando o gate do ramo de baixo) + S70 (super curtida restrita a perfil verificado; verified sai do bloco note e vira 1a condicao do ramo direction=='superlike') + S68 (cap por string em places/events, details da denuncia sem so-espaco) + S67 (bilhete opcional na super curtida, swipes.note) + S59 (prompt da semana em campo proprio weeklyPromptAnswer, fora de prompts[]) + S58 (motivo de rejeicao da verificacao) + S50 (prompt da semana, cap 3→4) + S49 (swipe read null-guard) + S48 (places/events) + S45 (swipe context) + S44 (uf) + S-Matricula (troca "Chave F" pra "Matrícula", regex ^F\d{7}$ pra ^[A-Z]?\d{1,7}$ — F+7 continua casando, sem migração) + S149-B (26/08/2026 — reações no chat de grupo: groups/{groupId}/reactions/{messageId} novo, mirror de matches/{matchId}/reactions [S80-A], mesma lista de 6 emojis, membership via groupAllowsPost em vez de getMatch(matchId).users) + S149-C (26/08/2026 — replyTo no chat de grupo: groups/{groupId}/messages/{messageId} allow create ganha validação de replyTo opcional, mirror EXATO de matches/{matchId}/messages [S79, linha ~1417-1428] — map com messageId/senderId string e text.size()<=400; hasOnly da mensagem ganha 'replyTo' na lista de chaves permitidas) — 2026-08-26
 // Atualize este carimbo a cada sprint que alterar este arquivo: ele
 // força o upload no deploy (evita "skipping upload" silencioso) e
 // identifica no console do Firebase qual versão está ativa.
@@ -1511,7 +1518,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 500
+          && request.resource.data.text.size() <= 2000
           && request.resource.data.editedAt == request.time
         );
 
@@ -1805,11 +1812,12 @@ service cloud.firestore {
         // S149-D — editar texto de mensagem, mirror exato do bloco 1:1
         // (matches/{matchId}/messages, linha ~1478-1494): autor, sem
         // deletedAt/imageUrl em resource.data, dentro da janela, só
-        // text+editedAt mudam, teto de 500 (mesmo teto do 1:1), editedAt
-        // carimbado com request.time. GroupMessage não tem campo location
-        // (ver groupService.ts) — sem ramo equivalente a
-        // !('location' in resource.data) do 1:1 por não existir esse campo
-        // aqui.
+        // text+editedAt mudam, teto de 2000 (S156: igualado ao allow
+        // create do mesmo bloco, que já usava 2000 desde S77, e segue
+        // igual ao teto do 1:1), editedAt carimbado com request.time.
+        // GroupMessage não tem campo location (ver groupService.ts) —
+        // sem ramo equivalente a !('location' in resource.data) do 1:1
+        // por não existir esse campo aqui.
         allow update: if (
           request.auth.uid == resource.data.senderId
           && !('deletedAt' in resource.data)
@@ -1820,7 +1828,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 500
+          && request.resource.data.text.size() <= 2000
           && request.resource.data.editedAt == request.time
         ) || (
           // S149-E — "apagar pra todos": vira lápide, mirror EXATO do bloco
