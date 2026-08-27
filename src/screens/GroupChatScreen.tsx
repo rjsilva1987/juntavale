@@ -9,8 +9,9 @@
 // separar só o subconjunto de texto+foto exigiria desmontar esse componente
 // inteiro, mais caro do que escrever a versão mínima aqui. O CONTRATO DE
 // DADOS fica restrito ao mínimo (ver groupService.ts/firestore.rules):
-// reações (S149-B), replyTo (S149-C) e edição (S149-D) já existem; SEM
-// read-receipts ou exclusão de mensagem (S149-E).
+// reações (S149-B), replyTo (S149-C), edição (S149-D) e "apagar pra todos"
+// (S149-E) já existem; SEM read-receipts nem "apagar só pra mim" (S85-A,
+// fora do escopo do grupo).
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -47,6 +48,7 @@ import {
   UserProfile,
 } from '@/services/firestoreService';
 import {
+  deleteGroupMessageForEveryone,
   editGroupMessage,
   getGroup,
   getMyMembership,
@@ -69,6 +71,13 @@ const MAX_MESSAGE_LENGTH = 2000;
 // MESMA do 1:1 (EDIT_WINDOW_MS, ChatScreen.tsx:111) — mesmo valor literal,
 // não existe fonte única compartilhada entre 1:1 e grupo hoje.
 const GROUP_EDIT_WINDOW_MS = 60 * 60 * 1000;
+// S149-E — decisão do Raphael (26/08/2026): a janela de apagar-pra-todos em
+// grupo é a MESMA do 1:1 (DELETE_FOR_EVERYONE_WINDOW_MS, ChatScreen.tsx:107)
+// — mesmo valor numérico, constante SEPARADA de propósito (mesmo padrão do
+// 1:1: DELETE_FOR_EVERYONE_WINDOW_MS e EDIT_WINDOW_MS lá também são duas
+// constantes distintas, mudar uma não pode mudar a outra em silêncio). Não
+// reusa GROUP_EDIT_WINDOW_MS acima nem cria fonte compartilhada nova.
+const GROUP_DELETE_FOR_EVERYONE_WINDOW_MS = 60 * 60 * 1000;
 // S149-C — mesma regra de truncamento de ChatScreen.tsx:74-82 (100 code
 // points na citação; rules aceitam até 400, guarda de abuso — ver
 // firestore.rules). Não reimporta de lá (const local, não exportada em
@@ -294,18 +303,30 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
 
   // S149-D — guarda de UI, mirror de canEdit (ChatScreen.tsx:1261-1269):
   // verdadeiro só pra mensagem própria de texto, ainda não editada fora da
-  // janela, dentro de GROUP_EDIT_WINDOW_MS. GroupMessage não tem campo
-  // deletedAt ainda (apagar é S149-E, sprint separada) — sem ramo
-  // equivalente a "!replyOptionsTarget.deletedAt" do 1:1 por não existir
-  // esse estado possível hoje. reactionTarget é o mesmo state usado pelo
-  // sheet de toque longo (mensagem tocada), papel equivalente a
+  // janela, dentro de GROUP_EDIT_WINDOW_MS. reactionTarget é o mesmo state
+  // usado pelo sheet de toque longo (mensagem tocada), papel equivalente a
   // replyOptionsTarget no 1:1.
+  // S149-E (ajuste) — GroupMessage agora tem deletedAt; guarda
+  // "!reactionTarget.deletedAt" acrescentada pra mensagem apagada não
+  // oferecer mais "Editar" (mesmo raciocínio do 1:1: lápide não é editável).
   const canEdit =
     !!reactionTarget &&
     reactionTarget.senderId === user?.uid &&
+    !reactionTarget.deletedAt &&
     !reactionTarget.imageUrl &&
     (!reactionTarget.createdAt ||
       Date.now() - reactionTarget.createdAt.toMillis() < GROUP_EDIT_WINDOW_MS);
+
+  // S149-E — guarda de UI, mirror de canDeleteForEveryone (ChatScreen.tsx:
+  // 1251-1257): verdadeiro só pra própria mensagem (SÓ O AUTOR — sem exceção
+  // pro criador/dono do grupo, decisão do Raphael 26/08/2026), ainda não
+  // apagada, dentro da janela de GROUP_DELETE_FOR_EVERYONE_WINDOW_MS.
+  const canDeleteForEveryone =
+    !!reactionTarget &&
+    reactionTarget.senderId === user?.uid &&
+    !reactionTarget.deletedAt &&
+    (!reactionTarget.createdAt ||
+      Date.now() - reactionTarget.createdAt.toMillis() < GROUP_DELETE_FOR_EVERYONE_WINDOW_MS);
 
   const renderMessage = ({ item }: { item: GroupMessage }) => {
     const isMe = item.senderId === user?.uid;
@@ -346,7 +367,20 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               </Text>
             </View>
           )}
-          {imageUrl ? (
+          {/* S149-E — lápide: mensagem apagada pra todos. Guarda antes do
+              ternário de imagem/texto — mirror de ChatScreen.tsx:370-379: uma
+              mensagem apagada não tem reação nem toque longo (o Text da
+              lápide não recebe onLongPress de propósito); hora continua
+              aparecendo (bubbleTimeRow fora deste ternário). replyTo acima já
+              não aparece pra mensagem apagada por conta própria — o
+              deleteField() de deleteGroupMessageForEveryone apaga o campo
+              replyTo do doc junto com text/imageUrl/editedAt, sem precisar de
+              guarda extra aqui. */}
+          {item.deletedAt ? (
+            <Text style={[styles.bubbleTextDeleted, isMe && styles.bubbleTextDeletedMe]}>
+              Esta mensagem foi apagada
+            </Text>
+          ) : imageUrl ? (
             <Pressable
               onPress={() => setViewerImage(imageUrl)}
               onLongPress={() => setReactionTarget(item)}
@@ -372,15 +406,17 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
             </Text>
             {/* S149-D — "editada" ao lado da hora, mirror de
-                ChatScreen.tsx:454-466. GroupMessage não tem campo deletedAt
-                ainda (apagar é S149-E, sprint separada) — sem o ramo
-                "!item.deletedAt" do 1:1 por não existir esse estado possível
-                hoje. */}
+                ChatScreen.tsx:454-466. Sem guarda extra de !item.deletedAt
+                aqui: deleteGroupMessageForEveryone apaga editedAt via
+                deleteField() junto com o resto, então uma mensagem apagada
+                nunca chega com editedAt presente. */}
             {item.editedAt && (
               <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>editada</Text>
             )}
           </View>
-          {reactionEntries.length > 0 && (
+          {/* S149-E — reações somem da lápide, mirror de ChatScreen.tsx:489
+              (!item.deletedAt && reactionEntries.length > 0). */}
+          {!item.deletedAt && reactionEntries.length > 0 && (
             <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
               {reactionEntries.map(([uid, emoji]) => (
                 <Text key={uid} style={styles.reactionBadge}>
@@ -574,9 +610,10 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
       </Modal>
 
       {/* S149-B — sheet do toque longo: mirror do sheet de reação do
-          ChatScreen.tsx (1:1, S80-A/B). S149-C acrescentou "Responder" e
-          S149-D acrescentou "Editar" (mesmo sheet, sem Modal paralelo) —
-          copiar/apagar continuam fora do escopo. */}
+          ChatScreen.tsx (1:1, S80-A/B). S149-C acrescentou "Responder",
+          S149-D acrescentou "Editar" e S149-E acrescentou "Apagar pra
+          todos" (mesmo sheet, sem Modal paralelo) — "apagar só pra mim"
+          (S85-A) continua fora do escopo. */}
       <Modal
         visible={!!reactionTarget}
         transparent
@@ -642,6 +679,51 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
                 >
                   <Ionicons name="pencil" size={22} color={theme.colors.text} />
                   <Text style={styles.sheetOptionText}>Editar</Text>
+                </AnimatedPressable>
+              </>
+            )}
+            {/* S149-E — "Apagar pra todos": vira lápide pra todo mundo do
+                grupo. Só o AUTOR (sem exceção pro criador/dono do grupo,
+                decisão do Raphael 26/08/2026), dentro da janela de 1h —
+                mirror de canDeleteForEveryone/sheetOption de "Apagar pros
+                dois" (ChatScreen.tsx:1703-1738), com Alert.alert de
+                confirmação ANTES de chamar deleteGroupMessageForEveryone,
+                mesma guarda client-side-primeiro (bug do S49). */}
+            {canDeleteForEveryone && (
+              <>
+                <View style={styles.sheetDivider} />
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    const target = reactionTarget;
+                    setReactionTarget(null);
+                    if (!target) return;
+                    Alert.alert(
+                      'Apagar pra todos',
+                      'Essa mensagem vira "apagada" pra todos e não pode ser desfeito. Continuar?',
+                      [
+                        { text: 'Cancelar', style: 'cancel' },
+                        {
+                          text: 'Apagar',
+                          style: 'destructive',
+                          onPress: () => {
+                            deleteGroupMessageForEveryone(
+                              groupId,
+                              target.id,
+                              target.imageUrl,
+                            ).catch((err) =>
+                              console.warn('[GroupChatScreen] falha ao apagar mensagem', err),
+                            );
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Ionicons name="trash-bin-outline" size={22} color={theme.colors.nope} />
+                  <Text style={[styles.sheetOptionText, { color: theme.colors.nope }]}>
+                    Apagar pra todos
+                  </Text>
                 </AnimatedPressable>
               </>
             )}
@@ -723,6 +805,15 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S149-E — lápide de mensagem apagada "pra todos": mirror exato de
+  // bubbleTextDeleted/bubbleTextDeletedMe (ChatScreen.tsx:1978-1984).
+  bubbleTextDeleted: {
+    fontSize: theme.fontSize.md,
+    fontStyle: 'italic',
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  bubbleTextDeletedMe: { color: 'rgba(255,255,255,0.85)' },
   // S149-C — mirror EXATO de ChatScreen.tsx:1990-2006 (citação dentro da
   // bolha: borda à esquerda em primaryLight + itálico).
   replyQuoteBox: {

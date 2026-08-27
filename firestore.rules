@@ -1,4 +1,18 @@
-// rules-stamp: S149-D (26/08/2026 — editar mensagem no chat de grupo:
+// rules-stamp: S149-E (26/08/2026 — apagar mensagem pra todos no chat de
+// grupo: groups/{groupId}/messages/{messageId} allow update ganha 3º ramo
+// OR, unido por `||` aos dois já existentes (editar S149-D e o `if false`
+// inicial), mirror EXATO do bloco de apagar-pra-todos do 1:1
+// [matches/{matchId}/messages, linha ~1468-1485]: autor
+// (request.auth.uid == resource.data.senderId), janela de 1h a partir de
+// createdAt (mesma duração do ramo de editar), via única
+// (!('deletedAt' in resource.data)), keys().hasOnly(['senderId','createdAt',
+// 'deletedAt']) — GroupMessage não tem location/momentoRef (ver
+// groupService.ts), sem ramo equivalente a esses campos do 1:1 —
+// senderId/createdAt preservados, deletedAt==request.time. `allow delete`
+// continua `if false`. SEM referência a creatorId/dono do grupo — decisão
+// do Raphael (26/08/2026): só o autor apaga a própria mensagem, o
+// criador/dono do grupo não tem poder de moderação sobre mensagem alheia.)
+// + S149-D (26/08/2026 — editar mensagem no chat de grupo:
 // groups/{groupId}/messages/{messageId} allow update ganha ramo novo,
 // unido por `||` ao `if false` que já existia, mirror EXATO do bloco de
 // editar do 1:1 [matches/{matchId}/messages, linha ~1478-1494]: autor
@@ -1758,10 +1772,11 @@ service cloud.firestore {
       //
       // Mesmo MOLDE de campos/validação de matches/{matchId}/messages acima
       // (S124-A decisão 11), restrito ao mínimo: texto, foto, (S149-C)
-      // replyTo e (S149-D) edição de texto, SEM reações-no-doc/read-receipts
-      // (reações vivem em groups/{groupId}/reactions, S149-B, bloco abaixo).
-      // allow delete continua if false — "apagar pros dois" fica pra S149-E,
-      // sprint separada.
+      // replyTo, (S149-D) edição de texto e (S149-E) apagar-pra-todos, SEM
+      // reações-no-doc/read-receipts (reações vivem em
+      // groups/{groupId}/reactions, S149-B, bloco abaixo). allow delete
+      // continua if false — "apagar pra todos" vira lápide via update, nunca
+      // apaga o doc de verdade (mesmo desenho do 1:1).
       match /messages/{messageId} {
         allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
 
@@ -1807,6 +1822,31 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 500
           && request.resource.data.editedAt == request.time
+        ) || (
+          // S149-E — "apagar pra todos": vira lápide, mirror EXATO do bloco
+          // 1:1 (matches/{matchId}/messages, linha ~1468-1485). Decisão do
+          // Raphael (26/08/2026): só o AUTOR apaga a própria mensagem — o
+          // criador/dono do grupo NÃO tem poder de moderação sobre mensagem
+          // alheia, por isso esta rule não referencia creatorId nem papel
+          // de dono/admin, só resource.data.senderId da própria mensagem.
+          request.auth.uid == resource.data.senderId
+          // prazo: 1h a partir do createdAt original — MESMA duração do
+          // ramo de editar acima e do bloco 1:1.
+          && request.time < resource.data.createdAt + duration.value(1, 'h')
+          // via única: lápide não se reescreve — sem isso um doc já apagado
+          // aceitaria update de novo e resetaria deletedAt.
+          && !('deletedAt' in resource.data)
+          // conteúdo removido de verdade: text/imageUrl/replyTo/editedAt têm
+          // que estar AUSENTES no resultado — hasOnly derruba todos por
+          // construção. GroupMessage não tem location/momentoRef (ver
+          // groupService.ts) — sem ramo equivalente a esses campos do 1:1
+          // por não existirem aqui.
+          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'deletedAt'])
+          // imutáveis preservados — senderId e createdAt não podem mudar de
+          // valor no update, só o shape do doc muda.
+          && request.resource.data.senderId == resource.data.senderId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.deletedAt == request.time
         );
 
         allow delete: if false;

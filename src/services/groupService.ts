@@ -26,7 +26,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
+import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 
 import { db, functions, storage } from '@/services/firebase';
 import { ReactionEmoji } from '@/services/firestoreService';
@@ -139,6 +139,9 @@ export interface GroupMessage {
   // S149-D — mirror de Message.editedAt (firestoreService.ts:262): presente
   // só em mensagem editada.
   editedAt?: Timestamp;
+  // S149-E — mirror de Message.deletedAt: presente só em mensagem apagada
+  // pra todos (deleteGroupMessageForEveryone abaixo).
+  deletedAt?: Timestamp;
 }
 
 const groupRef = (groupId: string) => doc(db, 'groups', groupId);
@@ -454,6 +457,31 @@ export const editGroupMessage = async (
     text,
     editedAt: serverTimestamp(),
   });
+};
+
+// S149-E — mirror exato de deleteMessageForEveryone (firestoreService.ts:
+// 1007-1026): updateDoc primeiro, deleteObject do Storage só DEPOIS do
+// updateDoc ter sucesso (mesmo motivo do 1:1 — se a rule negar o update, a
+// foto tem que continuar existindo, sem doc apontando pro nada). imageUrl é
+// só o PARÂMETRO em memória (lido pelo caller ANTES do updateDoc, que vai
+// apagar o campo do doc via deleteField()) — GroupMessage não tem
+// location/momentoRef (ver interface acima), então os campos apagados aqui
+// são só text/imageUrl/replyTo/editedAt.
+export const deleteGroupMessageForEveryone = async (
+  groupId: string,
+  messageId: string,
+  imageUrl?: string,
+): Promise<void> => {
+  await updateDoc(doc(db, 'groups', groupId, 'messages', messageId), {
+    text: deleteField(),
+    imageUrl: deleteField(),
+    replyTo: deleteField(),
+    editedAt: deleteField(),
+    deletedAt: serverTimestamp(),
+  });
+  if (imageUrl) {
+    await deleteObject(ref(storage, imageUrl)).catch(() => {});
+  }
 };
 
 // ─── Reações ──────────────────────────────────────────────

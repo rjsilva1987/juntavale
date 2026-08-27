@@ -48,12 +48,14 @@ Nada de recon ou implementação antes dessa decisão.
 ---
 
 ### S149 — Grupo: paridade do chat (sub-sprints C/D/E)
-**Status:** ABERTA · S149-A, S149-B, S149-C e S149-D já FECHADAS (ver
-"Fechadas recentemente") · S149-E (apagar) continua em aberto.
+**Status:** ABERTA · S149-A a S149-E já FECHADAS (ver "Fechadas
+recentemente") · restam "ler mais" e "copiar" (mirror do 1:1), ainda sem
+letra própria nem recon/decisão.
 
 Chat de grupo ganha as funcionalidades do chat 1:1 — responder/replyTo,
-editar, apagar, "ler mais", copiar (reações já entregues na S149-B).
-Sub-sprint S149-E, escopo ainda não quebrado por item individual.
+editar, apagar (S149-C/D/E, FECHADAS), "ler mais" e copiar (reações já
+entregues na S149-B). Os dois itens restantes ainda não foram quebrados
+em sub-sprint própria.
 
 ---
 
@@ -93,6 +95,7 @@ que está sendo criado.
 
 | Sprint | O que era |
 |---|---|
+| S149-E | Chat de grupo ganha apagar mensagem PRA TODOS (lápide + limpeza da foto no Storage), mirror do molde do 1:1 (S85-B; "apagar só pra mim"/S85-A ficou fora do escopo) — `deleteGroupMessageForEveryone` em `groupService.ts` (update da lápide primeiro, `deleteObject` do Storage só depois de confirmado); `GROUP_DELETE_FOR_EVERYONE_WINDOW_MS` = 1h, mesmo valor de `ChatScreen.tsx:107` (decisão do Raphael); só o AUTOR apaga (decisão do Raphael: criador/dono do grupo SEM poder de moderação sobre mensagem alheia — regra nova sem nenhuma referência a `creatorId`); placeholder "Esta mensagem foi apagada" sem reações/ações; `canEdit` (S149-D) ganhou `!deletedAt`. `firestore.rules` bloco `groups/{groupId}/messages` ganhou terceiro ramo no `allow update` (mirror do bloco 1:1: autor, dentro de 1h, via única, `hasOnly(['senderId','createdAt','deletedAt'])`, `deletedAt == request.time`). **`firestore.rules` NÃO deployadas.** **Fechada em código, SEM teste em aparelho.** |
 | S149-D | Chat de grupo ganha editar mensagem, mirror do molde do 1:1 (S92) — `GroupMessage.editedAt`/`editGroupMessage` em `groupService.ts`; `GROUP_EDIT_WINDOW_MS` = 1h, mesmo valor de `ChatScreen.tsx:111` (decisão do Raphael de manter a mesma janela); opção "Editar" no sheet de toque longo (só autor, só mensagem de texto, dentro da janela); barra de composição reusada em modo de edição; indicador "(editada)" na bolha. `firestore.rules` bloco `groups/{groupId}/messages` ganhou ramo novo no `allow update` (mirror do bloco 1:1: autor, sem imageUrl, dentro de 1h, `hasOnly(['text','editedAt'])`, `text is string`, `text.size() > 0 && <= 500`, `editedAt == request.time`) — achado em auditoria e corrigido: faltavam `text is string`/`text.size() > 0` na primeira versão. **`firestore.rules` NÃO deployadas.** **Fechada em código, SEM teste em aparelho.** |
 | S149-C | Chat de grupo ganha responder/replyTo, mirror byte a byte do molde do 1:1 (S79-C/S79-B) — `GroupMessage.replyTo`/`sendGroupMessage` em `groupService.ts`, opção "Responder" no sheet de toque longo já existente (S149-B, sem Modal paralelo), barra de citação no composer e preview na bolha em `GroupChatScreen.tsx`; `buildGroupReplyQuote` cobre o caso de responder mensagem só-com-foto (rótulo `'📷 Foto'`, mesmo valor do 1:1) — achado e corrigido em auditoria. `firestore.rules` bloco `groups/{groupId}/messages` ganhou validação do campo `replyTo` no `allow create` (mirror do bloco 1:1) — **rules NÃO deployadas**. Sem scroll-to-original-message e sem swipe-to-reply (fora do escopo desta sub-sprint). **Fechada em código, SEM teste em aparelho.** |
 | S154 | Bug: ao abrir `ChatScreen` (chat 1:1) com muitas mensagens, a rolagem inicial podia parar num ponto intermediário (`setTimeout` único do S101 podia acertar um `contentSize` ainda não estabilizado) em vez de ir até o fim real. Corrigido com `onContentSizeChange` na FlatList principal, gateado por `isNearBottomRef.current && !pendingScrollTarget` (reusa estado 100% já existente do S142/S129-A, nada novo declarado) — `setTimeout` original preservado, os dois mecanismos convivem, mesmo padrão de reforço já usado em `GroupChatScreen`/`MomentoRequestChatScreen` (S149-B). Client puro, sem rules/functions. **Fechada em código, commit `d61a201`, SEM teste em aparelho.** |
