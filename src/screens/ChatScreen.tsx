@@ -626,6 +626,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // listenMessages). Ref, não estado: só é lido dentro do próprio callback e não
   // pode causar render.
   const windowIdsRef = useRef<Set<string>>(new Set());
+  // S160 — sinaliza que o PRÓXIMO onContentSizeChange precisa forçar
+  // scrollToEnd, independente de isNearBottomRef (garantia de "mensagem
+  // própria sempre desce"). Setado pelo callback do listener; consumido e
+  // resetado só pelo onContentSizeChange da FlatList — único lugar que
+  // efetivamente chama scrollToEnd, eliminando a corrida entre o setTimeout
+  // antigo e o onContentSizeChange que já existia (ver Causa A do S160).
+  const forceScrollToEndRef = useRef(false);
+  // S160 — id da mensagem-alvo do salto por citação (scrollToMessage),
+  // espelhando pendingScrollTarget num ref pra ser lido dentro de
+  // onScrollToIndexFailed sem depender do closure capturado no momento da
+  // falha (ver Causa C do S160).
+  const scrollTargetIdRef = useRef<string | null>(null);
+  // S160 — espelho de visibleMessages em ref, pra onScrollToIndexFailed
+  // revalidar o índice da mensagem-alvo contra o estado ATUAL da lista no
+  // retry (100ms depois), em vez de reusar o info.index capturado no
+  // momento da falha, que pode já estar desatualizado.
+  const visibleMessagesRef = useRef<Message[]>([]);
   // S101 (RODADA 2) — contador de geração da abertura do chat: incrementado
   // uma vez por (re)montagem lógica da conversa (mesmo reabrir o MESMO
   // matchId conta), dentro do efeito de dados abaixo. Serve de base pra DUAS
@@ -744,7 +761,20 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           const isOwnNewMessage =
             !!newest && newest.senderId === uid && !windowIdsRef.current.has(newest.id);
           windowIdsRef.current = new Set(msgs.map((m) => m.id));
-          setMessages(msgs);
+          // S160 (Causa B) — uma mensagem só some de `msgs` (array ascendente
+          // por createdAt) por ser mais antiga que o início da janela nova do
+          // fallback sem cursor — nunca por deleção real (deleção é tombstone
+          // via deletedAt, o doc nunca some da coleção, ver
+          // firestoreService.ts). Prefixar as que sumiram preserva a ordem
+          // cronológica sem precisar reordenar. No caminho normal (com
+          // cursor), a janela só cresce e nunca derruba nada, então
+          // stillMissing é sempre vazio ali — o comportamento de hoje não
+          // muda nesse caminho.
+          setMessages((prev) => {
+            const nextIds = new Set(msgs.map((m) => m.id));
+            const stillMissing = prev.filter((m) => !nextIds.has(m.id));
+            return [...stillMissing, ...msgs];
+          });
           setLoading(false);
           // S142 — "está vendo o fim" vale tanto pra mensagem própria quanto
           // pra já estar perto do fim quando a mensagem do outro lado chega.
@@ -754,7 +784,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           // handleReturnToBottom/handleMessagesScroll).
           const isViewingBottom = isOwnNewMessage || isNearBottomRef.current;
           if (isViewingBottom) {
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+            // S160 (Causa A) — só sinaliza; quem chama scrollToEnd de fato é
+            // o onContentSizeChange da FlatList, único lugar que executa o
+            // scroll, disparado pelo evento real de mudança de layout em vez
+            // de um setTimeout de tempo fixo (eliminava a corrida com o
+            // onContentSizeChange que já existia).
+            forceScrollToEndRef.current = true;
             setHasNewMessageBelow(false);
             hasNewMessageBelowRef.current = false;
           } else {
@@ -912,6 +947,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     [orderedMessages, hiddenIds],
   );
 
+  // S160 (Causa C) — mantém visibleMessagesRef sincronizado, pra
+  // onScrollToIndexFailed revalidar o índice da mensagem-alvo contra a lista
+  // ATUAL no retry, sem depender de closure.
+  useEffect(() => {
+    visibleMessagesRef.current = visibleMessages;
+  }, [visibleMessages]);
+
   // S129-A — reversão do S79: tocar na citação leva até a mensagem original.
   // Reusa os estados/serviço já existentes do S101 (messages/olderMessages/
   // olderCursor/hasOlderMessages/loadingOlder, loadOlderMessages,
@@ -920,6 +962,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const scrollToMessage = useCallback(
     async (messageId: string) => {
       if (visibleMessages.some((m) => m.id === messageId)) {
+        scrollTargetIdRef.current = messageId;
         setPendingScrollTarget(messageId);
         return;
       }
@@ -983,6 +1026,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (chatGenerationRef.current !== requestedGeneration) return;
 
       if (found) {
+        scrollTargetIdRef.current = messageId;
         setPendingScrollTarget(messageId);
       } else {
         Alert.alert('Aviso', 'Não foi possível localizar a mensagem original.');
@@ -1423,13 +1467,36 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                 // de altura variável (sem getItemLayout aqui): se o índice ainda
                 // não tiver layout medido, tenta de novo num timeout curto.
                 onScrollToIndexFailed={(info) => {
+                  // S160 (Causa C) — revalida o índice contra
+                  // visibleMessagesRef no momento do retry em vez de reusar
+                  // info.index (capturado no momento da falha): se a lista
+                  // mudou nesse meio-tempo (mensagem nova, página antiga
+                  // prefixada), o índice antigo pode já apontar pro lugar
+                  // errado.
+                  const targetId = scrollTargetIdRef.current;
                   setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                    const freshIndex = targetId
+                      ? visibleMessagesRef.current.findIndex((m) => m.id === targetId)
+                      : info.index;
+                    if (freshIndex === -1) return;
+                    flatListRef.current?.scrollToIndex({ index: freshIndex, animated: true });
+                    scrollTargetIdRef.current = null;
                   }, 100);
                 }}
                 onContentSizeChange={() => {
-                  if (isNearBottomRef.current && !pendingScrollTarget) {
-                    flatListRef.current?.scrollToEnd({ animated: false });
+                  // S160 (Causa A) — único lugar que efetivamente chama
+                  // scrollToEnd: disparado pelo evento real de mudança de
+                  // layout, não por um setTimeout de tempo fixo. Preserva as
+                  // duas regras existentes: mensagem própria sempre desce
+                  // (forceScrollToEndRef, ignora isNearBottomRef) e perto do
+                  // fim continua descendo quando chega conteúdo
+                  // (isNearBottomRef).
+                  if (
+                    (isNearBottomRef.current || forceScrollToEndRef.current) &&
+                    !pendingScrollTarget
+                  ) {
+                    flatListRef.current?.scrollToEnd({ animated: forceScrollToEndRef.current });
+                    forceScrollToEndRef.current = false;
                   }
                 }}
                 // S101 — página anterior só sob toque (decisão de produto:

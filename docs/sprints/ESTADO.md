@@ -5,18 +5,21 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 28/08/2026
 **Commit atual:** e5e3e73 — chore: bump versionCode 17 / version 1.0.7
-(build 17) — ver ROADMAP.md. S158 (fix "ler mais" no chat 1:1/grupo) e
-S159 (fix composer/edge-to-edge no rodapé do chat) fechadas em código
-nesta sessão, aguardando commit/push (GIT MANUAL).
+(build 17) — ver ROADMAP.md. S158 (fix "ler mais" no chat 1:1/grupo), S159
+(fix composer/edge-to-edge no rodapé do chat) e S160 (fix scroll/render no
+chat 1:1) fechadas em código nesta sessão, aguardando commit/push (GIT
+MANUAL).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S158 e S159 fechadas em
-código (ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push
-manual e teste em aparelho nas duas. Bateria de testes do Expo Go
-concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia: S121-S153
-(lote de sprints anteriores + o lote da madrugada S147-S153) migradas pra
-"Fechadas recentemente". Ver ROADMAP.md § "Fechadas recentemente" pra
-detalhe por sprint.
+Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
+fechadas em código (ver ROADMAP.md § "Fechadas recentemente"), só falta
+commit/push manual e teste em aparelho nas três — a S160 em especial
+precisa reproduzir os 3 sintomas de novo e, se o sumiço de mensagem
+persistir, rodar o triage do Firestore (ver ROADMAP.md § S160). Bateria de
+testes do Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no
+mesmo dia: S121-S153 (lote de sprints anteriores + o lote da madrugada
+S147-S153) migradas pra "Fechadas recentemente". Ver ROADMAP.md §
+"Fechadas recentemente" pra detalhe por sprint.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
