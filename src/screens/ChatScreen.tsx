@@ -189,10 +189,15 @@ const MessageBubble = React.memo(function MessageBubble({
   // S130 — colapso de texto longo, por mensagem (useState local desta
   // instância, não um flag global da tela): expandir uma bolha não afeta as
   // outras, e uma bolha já expandida não recolapsa sozinha quando chega
-  // mensagem nova (nada aqui depende do array de mensagens). isTruncated só
-  // fica true se o layout real do texto passar de 6 linhas — onTextLayout
-  // mede o texto por inteiro, sem respeitar numberOfLines, então "ler mais"
-  // nunca aparece em mensagem curta.
+  // mensagem nova (nada aqui depende do array de mensagens).
+  // S158 — a medição de isTextTruncated NÃO fica no Text visível: no
+  // Fabric (RN 0.81/Expo 54), onTextLayout de um Text que já tem
+  // numberOfLines aplicado reporta as linhas JÁ truncadas, então
+  // lines.length nunca passa de 6 e "ler mais" nunca aparecia, mesmo em
+  // mensagem longa. A medição real é feita por um segundo Text "espelho"
+  // (mesmo texto, mesmo style, sem numberOfLines, invisível/opacity 0,
+  // position absolute por cima do Text visível) — só ele carrega
+  // onTextLayout.
   const [textExpanded, setTextExpanded] = useState(false);
   const [isTextTruncated, setIsTextTruncated] = useState(false);
   // S86 — só a mensagem PRÓPRIA mostra tique; createdAt nulo (mensagem
@@ -416,18 +421,34 @@ const MessageBubble = React.memo(function MessageBubble({
                   // tinha onPress próprio). Text do RN já suporta onLongPress
                   // direto, sem precisar de Pressable extra por cima.
                   <>
-                    <Text
-                      style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-                      onLongPress={() => onLongPressReply(item)}
-                      numberOfLines={textExpanded ? undefined : 6}
-                      onTextLayout={(e) => {
-                        if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
-                          setIsTextTruncated(true);
-                        }
-                      }}
-                    >
-                      {item.text}
-                    </Text>
+                    <View style={styles.bubbleTextWrap}>
+                      <Text
+                        style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+                        onLongPress={() => onLongPressReply(item)}
+                        numberOfLines={textExpanded ? undefined : 6}
+                      >
+                        {item.text}
+                      </Text>
+                      {/* S158 — Text espelho, sem numberOfLines: mede o texto
+                          inteiro pra saber se passa de 6 linhas (ver
+                          comentário de isTextTruncated acima). Invisível e
+                          fora do fluxo de toque, de propósito. */}
+                      <Text
+                        style={[
+                          styles.bubbleText,
+                          isMe && styles.bubbleTextMe,
+                          styles.bubbleTextMirror,
+                        ]}
+                        pointerEvents="none"
+                        onTextLayout={(e) => {
+                          if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                            setIsTextTruncated(true);
+                          }
+                        }}
+                      >
+                        {item.text}
+                      </Text>
+                    </View>
                     {isTextTruncated && !textExpanded && (
                       <Pressable onPress={() => setTextExpanded(true)}>
                         <Text style={[styles.bubbleReadMore, isMe && styles.bubbleReadMoreMe]}>
@@ -1992,6 +2013,11 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S158 — wrapper do Text visível + Text espelho: position 'relative'
+  // garante que o espelho (position absolute) se posicione relativo a este
+  // wrapper, e não à bolha inteira (que pode ter citação/momentoRef acima).
+  bubbleTextWrap: { position: 'relative' },
+  bubbleTextMirror: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
   // S130 — "ler mais" da bolha colapsada.
   bubbleReadMore: {
     fontSize: theme.fontSize.sm,

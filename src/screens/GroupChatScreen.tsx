@@ -187,24 +187,35 @@ const GroupMessageBubble = React.memo(function GroupMessageBubble({
             />
           </Pressable>
         ) : (
-          // S149-F (item 1) — mirror EXATO de ChatScreen.tsx:418-438 (S130):
-          // numberOfLines colapsa em 6 linhas até textExpanded virar true;
-          // onTextLayout mede o texto por inteiro (sem respeitar
-          // numberOfLines), então "ler mais" só aparece se o layout real
-          // passar de 6 linhas.
+          // S149-F (item 1) / S158 — mirror EXATO de ChatScreen.tsx:419-459:
+          // numberOfLines colapsa em 6 linhas até textExpanded virar true. A
+          // medição fica num Text "espelho" à parte (sem numberOfLines,
+          // invisível, position absolute por cima do Text visível), não no
+          // Text visível — no Fabric (RN 0.81/Expo 54), onTextLayout de um
+          // Text que já tem numberOfLines aplicado reporta as linhas JÁ
+          // truncadas, então "ler mais" nunca aparecia, mesmo em mensagem
+          // longa.
           <>
-            <Text
-              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-              onLongPress={() => onLongPress(item)}
-              numberOfLines={textExpanded ? undefined : 6}
-              onTextLayout={(e) => {
-                if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
-                  setIsTextTruncated(true);
-                }
-              }}
-            >
-              {item.text}
-            </Text>
+            <View style={styles.bubbleTextWrap}>
+              <Text
+                style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+                onLongPress={() => onLongPress(item)}
+                numberOfLines={textExpanded ? undefined : 6}
+              >
+                {item.text}
+              </Text>
+              <Text
+                style={[styles.bubbleText, isMe && styles.bubbleTextMe, styles.bubbleTextMirror]}
+                pointerEvents="none"
+                onTextLayout={(e) => {
+                  if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                    setIsTextTruncated(true);
+                  }
+                }}
+              >
+                {item.text}
+              </Text>
+            </View>
             {isTextTruncated && !textExpanded && (
               <Pressable onPress={() => setTextExpanded(true)}>
                 <Text style={[styles.bubbleReadMore, isMe && styles.bubbleReadMoreMe]}>
@@ -900,6 +911,12 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S158 — mirror exato de bubbleTextWrap/bubbleTextMirror
+  // (ChatScreen.tsx): wrapper do Text visível + Text espelho, position
+  // 'relative' garante que o espelho (position absolute) se posicione
+  // relativo a este wrapper, não à bolha inteira.
+  bubbleTextWrap: { position: 'relative' },
+  bubbleTextMirror: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
   // S149-F (item 1) — "ler mais" da bolha colapsada, mirror EXATO de
   // bubbleReadMore/bubbleReadMoreMe (ChatScreen.tsx:1996-2002, S130).
   bubbleReadMore: {

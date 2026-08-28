@@ -4,15 +4,18 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 28/08/2026
-**Commit atual:** 9a9969c — fix(chat): restaura behavior height do
-teclado no Android (S157-B) — ver ROADMAP.md.
+**Commit atual:** e5e3e73 — chore: bump versionCode 17 / version 1.0.7
+(build 17) — ver ROADMAP.md. S158 (fix "ler mais" no chat 1:1/grupo)
+fechada em código nesta sessão, aguardando commit/push (GIT MANUAL).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. Bateria de testes
-do Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia:
-S121-S153 (lote de sprints anteriores + o lote da madrugada S147-S153)
-migradas pra "Fechadas recentemente". Ver ROADMAP.md § "Fechadas
-recentemente" pra detalhe por sprint.
+Nenhuma sprint em código pendente de fechamento. S158 fechada em código
+(ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push manual e
+teste em aparelho. Bateria de testes do Expo Go concluída em 26/08/2026 e
+ROADMAP.md consolidado no mesmo dia: S121-S153 (lote de sprints
+anteriores + o lote da madrugada S147-S153) migradas pra "Fechadas
+recentemente". Ver ROADMAP.md § "Fechadas recentemente" pra detalhe por
+sprint.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
