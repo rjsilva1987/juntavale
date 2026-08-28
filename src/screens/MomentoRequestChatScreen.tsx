@@ -25,7 +25,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { ReportModal } from '@/components/ReportModal';
@@ -66,6 +66,7 @@ export default function MomentoRequestChatScreen({
 }: MomentoRequestChatScreenProps) {
   const { requestId } = route.params;
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [request, setRequest] = useState<MomentoRequest | null | undefined>(undefined);
   const [threadMessages, setThreadMessages] = useState<MomentoRequestMessage[]>([]);
   const [otherProfile, setOtherProfile] = useState<UserProfile | null>(null);
@@ -262,7 +263,7 @@ export default function MomentoRequestChatScreen({
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <AnimatedPressable
             onPress={() => navigation.canGoBack() && navigation.goBack()}
@@ -358,7 +359,7 @@ export default function MomentoRequestChatScreen({
           )}
 
           {(isAnswered || (isPending && isAuthor)) && (
-            <View style={styles.inputRow}>
+            <View style={[styles.inputRow, { paddingBottom: theme.spacing.sm + insets.bottom }]}>
               <TextInput
                 style={styles.input}
                 placeholder={

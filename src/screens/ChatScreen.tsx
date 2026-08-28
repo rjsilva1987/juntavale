@@ -34,7 +34,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
@@ -529,6 +529,7 @@ const MessageBubble = React.memo(function MessageBubble({
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
   // S101 — messages é só a JANELA em tempo real (onSnapshot com
   // createdAt >= corte). O histórico anterior vive em olderMessages, buscado
   // página a página sob toque e SEM listener; os dois são concatenados em
@@ -1338,7 +1339,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
           <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
@@ -1501,13 +1502,15 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
           {/* Input */}
           {isBlocked ? (
-            <View style={styles.blockedBanner}>
+            <View
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
+            >
               <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
               <Text style={styles.blockedBannerText}>Conversa indisponível</Text>
             </View>
           ) : isUnverified ? (
             <Pressable
-              style={styles.blockedBanner}
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
               onPress={() => navigation.navigate('Verification')}
             >
               <Ionicons name="shield-checkmark-outline" size={16} color={theme.colors.textSecondary} />
@@ -1561,7 +1564,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
                   </AnimatedPressable>
                 </View>
               )}
-              <View style={styles.inputRow}>
+              <View style={[styles.inputRow, { paddingBottom: theme.spacing.sm + insets.bottom }]}>
                 <AnimatedPressable
                   style={styles.inputIcon}
                   onPress={() => setAttachSheetVisible(true)}

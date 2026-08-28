@@ -33,7 +33,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
@@ -254,6 +254,7 @@ const GroupMessageBubble = React.memo(function GroupMessageBubble({
 export default function GroupChatScreen({ route, navigation }: GroupChatScreenProps) {
   const { groupId, groupName } = route.params;
   const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [senderProfiles, setSenderProfiles] = useState<Record<string, UserProfile | null>>({});
   const [text, setText] = useState('');
@@ -518,7 +519,7 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
 
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <AnimatedPressable
             onPress={() => navigation.canGoBack() && navigation.goBack()}
@@ -567,13 +568,15 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
           )}
 
           {isMember === false ? (
-            <View style={styles.blockedBanner}>
+            <View
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
+            >
               <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
               <Text style={styles.blockedBannerText}>Você não é mais membro deste grupo</Text>
             </View>
           ) : isUnverified ? (
             <Pressable
-              style={styles.blockedBanner}
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
               onPress={() => navigation.navigate('Verification')}
             >
               <Ionicons
@@ -634,7 +637,7 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
                   </AnimatedPressable>
                 </View>
               )}
-              <View style={styles.inputRow}>
+              <View style={[styles.inputRow, { paddingBottom: theme.spacing.sm + insets.bottom }]}>
                 <AnimatedPressable
                   style={styles.inputIcon}
                   onPress={() => setAttachSheetVisible(true)}

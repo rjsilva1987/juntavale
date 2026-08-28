@@ -81,8 +81,10 @@
   relatórios de sprint.
 
 ## Padrões estabelecidos
-- Tela com input fixo no rodapé: SafeAreaView SEM edges (padrão
-  ChatScreen); tela de lista: edges={['top']}.
+- TODAS as telas usam `SafeAreaView edges={['top']}`; toda tela com
+  elemento fixo no rodapé (composer, banner) aplica `insets.bottom`
+  manualmente nesse elemento via `useSafeAreaInsets` (padrão ChatScreen/
+  GroupChatScreen/MomentoRequestChatScreen, S159).
 - Push: sempre reusar getPushToken/sendExpoNotifications e a constante
   REGION nas functions; scheduled functions seguem o esqueleto do
   staleMatchReminder.
