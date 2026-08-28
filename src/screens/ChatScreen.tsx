@@ -1363,7 +1363,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         {/* Messages */}
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
           <View style={styles.messagesWrap}>
