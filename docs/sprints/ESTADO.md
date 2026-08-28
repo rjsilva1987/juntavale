@@ -4,15 +4,11 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 28/08/2026
-**Commit atual:** 2e79ae7 — fix(chat): elimina duplo ajuste de teclado no
-Android e memoiza lista de mensagens (S157) — ver ROADMAP.md.
+**Commit atual:** 9a9969c — fix(chat): restaura behavior height do
+teclado no Android (S157-B) — ver ROADMAP.md.
 
 ## Sprints em andamento
-S157-B (regressão do S157: teclado Android voltou a cobrir a barra de
-mensagem do ChatScreen) fechada em código e auditada (APROVADO) em
-28/08/2026, GIT MANUAL — commit/push ainda NÃO rodados, aguardando o
-Raphael. Ver ROADMAP.md § "Fechadas recentemente". Fora essa, nenhuma
-sprint em código pendente de fechamento. Bateria de testes
+Nenhuma sprint em código pendente de fechamento. Bateria de testes
 do Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia:
 S121-S153 (lote de sprints anteriores + o lote da madrugada S147-S153)
 migradas pra "Fechadas recentemente". Ver ROADMAP.md § "Fechadas
@@ -28,10 +24,6 @@ recentemente" pra detalhe por sprint.
   PENDENTE. Ver ROADMAP.md § S140.
 - S144-B — enxugar carimbo do `firestore.rules` — a refazer (commit
   `db12492` revertido em `fa757f5`). Ver ROADMAP.md § S144-B.
-- S149 — restam "ler mais" e "copiar" (mirror do 1:1) pra fechar a
-  paridade do chat de grupo — sem letra própria nem recon/decisão ainda.
-  Reações (S149-B), responder/replyTo (S149-C), editar (S149-D) e apagar
-  (S149-E) já fechadas. Ver ROADMAP.md § S149.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de

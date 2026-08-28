@@ -15,6 +15,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -101,6 +102,143 @@ const buildGroupReplyQuote = (message: GroupMessage): string => {
   if (message.imageUrl) return REPLY_QUOTE_PHOTO_LABEL;
   return '';
 };
+
+// S149-F — mirror estrutural de MessageBubble (ChatScreen.tsx:168, S157):
+// extraído de dentro do renderMessage porque o "ler mais" (item 1, mirror de
+// S130) precisa de useState LOCAL por bolha (textExpanded/isTextTruncated) —
+// uma função-por-item passada direto como renderItem do FlatList não pode
+// ter hooks (regra dos hooks quebra conforme a lista cresce/encolhe),
+// precisa ser instanciada via JSX. React.memo pelo mesmo motivo do 1:1: a
+// FlatList não deve re-renderizar todas as bolhas visíveis a cada digitação
+// no composer.
+interface GroupMessageBubbleProps {
+  item: GroupMessage;
+  isMe: boolean;
+  senderName: string;
+  creatorId: string | null;
+  reactionEntries: [string, ReactionEmoji][];
+  getReplySenderLabel: (senderId: string) => string;
+  onViewImage: (imageUrl: string) => void;
+  onLongPress: (message: GroupMessage) => void;
+}
+
+const GroupMessageBubble = React.memo(function GroupMessageBubble({
+  item,
+  isMe,
+  senderName,
+  creatorId,
+  reactionEntries,
+  getReplySenderLabel,
+  onViewImage,
+  onLongPress,
+}: GroupMessageBubbleProps) {
+  const imageUrl = item.imageUrl;
+  const replyTo = item.replyTo;
+  // S149-F (item 1) — mirror EXATO de textExpanded/isTextTruncated
+  // (ChatScreen.tsx:196-197, S130): colapso de texto longo por bolha, teto
+  // de 6 linhas (numberOfLines/e.nativeEvent.lines.length abaixo), NÃO
+  // caracteres — sem relação com MAX_MESSAGE_LENGTH do TextInput.
+  const [textExpanded, setTextExpanded] = useState(false);
+  const [isTextTruncated, setIsTextTruncated] = useState(false);
+
+  return (
+    <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+        {!isMe && !!senderName && (
+          <View style={styles.senderNameRow}>
+            <Text style={styles.senderName}>{senderName}</Text>
+            {!!creatorId && item.senderId === creatorId && <GroupFounderTag />}
+          </View>
+        )}
+        {/* S149-C — preview compacto da mensagem citada, mirror visual de
+            ChatScreen.tsx:330-343. Sem Pressable/onJumpToReply: scroll até
+            a mensagem original é EXPLICITAMENTE fora do escopo (S149-C
+            item 7). */}
+        {replyTo && (
+          <View style={styles.replyQuoteBox}>
+            <Text
+              style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
+              numberOfLines={1}
+            >
+              {getReplySenderLabel(replyTo.senderId)}
+            </Text>
+            <Text
+              style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
+              numberOfLines={2}
+            >
+              {replyTo.text}
+            </Text>
+          </View>
+        )}
+        {/* S149-E — lápide: mensagem apagada pra todos. Guarda antes do
+            ternário de imagem/texto — mirror de ChatScreen.tsx:370-379. */}
+        {item.deletedAt ? (
+          <Text style={[styles.bubbleTextDeleted, isMe && styles.bubbleTextDeletedMe]}>
+            Esta mensagem foi apagada
+          </Text>
+        ) : imageUrl ? (
+          <Pressable onPress={() => onViewImage(imageUrl)} onLongPress={() => onLongPress(item)}>
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.bubbleImage}
+              contentFit="cover"
+              placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
+              transition={200}
+            />
+          </Pressable>
+        ) : (
+          // S149-F (item 1) — mirror EXATO de ChatScreen.tsx:418-438 (S130):
+          // numberOfLines colapsa em 6 linhas até textExpanded virar true;
+          // onTextLayout mede o texto por inteiro (sem respeitar
+          // numberOfLines), então "ler mais" só aparece se o layout real
+          // passar de 6 linhas.
+          <>
+            <Text
+              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
+              onLongPress={() => onLongPress(item)}
+              numberOfLines={textExpanded ? undefined : 6}
+              onTextLayout={(e) => {
+                if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                  setIsTextTruncated(true);
+                }
+              }}
+            >
+              {item.text}
+            </Text>
+            {isTextTruncated && !textExpanded && (
+              <Pressable onPress={() => setTextExpanded(true)}>
+                <Text style={[styles.bubbleReadMore, isMe && styles.bubbleReadMoreMe]}>
+                  ler mais
+                </Text>
+              </Pressable>
+            )}
+          </>
+        )}
+        <View style={styles.bubbleTimeRow}>
+          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+            {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
+          </Text>
+          {/* S149-D — "editada" ao lado da hora, mirror de
+              ChatScreen.tsx:454-466. */}
+          {item.editedAt && (
+            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>editada</Text>
+          )}
+        </View>
+        {/* S149-E — reações somem da lápide, mirror de ChatScreen.tsx:489
+            (!item.deletedAt && reactionEntries.length > 0). */}
+        {!item.deletedAt && reactionEntries.length > 0 && (
+          <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
+            {reactionEntries.map(([uid, emoji]) => (
+              <Text key={uid} style={styles.reactionBadge}>
+                {emoji}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+});
 
 export default function GroupChatScreen({ route, navigation }: GroupChatScreenProps) {
   const { groupId, groupName } = route.params;
@@ -328,105 +466,42 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
     (!reactionTarget.createdAt ||
       Date.now() - reactionTarget.createdAt.toMillis() < GROUP_DELETE_FOR_EVERYONE_WINDOW_MS);
 
+  // S149-F (item 2) — guarda de "copiar", mirror ADAPTADO de canCopy
+  // (ChatScreen.tsx:1311-1316, S142): vale pra mensagem de qualquer um dos
+  // membros, sem janela de tempo (diferente de canEdit/canDeleteForEveryone).
+  // Sem checo de `location` — GroupMessage (groupService.ts:131-144) não tem
+  // esse campo, referenciá-lo quebraria o tsc. !!reactionTarget.text barra
+  // foto (text === '') e mensagem apagada (lápide, sem text).
+  const canCopy =
+    !!reactionTarget &&
+    !reactionTarget.deletedAt &&
+    !reactionTarget.imageUrl &&
+    !!reactionTarget.text;
+
+  // S149-F (item 3) — renderMessage só computa as props derivadas do estado
+  // da tela (isMe, senderName, reactionEntries) e instancia GroupMessageBubble
+  // via JSX, mirror de renderMessage/<MessageBubble/> (ChatScreen.tsx:
+  // 1243-1245+, S157). O JSX inteiro da bolha migrou pra dentro do
+  // componente acima.
   const renderMessage = ({ item }: { item: GroupMessage }) => {
     const isMe = item.senderId === user?.uid;
     const senderProfile = senderProfiles[item.senderId];
     const senderName = senderProfile === undefined ? '' : getDisplayName(senderProfile);
-    const imageUrl = item.imageUrl;
-    const replyTo = item.replyTo;
     // S149-B — mirror de reactionEntries (ChatScreen.tsx:214-216).
-    const reactionEntries = reactions[item.id]
+    const reactionEntries: [string, ReactionEmoji][] = reactions[item.id]
       ? Object.entries(reactions[item.id]).sort(([a], [b]) => a.localeCompare(b))
       : [];
     return (
-      <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          {!isMe && !!senderName && (
-            <View style={styles.senderNameRow}>
-              <Text style={styles.senderName}>{senderName}</Text>
-              {!!creatorId && item.senderId === creatorId && <GroupFounderTag />}
-            </View>
-          )}
-          {/* S149-C — preview compacto da mensagem citada, mirror visual de
-              ChatScreen.tsx:330-343. Sem Pressable/onJumpToReply: scroll até
-              a mensagem original é EXPLICITAMENTE fora do escopo desta
-              sprint (spec S149-C item 7). */}
-          {replyTo && (
-            <View style={styles.replyQuoteBox}>
-              <Text
-                style={[styles.replyQuoteName, isMe && styles.replyQuoteTextMe]}
-                numberOfLines={1}
-              >
-                {getReplySenderLabel(replyTo.senderId)}
-              </Text>
-              <Text
-                style={[styles.replyQuoteText, isMe && styles.replyQuoteTextMe]}
-                numberOfLines={2}
-              >
-                {replyTo.text}
-              </Text>
-            </View>
-          )}
-          {/* S149-E — lápide: mensagem apagada pra todos. Guarda antes do
-              ternário de imagem/texto — mirror de ChatScreen.tsx:370-379: uma
-              mensagem apagada não tem reação nem toque longo (o Text da
-              lápide não recebe onLongPress de propósito); hora continua
-              aparecendo (bubbleTimeRow fora deste ternário). replyTo acima já
-              não aparece pra mensagem apagada por conta própria — o
-              deleteField() de deleteGroupMessageForEveryone apaga o campo
-              replyTo do doc junto com text/imageUrl/editedAt, sem precisar de
-              guarda extra aqui. */}
-          {item.deletedAt ? (
-            <Text style={[styles.bubbleTextDeleted, isMe && styles.bubbleTextDeletedMe]}>
-              Esta mensagem foi apagada
-            </Text>
-          ) : imageUrl ? (
-            <Pressable
-              onPress={() => setViewerImage(imageUrl)}
-              onLongPress={() => setReactionTarget(item)}
-            >
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.bubbleImage}
-                contentFit="cover"
-                placeholder={{ blurhash: BLURHASH_PLACEHOLDER }}
-                transition={200}
-              />
-            </Pressable>
-          ) : (
-            <Text
-              style={[styles.bubbleText, isMe && styles.bubbleTextMe]}
-              onLongPress={() => setReactionTarget(item)}
-            >
-              {item.text}
-            </Text>
-          )}
-          <View style={styles.bubbleTimeRow}>
-            <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-              {item.createdAt ? dayjs(item.createdAt.toDate()).format('HH:mm') : ''}
-            </Text>
-            {/* S149-D — "editada" ao lado da hora, mirror de
-                ChatScreen.tsx:454-466. Sem guarda extra de !item.deletedAt
-                aqui: deleteGroupMessageForEveryone apaga editedAt via
-                deleteField() junto com o resto, então uma mensagem apagada
-                nunca chega com editedAt presente. */}
-            {item.editedAt && (
-              <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>editada</Text>
-            )}
-          </View>
-          {/* S149-E — reações somem da lápide, mirror de ChatScreen.tsx:489
-              (!item.deletedAt && reactionEntries.length > 0). */}
-          {!item.deletedAt && reactionEntries.length > 0 && (
-            <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowMe]}>
-              {reactionEntries.map(([uid, emoji]) => (
-                <Text key={uid} style={styles.reactionBadge}>
-                  {emoji}
-                </Text>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
+      <GroupMessageBubble
+        item={item}
+        isMe={isMe}
+        senderName={senderName}
+        creatorId={creatorId}
+        reactionEntries={reactionEntries}
+        getReplySenderLabel={getReplySenderLabel}
+        onViewImage={setViewerImage}
+        onLongPress={setReactionTarget}
+      />
     );
   };
 
@@ -663,6 +738,26 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
               <Ionicons name="arrow-undo" size={22} color={theme.colors.text} />
               <Text style={styles.sheetOptionText}>Responder</Text>
             </AnimatedPressable>
+            {/* S149-F (item 2) — "Copiar mensagem", mirror exato de
+                ChatScreen.tsx:1662-1680 (S142): qualquer lado, sem janela de
+                tempo, só texto ainda não apagado (guarda canCopy acima). */}
+            {canCopy && (
+              <>
+                <View style={styles.sheetDivider} />
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={async () => {
+                    const target = reactionTarget;
+                    setReactionTarget(null);
+                    if (!target?.text) return;
+                    await Clipboard.setStringAsync(target.text);
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={22} color={theme.colors.text} />
+                  <Text style={styles.sheetOptionText}>Copiar mensagem</Text>
+                </AnimatedPressable>
+              </>
+            )}
             {/* S149-D — "Editar": só em mensagem própria de texto, ainda não
                 editada fora da janela — mirror exato de
                 ChatScreen.tsx:1654-1670 (sheetDivider + sheetOption, ícone
@@ -805,6 +900,15 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: theme.fontSize.md, color: theme.colors.text, lineHeight: 20 },
   bubbleTextMe: { color: theme.colors.white },
+  // S149-F (item 1) — "ler mais" da bolha colapsada, mirror EXATO de
+  // bubbleReadMore/bubbleReadMoreMe (ChatScreen.tsx:1996-2002, S130).
+  bubbleReadMore: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    marginTop: 2,
+  },
+  bubbleReadMoreMe: { color: theme.colors.white, textDecorationLine: 'underline' },
   // S149-E — lápide de mensagem apagada "pra todos": mirror exato de
   // bubbleTextDeleted/bubbleTextDeletedMe (ChatScreen.tsx:1978-1984).
   bubbleTextDeleted: {
