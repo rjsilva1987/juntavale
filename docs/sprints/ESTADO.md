@@ -8,8 +8,11 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 de criar, 500->2000 (S156) — ver ROADMAP.md.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. Bateria de testes do
-Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia:
+S157 (fluidez do chat 1:1 no Android) fechada em código e auditada
+(APROVADO) em 27/08/2026, GIT MANUAL — commit/push ainda NÃO rodados,
+aguardando o Raphael. Ver ROADMAP.md § "Fechadas recentemente". Fora
+essa, nenhuma sprint em código pendente de fechamento. Bateria de testes
+do Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no mesmo dia:
 S121-S153 (lote de sprints anteriores + o lote da madrugada S147-S153)
 migradas pra "Fechadas recentemente". Ver ROADMAP.md § "Fechadas
 recentemente" pra detalhe por sprint.

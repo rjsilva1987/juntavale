@@ -162,7 +162,10 @@ interface MessageBubbleProps {
   onJumpToReply: (messageId: string) => void;
 }
 
-function MessageBubble({
+// S157 — React.memo pra FlatList não re-renderizar todas as bolhas visíveis
+// a cada digitação: renderMessage (ver useCallback abaixo) já mantém as
+// props estáveis entre renders, então o memo aqui passa a valer de fato.
+const MessageBubble = React.memo(function MessageBubble({
   item,
   currentUid,
   otherName,
@@ -500,7 +503,7 @@ function MessageBubble({
       </View>
     </View>
   );
-}
+});
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
@@ -1213,7 +1216,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     Alert.alert('Denúncia enviada', 'Obrigado por nos avisar. Vamos analisar o caso.');
   };
 
-  const handleOpenLocation = (location: { latitude: number; longitude: number }) => {
+  // S157 — useCallback com deps vazias: o corpo não lê nenhum estado/prop
+  // do componente, só o parâmetro `location` recebido na chamada. Sem isso
+  // esta função ganharia identidade nova a cada render de ChatScreen (ex.:
+  // cada tecla digitada), o que quebraria o React.memo do MessageBubble
+  // logo abaixo, já que ela é repassada como prop onOpenLocation.
+  const handleOpenLocation = useCallback((location: { latitude: number; longitude: number }) => {
     const url = Platform.select({
       ios: `maps:0,0?q=${location.latitude},${location.longitude}`,
       android: `geo:0,0?q=${location.latitude},${location.longitude}`,
@@ -1224,23 +1232,42 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`,
       );
     });
-  };
+  }, []);
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <MessageBubble
-      item={item}
-      currentUid={user?.uid}
-      otherName={otherName}
-      otherPhoto={otherPhoto}
-      reactions={reactions[item.id]}
-      otherReadAt={otherLastReadAt[otherUid]}
-      otherDeliveredAt={otherDeliveredAt[otherUid]}
-      onViewImage={setViewerImage}
-      onOpenLocation={handleOpenLocation}
-      onLongPressReply={setReplyOptionsTarget}
-      onDragReply={setReplyTarget}
-      onJumpToReply={scrollToMessage}
-    />
+  // S157 — useCallback pra FlatList não receber uma prop renderItem nova a
+  // cada render de ChatScreen (ex.: cada tecla digitada no input), o que
+  // forçava a FlatList (PureComponent) a re-renderizar todas as bolhas
+  // visíveis. Deps: só o que o corpo abaixo de fato lê — nem `text` nem
+  // `isOtherTyping` entram aqui, porque nenhum dos dois é usado por
+  // MessageBubble/renderMessage.
+  const renderMessage = useCallback(
+    ({ item }: { item: Message }) => (
+      <MessageBubble
+        item={item}
+        currentUid={user?.uid}
+        otherName={otherName}
+        otherPhoto={otherPhoto}
+        reactions={reactions[item.id]}
+        otherReadAt={otherLastReadAt[otherUid]}
+        otherDeliveredAt={otherDeliveredAt[otherUid]}
+        onViewImage={setViewerImage}
+        onOpenLocation={handleOpenLocation}
+        onLongPressReply={setReplyOptionsTarget}
+        onDragReply={setReplyTarget}
+        onJumpToReply={scrollToMessage}
+      />
+    ),
+    [
+      user?.uid,
+      otherName,
+      otherPhoto,
+      reactions,
+      otherLastReadAt,
+      otherDeliveredAt,
+      otherUid,
+      handleOpenLocation,
+      scrollToMessage,
+    ],
   );
 
   // S85-B — guarda de UX obrigatória junto da rule (mesmo bug do S49: sem
@@ -1336,7 +1363,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         {/* Messages */}
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={0}
         >
           <View style={styles.messagesWrap}>
