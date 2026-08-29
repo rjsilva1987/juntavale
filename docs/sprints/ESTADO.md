@@ -4,11 +4,13 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 28/08/2026
-**Commit atual:** efaa4f6 — fix(chat): consolida scroll para o fim e
-protege janela deslizante do listener no chat 1:1 (S160) — ver ROADMAP.md.
-S158/S159/S160 já commitadas e no HEAD. S161 (Parte A — performance do
-renderMessage/MessageBubble do chat 1:1) fechada em código nesta sessão,
-aguardando commit/push (GIT MANUAL).
+**Commit atual:** S133 — fix(descobrir): esconde conteúdo do card de trás
+até virar o ativo (correção da 1ª tentativa por opacidade, commit
+`4661a62`, que ainda vazava com 25% do arrasto) — commitada nesta sessão
+via GIT AUTOMÁTICO, ver `git log` para o hash. S158/S159/S160 seguem no
+HEAD anterior (efaa4f6). S161 (Parte A — performance do
+renderMessage/MessageBubble do chat 1:1) fechada em código em sessão
+anterior, aguardando commit/push (GIT MANUAL).
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. S161 Parte A fechada em

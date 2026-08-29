@@ -721,6 +721,7 @@ export default function SwipeScreen() {
                   key={profiles[currentIndex + 1].uid}
                   profile={profiles[currentIndex + 1]}
                 />
+                <View style={styles.cardBehindMask} pointerEvents="none" />
               </Animated.View>
             )}
 
@@ -1107,6 +1108,11 @@ const styles = StyleSheet.create({
   cardBehind: {
     transform: [{ scale: 0.95 }],
     top: 8,
+  },
+  cardBehindMask: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
   },
 
   stamp: {
