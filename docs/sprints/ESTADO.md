@@ -4,22 +4,20 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 28/08/2026
-**Commit atual:** e5e3e73 — chore: bump versionCode 17 / version 1.0.7
-(build 17) — ver ROADMAP.md. S158 (fix "ler mais" no chat 1:1/grupo), S159
-(fix composer/edge-to-edge no rodapé do chat) e S160 (fix scroll/render no
-chat 1:1) fechadas em código nesta sessão, aguardando commit/push (GIT
-MANUAL).
+**Commit atual:** efaa4f6 — fix(chat): consolida scroll para o fim e
+protege janela deslizante do listener no chat 1:1 (S160) — ver ROADMAP.md.
+S158/S159/S160 já commitadas e no HEAD. S161 (Parte A — performance do
+renderMessage/MessageBubble do chat 1:1) fechada em código nesta sessão,
+aguardando commit/push (GIT MANUAL).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
-fechadas em código (ver ROADMAP.md § "Fechadas recentemente"), só falta
-commit/push manual e teste em aparelho nas três — a S160 em especial
-precisa reproduzir os 3 sintomas de novo e, se o sumiço de mensagem
-persistir, rodar o triage do Firestore (ver ROADMAP.md § S160). Bateria de
-testes do Expo Go concluída em 26/08/2026 e ROADMAP.md consolidado no
-mesmo dia: S121-S153 (lote de sprints anteriores + o lote da madrugada
-S147-S153) migradas pra "Fechadas recentemente". Ver ROADMAP.md §
-"Fechadas recentemente" pra detalhe por sprint.
+Nenhuma sprint em código pendente de fechamento. S161 Parte A fechada em
+código (ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push
+manual e teste em aparelho (reação/tique de leitura/entrega em tempo real,
+sem travar). S158, S159 e S160 seguem só com teste em aparelho pendente —
+a S160 em especial precisa reproduzir os 3 sintomas de novo e, se o
+sumiço de mensagem persistir, rodar o triage do Firestore (ver ROADMAP.md
+§ S160).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
@@ -42,6 +40,15 @@ S147-S153) migradas pra "Fechadas recentemente". Ver ROADMAP.md §
   ROADMAP § "Dívidas técnicas").
 
 ## Pendências vivas
+- **S161 Parte B** (adiada, decisão do Raphael) — listener de reações do
+  chat 1:1 (`listenReactions`, `matches/{matchId}/reactions`) continua
+  escutando a subcoleção inteira sem corte de janela. Não há campo de
+  tempo no doc de reação (id = messageId) pra usar cursor como em
+  `messages`; a única forma de reduzir leitura de fato seria
+  `where(documentId(),'in',ids)` limitado a 30 ids, com trade-off de UX
+  (reações em mensagens antigas paginadas somem) — precisa de mais
+  desenho/decisão antes de virar sprint. Ver ROADMAP.md § "Fechadas
+  recentemente" (linha S161).
 - **S149-B** — Ressalva da auditoria pra confirmar com o Raphael: a
   prévia de última mensagem em GroupsScreen aparece também na seção
   "Descobrir" (grupos que o usuário não integra) — ver ROADMAP.md §

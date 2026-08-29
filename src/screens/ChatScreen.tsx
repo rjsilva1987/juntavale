@@ -524,7 +524,49 @@ const MessageBubble = React.memo(function MessageBubble({
       </View>
     </View>
   );
-});
+}, messageBubblePropsEqual);
+
+// S161 — compara por CONTEÚDO (não por referência) as chaves de
+// reactions[item.id] — no máximo 2 entradas (comentário S80-B na interface
+// MessageBubbleProps): mesma referência é atalho de igualdade; conjunto de
+// chaves de tamanho diferente já é diferente; senão compara valor a valor.
+function reactionsEqual(
+  prev: Record<string, ReactionEmoji> | undefined,
+  next: Record<string, ReactionEmoji> | undefined,
+): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  const prevKeys = Object.keys(prev);
+  const nextKeys = Object.keys(next);
+  if (prevKeys.length !== nextKeys.length) return false;
+  return prevKeys.every((key) => prev[key] === next[key]);
+}
+
+// S161 — comparador customizado do React.memo de MessageBubble: sem ele, o
+// memo compara raso (Object.is) todas as props, e otherReadAt/
+// otherDeliveredAt (Timestamp do Firestore) e reactions (Record por
+// mensagem) são recriados a cada snapshot mesmo quando o valor de fato não
+// mudou pra ESTA mensagem, o que desfazia o ganho do memo. Retorna true
+// quando as props são EQUIVALENTES (não re-renderiza).
+function messageBubblePropsEqual(prev: MessageBubbleProps, next: MessageBubbleProps): boolean {
+  if (
+    prev.item !== next.item ||
+    prev.currentUid !== next.currentUid ||
+    prev.otherName !== next.otherName ||
+    prev.otherPhoto !== next.otherPhoto ||
+    prev.onViewImage !== next.onViewImage ||
+    prev.onOpenLocation !== next.onOpenLocation ||
+    prev.onLongPressReply !== next.onLongPressReply ||
+    prev.onDragReply !== next.onDragReply ||
+    prev.onJumpToReply !== next.onJumpToReply
+  ) {
+    return false;
+  }
+  if (prev.otherReadAt?.toMillis() !== next.otherReadAt?.toMillis()) return false;
+  if (prev.otherDeliveredAt?.toMillis() !== next.otherDeliveredAt?.toMillis()) return false;
+  if (!reactionsEqual(prev.reactions, next.reactions)) return false;
+  return true;
+}
 
 export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
@@ -643,6 +685,31 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // retry (100ms depois), em vez de reusar o info.index capturado no
   // momento da falha, que pode já estar desatualizado.
   const visibleMessagesRef = useRef<Message[]>([]);
+  // S161 — espelho de reactions em ref, mesmo padrão de visibleMessagesRef
+  // acima: renderMessage lê a fatia por mensagem (reactionsRef.current[id])
+  // sem precisar do objeto agregado inteiro nas deps do useCallback, que
+  // muda de identidade a cada snapshot da coleção reactions inteira mesmo
+  // quando a mensagem específica não mudou.
+  const reactionsRef = useRef(reactions);
+  // S161 (correção pós-auditoria) — atribuição direta no corpo do render,
+  // não useEffect: renderMessage (renderItem do FlatList) é chamado
+  // síncrono, no mesmo commit do render de ChatScreen. Um useEffect só roda
+  // DEPOIS do commit inteiro, então o mesmo render que recebe uma reação
+  // nova via setReactions ainda leria o ref com o valor antigo. Diferente
+  // de visibleMessagesRef/scrollToMessageRef, que só são lidos dentro de
+  // callbacks de evento (sempre pós-commit) — esses continuam com
+  // useEffect, que é o padrão correto pra eles.
+  reactionsRef.current = reactions;
+  // S161 — mesmo padrão acima, pra otherLastReadAt: evita recriar
+  // renderMessage a cada snapshot de matches/{matchId}, mesmo quando só
+  // lastMessage mudou (não leitura).
+  const otherLastReadAtRef = useRef(otherLastReadAt);
+  // S161 — mesmo padrão acima, pra otherDeliveredAt.
+  const otherDeliveredAtRef = useRef(otherDeliveredAt);
+  // S161 (correção pós-auditoria) — mesmo motivo do reactionsRef acima:
+  // atribuição direta no corpo do render, não useEffect.
+  otherLastReadAtRef.current = otherLastReadAt;
+  otherDeliveredAtRef.current = otherDeliveredAt;
   // S101 (RODADA 2) — contador de geração da abertura do chat: incrementado
   // uma vez por (re)montagem lógica da conversa (mesmo reabrir o MESMO
   // matchId conta), dentro do efeito de dados abaixo. Serve de base pra DUAS
@@ -1035,6 +1102,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     [visibleMessages, loadingOlder, olderCursor, hasOlderMessages, hiddenIds, matchId],
   );
 
+  // S161 — espelho de scrollToMessage em ref, mesmo padrão de
+  // visibleMessagesRef acima: renderMessage passa handleJumpToReply (wrapper
+  // estável, ver mais abaixo) em vez de scrollToMessage direto, pra não
+  // recriar renderItem a cada mudança de visibleMessages/loadingOlder/
+  // olderCursor/hasOlderMessages/hiddenIds (deps de scrollToMessage, que
+  // continua exatamente como está).
+  const scrollToMessageRef = useRef(scrollToMessage);
+  useEffect(() => {
+    scrollToMessageRef.current = scrollToMessage;
+  }, [scrollToMessage]);
+
   // S129-A — dispara o scroll de fato assim que a mensagem-alvo aparecer em
   // visibleMessages. Se ainda não achar (página anterior ainda carregando /
   // re-render não propagou), não faz nada — o próprio efeito roda de novo
@@ -1300,12 +1378,41 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     });
   }, []);
 
+  // S161 — wrapper ESTÁVEL (deps vazias) pra passar como onJumpToReply em
+  // vez de scrollToMessage direto: scrollToMessage muda de identidade a
+  // cada evento de mensagem em tempo real (deps: visibleMessages/
+  // loadingOlder/olderCursor/hasOlderMessages/hiddenIds/matchId), o que
+  // recriaria renderMessage sem necessidade. A leitura da versão atual é
+  // via scrollToMessageRef (ver declaração acima, logo após scrollToMessage).
+  const handleJumpToReply = useCallback((messageId: string) => {
+    scrollToMessageRef.current(messageId);
+  }, []);
+
+  // S161 — extraData memoizado da FlatList: como renderMessage deixa de
+  // mudar de identidade quando reactions/otherLastReadAt/otherDeliveredAt
+  // mudam (agora lidos via ref dentro do renderItem, não via closure de
+  // state), a FlatList precisa de outro sinal pra saber quando redesenhar os
+  // itens visíveis. useMemo (não array literal direto na prop) é
+  // obrigatório: um array literal teria identidade nova a CADA render de
+  // ChatScreen (ex. cada tecla digitada), reintroduzindo o bug que o S157
+  // corrigiu.
+  const messageListExtraData = useMemo(
+    () => [reactions, otherLastReadAt, otherDeliveredAt],
+    [reactions, otherLastReadAt, otherDeliveredAt],
+  );
+
   // S157 — useCallback pra FlatList não receber uma prop renderItem nova a
   // cada render de ChatScreen (ex.: cada tecla digitada no input), o que
   // forçava a FlatList (PureComponent) a re-renderizar todas as bolhas
   // visíveis. Deps: só o que o corpo abaixo de fato lê — nem `text` nem
   // `isOtherTyping` entram aqui, porque nenhum dos dois é usado por
   // MessageBubble/renderMessage.
+  // S161 — reactions/otherLastReadAt/otherDeliveredAt/scrollToMessage NÃO
+  // entram mais nas deps: o corpo lê a versão atual deles via
+  // reactionsRef/otherLastReadAtRef/otherDeliveredAtRef/scrollToMessageRef
+  // (handleJumpToReply), então renderMessage só recria identidade quando as
+  // deps mínimas abaixo de fato mudam — a FlatList é avisada de mudança de
+  // reação/leitura/entrega separadamente via messageListExtraData.
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => (
       <MessageBubble
@@ -1313,27 +1420,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         currentUid={user?.uid}
         otherName={otherName}
         otherPhoto={otherPhoto}
-        reactions={reactions[item.id]}
-        otherReadAt={otherLastReadAt[otherUid]}
-        otherDeliveredAt={otherDeliveredAt[otherUid]}
+        reactions={reactionsRef.current[item.id]}
+        otherReadAt={otherLastReadAtRef.current[otherUid]}
+        otherDeliveredAt={otherDeliveredAtRef.current[otherUid]}
         onViewImage={setViewerImage}
         onOpenLocation={handleOpenLocation}
         onLongPressReply={setReplyOptionsTarget}
         onDragReply={setReplyTarget}
-        onJumpToReply={scrollToMessage}
+        onJumpToReply={handleJumpToReply}
       />
     ),
-    [
-      user?.uid,
-      otherName,
-      otherPhoto,
-      reactions,
-      otherLastReadAt,
-      otherDeliveredAt,
-      otherUid,
-      handleOpenLocation,
-      scrollToMessage,
-    ],
+    [user?.uid, otherName, otherPhoto, otherUid, handleOpenLocation, handleJumpToReply],
   );
 
   // S85-B — guarda de UX obrigatória junto da rule (mesmo bug do S49: sem
@@ -1453,6 +1550,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               <FlatList
                 ref={flatListRef}
                 data={visibleMessages}
+                extraData={messageListExtraData}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.messagesList}
                 renderItem={renderMessage}
