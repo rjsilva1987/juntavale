@@ -3,23 +3,22 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 28/08/2026
-**Commit atual:** S133 — fix(descobrir): esconde conteúdo do card de trás
-até virar o ativo (correção da 1ª tentativa por opacidade, commit
-`4661a62`, que ainda vazava com 25% do arrasto) — commitada nesta sessão
-via GIT AUTOMÁTICO, ver `git log` para o hash. S158/S159/S160 seguem no
-HEAD anterior (efaa4f6). S161 (Parte A — performance do
-renderMessage/MessageBubble do chat 1:1) fechada em código em sessão
-anterior, aguardando commit/push (GIT MANUAL).
+**Atualizado:** 31/08/2026
+**Commit atual:** 0d7bf30 — perf(chat): estabiliza renderMessage e
+memoiza MessageBubble no chat 1:1 (S161 Parte A). S162 (diagnóstico do
+chat 1:1 quebrado no build 18) encerrada sem tocar código. S163
+(correção: callback de erro em `listenMessages`/`listenTypingStatus`/
+`listenMatchBlockStatus` + banner de retry no `ChatScreen`) fechada em
+código e auditada nesta sessão, aguardando commit/push (GIT MANUAL).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S161 Parte A fechada em
-código (ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push
-manual e teste em aparelho (reação/tique de leitura/entrega em tempo real,
-sem travar). S158, S159 e S160 seguem só com teste em aparelho pendente —
-a S160 em especial precisa reproduzir os 3 sintomas de novo e, se o
-sumiço de mensagem persistir, rodar o triage do Firestore (ver ROADMAP.md
-§ S160).
+Nenhuma sprint em código pendente de fechamento. S163 fechada em código
+(ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push manual
+e teste em aparelho (reproduzir os 3 sintomas do build 18 e confirmar
+que o skeleton não trava mais e o banner de retry funciona). S158, S159
+e S160 seguem só com teste em aparelho pendente — a S160 em especial
+precisa reproduzir os 3 sintomas de novo e, se o sumiço de mensagem
+persistir, rodar o triage do Firestore (ver ROADMAP.md § S160).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

@@ -588,6 +588,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [reactions, setReactions] = useState<Record<string, Record<string, ReactionEmoji>>>({});
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [messagesError, setMessagesError] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [optionsSheetVisible, setOptionsSheetVisible] = useState(false);
   const [reportVisible, setReportVisible] = useState(false);
@@ -785,6 +787,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     let unsub: (() => void) | undefined;
 
     setLoading(true);
+    setMessagesError(false);
     setMessages([]);
     setOlderMessages([]);
     setOlderCursor(null);
@@ -868,6 +871,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           }
         },
         cursor,
+        (error) => {
+          if (cancelled) return;
+          console.warn('[ChatScreen] listenMessages falhou:', error);
+          setLoading(false);
+          setMessagesError(true);
+        },
       );
     };
     start();
@@ -876,7 +885,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       cancelled = true;
       unsub?.();
     };
-  }, [matchId, uid]);
+  }, [matchId, uid, retryTick]);
 
   useFocusEffect(
     useCallback(() => {
@@ -975,6 +984,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     hasNewMessageBelowRef.current = false;
     if (uid) markMatchRead(matchId, uid).catch(() => {});
   }, [matchId, uid]);
+
+  // S163 — retry manual do listener de mensagens: incrementa retryTick, que
+  // está nas dependências do useEffect de listenMessages e reexecuta a
+  // mesma lógica de "nova geração" já usada ao reabrir a conversa.
+  const handleRetryMessages = useCallback(() => setRetryTick((t) => t + 1), []);
 
   useEffect(() => {
     const unsub = listenReactions(matchId, setReactions);
@@ -1666,7 +1680,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           )}
 
           {/* Input */}
-          {isBlocked ? (
+          {messagesError ? (
+            <Pressable
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
+              onPress={handleRetryMessages}
+            >
+              <Ionicons name="refresh-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedBannerText}>
+                Não foi possível atualizar as mensagens. Toque para tentar novamente.
+              </Text>
+            </Pressable>
+          ) : isBlocked ? (
             <View
               style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
             >

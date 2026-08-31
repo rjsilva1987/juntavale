@@ -1203,11 +1203,19 @@ export const listenMessages = (
   matchId: string,
   callback: (messages: Message[]) => void,
   cursor?: MessageCursor | null,
+  onError?: (error: unknown) => void,
 ) => {
   const q = buildMessagesQuery(messagesCollection(matchId), cursor);
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map(toMessage));
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      callback(snap.docs.map(toMessage));
+    },
+    (error) => {
+      console.warn('[firestoreService] listenMessages falhou:', error);
+      onError?.(error);
+    },
+  );
 };
 
 // Página anterior sob demanda: getDocs + startAfter(cursor), SEM listener (o
@@ -1370,49 +1378,62 @@ export const listenTypingStatus = (
     }
   };
 
-  const unsub = onSnapshot(doc(db, 'matches', matchId), (snap) => {
-    const data = snap.data() as Match | undefined;
-    const otherUid = data?.users?.find((u) => u !== currentUid);
-    const stamp = otherUid ? data?.typing?.[otherUid] : undefined;
+  const unsub = onSnapshot(
+    doc(db, 'matches', matchId),
+    (snap) => {
+      const data = snap.data() as Match | undefined;
+      const otherUid = data?.users?.find((u) => u !== currentUid);
+      const stamp = otherUid ? data?.typing?.[otherUid] : undefined;
 
-    // Checagem TEM que ser falsy (`!stamp`), não `=== undefined`: no
-    // snapshot LOCAL de quem escreve, antes da confirmação do servidor,
-    // serverTimestamp() resolve como `null` (não `undefined`) na leitura
-    // otimista da própria mutação pendente. Trocar por `=== undefined`
-    // deixaria esse `null` passar reto até `stamp.toMillis()` logo abaixo e
-    // reintroduziria o crash que este guard existe pra evitar.
-    if (!stamp) {
-      // Chave ausente (nunca digitou, ou o cleanup/expiração já rodou):
-      // corta qualquer timer pendente e reporta false na hora.
+      // Checagem TEM que ser falsy (`!stamp`), não `=== undefined`: no
+      // snapshot LOCAL de quem escreve, antes da confirmação do servidor,
+      // serverTimestamp() resolve como `null` (não `undefined`) na leitura
+      // otimista da própria mutação pendente. Trocar por `=== undefined`
+      // deixaria esse `null` passar reto até `stamp.toMillis()` logo abaixo e
+      // reintroduziria o crash que este guard existe pra evitar.
+      if (!stamp) {
+        // Chave ausente (nunca digitou, ou o cleanup/expiração já rodou):
+        // corta qualquer timer pendente e reporta false na hora.
+        lastStampMillis = null;
+        clearPendingExpiry();
+        callback(false);
+        return;
+      }
+
+      const stampMillis = stamp.toMillis();
+
+      // S79-C1 — só (re)agenda o timer quando o VALOR do carimbo muda em
+      // relação ao snapshot anterior, nunca a cada snapshot. O doc do match
+      // também é tocado por lastReadAt (leitura da conversa) e por
+      // lastMessage (Cloud Function onMessageCreated a cada mensagem nova) —
+      // qualquer um desses dispara este onSnapshot de novo com o MESMO
+      // carimbo de typing de antes. Se reagendássemos o timer em todo
+      // snapshot, um carimbo velho deixado por um client que morreu sem
+      // limpar seria revalidado por qualquer mensagem nova subsequente —
+      // "digitando..." eterno de volta, o bug exato que esta sprint corrige.
+      if (stampMillis !== lastStampMillis) {
+        lastStampMillis = stampMillis;
+        clearPendingExpiry();
+        callback(true);
+        expireTimeout = setTimeout(() => callback(false), TYPING_STALE_MS);
+      }
+      // Falso positivo aceito: se o listener conecta com um carimbo já velho
+      // na base (ex.: reabrir o chat), não há "lastStampMillis" anterior pra
+      // comparar — este ramo dispara do mesmo jeito e mostra "digitando" por
+      // até TYPING_STALE_MS antes de expirar sozinho. Auto-corrige, não
+      // precisa de tratamento especial.
+    },
+    (error) => {
+      // Mesmo motivo do listenReactions/listenPresence: se o match for
+      // desfeito com o chat aberto, a rule de leitura passa a negar e este
+      // onSnapshot estouraria sem este callback de erro. Mirror do ramo
+      // "chave ausente" acima: corta timer pendente e reporta false.
+      console.warn('[firestoreService] listenTypingStatus falhou:', error);
+      clearPendingExpiry();
       lastStampMillis = null;
-      clearPendingExpiry();
       callback(false);
-      return;
-    }
-
-    const stampMillis = stamp.toMillis();
-
-    // S79-C1 — só (re)agenda o timer quando o VALOR do carimbo muda em
-    // relação ao snapshot anterior, nunca a cada snapshot. O doc do match
-    // também é tocado por lastReadAt (leitura da conversa) e por
-    // lastMessage (Cloud Function onMessageCreated a cada mensagem nova) —
-    // qualquer um desses dispara este onSnapshot de novo com o MESMO
-    // carimbo de typing de antes. Se reagendássemos o timer em todo
-    // snapshot, um carimbo velho deixado por um client que morreu sem
-    // limpar seria revalidado por qualquer mensagem nova subsequente —
-    // "digitando..." eterno de volta, o bug exato que esta sprint corrige.
-    if (stampMillis !== lastStampMillis) {
-      lastStampMillis = stampMillis;
-      clearPendingExpiry();
-      callback(true);
-      expireTimeout = setTimeout(() => callback(false), TYPING_STALE_MS);
-    }
-    // Falso positivo aceito: se o listener conecta com um carimbo já velho
-    // na base (ex.: reabrir o chat), não há "lastStampMillis" anterior pra
-    // comparar — este ramo dispara do mesmo jeito e mostra "digitando" por
-    // até TYPING_STALE_MS antes de expirar sozinho. Auto-corrige, não
-    // precisa de tratamento especial.
-  });
+    },
+  );
 
   return () => {
     clearPendingExpiry();
@@ -1454,8 +1475,19 @@ export const listenMatchBlockStatus = (
     deliveredAt: Record<string, Timestamp>,
   ) => void,
 ) => {
-  return onSnapshot(doc(db, 'matches', matchId), (snap) => {
-    const data = snap.data() as Match | undefined;
-    callback(data?.blockedBy ?? [], data?.lastReadAt ?? {}, data?.deliveredAt ?? {});
-  });
+  return onSnapshot(
+    doc(db, 'matches', matchId),
+    (snap) => {
+      const data = snap.data() as Match | undefined;
+      callback(data?.blockedBy ?? [], data?.lastReadAt ?? {}, data?.deliveredAt ?? {});
+    },
+    (error) => {
+      // Mesmo motivo do listenPresence: se o match for desfeito com o chat
+      // aberto, a regra de leitura passa a negar e este onSnapshot
+      // estouraria sem este callback de erro. Mirror do retorno de sucesso
+      // quando os campos não existem no doc.
+      console.warn('[firestoreService] listenMatchBlockStatus falhou:', error);
+      callback([], {}, {});
+    },
+  );
 };
