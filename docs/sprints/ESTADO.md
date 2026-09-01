@@ -8,17 +8,22 @@ substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 memoiza MessageBubble no chat 1:1 (S161 Parte A). S162 (diagnóstico do
 chat 1:1 quebrado no build 18) encerrada sem tocar código. S163
 (correção: callback de erro em `listenMessages`/`listenTypingStatus`/
-`listenMatchBlockStatus` + banner de retry no `ChatScreen`) fechada em
-código e auditada nesta sessão, aguardando commit/push (GIT MANUAL).
+`listenMatchBlockStatus` + banner de retry no `ChatScreen`) e S164
+(causa raiz do build 18: banner passa a mostrar o `.code` do Firestore,
+`listenReactions` limitado às últimas 30 mensagens, rules revisadas sem
+edição) fechadas em código e auditadas nesta sessão, aguardando
+commit/push (GIT MANUAL).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S163 fechada em código
-(ver ROADMAP.md § "Fechadas recentemente"), só falta commit/push manual
-e teste em aparelho (reproduzir os 3 sintomas do build 18 e confirmar
-que o skeleton não trava mais e o banner de retry funciona). S158, S159
-e S160 seguem só com teste em aparelho pendente — a S160 em especial
-precisa reproduzir os 3 sintomas de novo e, se o sumiço de mensagem
-persistir, rodar o triage do Firestore (ver ROADMAP.md § S160).
+Nenhuma sprint em código pendente de fechamento. S163 e S164 fechadas
+em código (ver ROADMAP.md § "Fechadas recentemente"), só falta
+commit/push manual e teste em aparelho (reproduzir os 3 sintomas do
+build 18; a S164 soma ler o `.code` do Firestore que aparece no banner
+pra confirmar a causa exata, e conferir que as reações seguem
+atualizando nas últimas 30 mensagens). S158, S159 e S160 seguem só com
+teste em aparelho pendente — a S160 em especial precisa reproduzir os 3
+sintomas de novo e, se o sumiço de mensagem persistir, rodar o triage
+do Firestore (ver ROADMAP.md § S160).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
@@ -41,15 +46,6 @@ persistir, rodar o triage do Firestore (ver ROADMAP.md § S160).
   ROADMAP § "Dívidas técnicas").
 
 ## Pendências vivas
-- **S161 Parte B** (adiada, decisão do Raphael) — listener de reações do
-  chat 1:1 (`listenReactions`, `matches/{matchId}/reactions`) continua
-  escutando a subcoleção inteira sem corte de janela. Não há campo de
-  tempo no doc de reação (id = messageId) pra usar cursor como em
-  `messages`; a única forma de reduzir leitura de fato seria
-  `where(documentId(),'in',ids)` limitado a 30 ids, com trade-off de UX
-  (reações em mensagens antigas paginadas somem) — precisa de mais
-  desenho/decisão antes de virar sprint. Ver ROADMAP.md § "Fechadas
-  recentemente" (linha S161).
 - **S149-B** — Ressalva da auditoria pra confirmar com o Raphael: a
   prévia de última mensagem em GroupsScreen aparece também na seção
   "Descobrir" (grupos que o usuário não integra) — ver ROADMAP.md §

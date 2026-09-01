@@ -16,6 +16,7 @@ import {
   limitToLast,
   startAfter,
   startAt,
+  documentId,
   onSnapshot,
   serverTimestamp,
   Timestamp,
@@ -1267,15 +1268,23 @@ export const setMessageReaction = async (
   );
 };
 
-// S80-B — assina a COLEÇÃO inteira (um doc por mensagem), não um doc único
-// como listenPresence/listenTypingStatus. callback recebe messageId -> (uid
-// -> emoji), montado a partir de snap.docs (id do doc = messageId).
+// S80-B — assina só os docs cujo id (=messageId) está nos últimos
+// MESSAGE_PAGE_SIZE ids carregados no client (lastMessageIds em ChatScreen),
+// não a coleção inteira. Corte por CURSOR de mensagens (nunca Timestamp) —
+// mesmo princípio do corte de listenMessages/loadOlderMessages documentado
+// acima nesta mesma seção. callback recebe messageId -> (uid -> emoji),
+// montado a partir de snap.docs (id do doc = messageId).
 export const listenReactions = (
   matchId: string,
+  messageIds: string[],
   callback: (reactions: Record<string, Record<string, ReactionEmoji>>) => void,
 ) => {
+  if (messageIds.length === 0) {
+    callback({});
+    return () => {};
+  }
   return onSnapshot(
-    collection(db, 'matches', matchId, 'reactions'),
+    query(collection(db, 'matches', matchId, 'reactions'), where(documentId(), 'in', messageIds)),
     (snap) => {
       const reactions: Record<string, Record<string, ReactionEmoji>> = {};
       snap.docs.forEach((d) => {

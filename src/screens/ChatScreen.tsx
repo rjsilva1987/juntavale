@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, type FirestoreError } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -59,6 +59,7 @@ import {
   getMatchLastReadAt,
   loadOlderMessages,
   markMatchRead,
+  MESSAGE_PAGE_SIZE,
   sendMessage,
   setMessageReaction,
   unmatch,
@@ -589,6 +590,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [messagesError, setMessagesError] = useState(false);
+  const [messagesErrorCode, setMessagesErrorCode] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [optionsSheetVisible, setOptionsSheetVisible] = useState(false);
@@ -788,6 +790,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
     setLoading(true);
     setMessagesError(false);
+    setMessagesErrorCode(null);
     setMessages([]);
     setOlderMessages([]);
     setOlderCursor(null);
@@ -876,6 +879,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           console.warn('[ChatScreen] listenMessages falhou:', error);
           setLoading(false);
           setMessagesError(true);
+          const code =
+            typeof error === 'object' && error !== null && 'code' in error
+              ? String((error as FirestoreError).code)
+              : null;
+          setMessagesErrorCode(code);
         },
       );
     };
@@ -991,11 +999,6 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const handleRetryMessages = useCallback(() => setRetryTick((t) => t + 1), []);
 
   useEffect(() => {
-    const unsub = listenReactions(matchId, setReactions);
-    return unsub;
-  }, [matchId]);
-
-  useEffect(() => {
     if (!uid) return;
     const unsub = listenHiddenMessages(matchId, uid, setHiddenIds);
     return unsub;
@@ -1016,6 +1019,16 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     const windowIds = new Set(messages.map((m) => m.id));
     return [...olderMessages.filter((m) => !windowIds.has(m.id)), ...messages];
   }, [olderMessages, messages]);
+
+  const lastMessageIds = useMemo(
+    () => orderedMessages.slice(-MESSAGE_PAGE_SIZE).map((m) => m.id),
+    [orderedMessages],
+  );
+
+  useEffect(() => {
+    const unsub = listenReactions(matchId, lastMessageIds, setReactions);
+    return unsub;
+  }, [matchId, lastMessageIds]);
 
   // S85-A — ponto único do filtro: a FlatList consome visibleMessages, não
   // messages direto (ver data={visibleMessages} abaixo). hiddenIds é só do
@@ -1686,9 +1699,14 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
               onPress={handleRetryMessages}
             >
               <Ionicons name="refresh-outline" size={16} color={theme.colors.textSecondary} />
-              <Text style={styles.blockedBannerText}>
-                Não foi possível atualizar as mensagens. Toque para tentar novamente.
-              </Text>
+              <View style={styles.blockedBannerTextGroup}>
+                <Text style={styles.blockedBannerText}>
+                  Não foi possível atualizar as mensagens. Toque para tentar novamente.
+                </Text>
+                {messagesErrorCode ? (
+                  <Text style={styles.blockedBannerCode}>erro: {messagesErrorCode}</Text>
+                ) : null}
+              </View>
             </Pressable>
           ) : isBlocked ? (
             <View
@@ -2398,6 +2416,12 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   blockedBannerText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+  blockedBannerTextGroup: { flex: 1 },
+  blockedBannerCode: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+  },
 
   input: {
     flex: 1,
