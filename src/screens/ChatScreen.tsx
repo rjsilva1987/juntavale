@@ -1020,10 +1020,23 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     return [...olderMessages.filter((m) => !windowIds.has(m.id)), ...messages];
   }, [olderMessages, messages]);
 
-  const lastMessageIds = useMemo(
-    () => orderedMessages.slice(-MESSAGE_PAGE_SIZE).map((m) => m.id),
-    [orderedMessages],
-  );
+  // S165 — evita resubscribe de listenReactions quando a JANELA das últimas
+  // MESSAGE_PAGE_SIZE mensagens não muda de conteúdo (ex.: edição de texto
+  // ou tombstone de mensagem apagada, dentro ou fora da janela, que não
+  // alteram quais ids estão presentes). orderedMessages troca de referência
+  // por qualquer mudança em messages/olderMessages; sem essa comparação por
+  // conteúdo, lastMessageIds trocaria de referência junto e reassinaria o
+  // listener sem necessidade.
+  const nextMessageIdsRef = useRef<string[]>([]);
+  const lastMessageIds = useMemo(() => {
+    const next = orderedMessages.slice(-MESSAGE_PAGE_SIZE).map((m) => m.id);
+    const prev = nextMessageIdsRef.current;
+    const same = prev.length === next.length && prev.every((id, i) => id === next[i]);
+    if (!same) {
+      nextMessageIdsRef.current = next;
+    }
+    return nextMessageIdsRef.current;
+  }, [orderedMessages]);
 
   useEffect(() => {
     const unsub = listenReactions(matchId, lastMessageIds, setReactions);

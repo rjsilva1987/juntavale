@@ -4,26 +4,30 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 31/08/2026
-**Commit atual:** 0d7bf30 — perf(chat): estabiliza renderMessage e
-memoiza MessageBubble no chat 1:1 (S161 Parte A). S162 (diagnóstico do
-chat 1:1 quebrado no build 18) encerrada sem tocar código. S163
+**Commit atual:** 573ef7f — fix(chat): expoe codigo do erro no banner e
+limita listenReactions as ultimas 30 mensagens (S164). S162 (diagnóstico
+do chat 1:1 quebrado no build 18) encerrada sem tocar código. S163
 (correção: callback de erro em `listenMessages`/`listenTypingStatus`/
-`listenMatchBlockStatus` + banner de retry no `ChatScreen`) e S164
-(causa raiz do build 18: banner passa a mostrar o `.code` do Firestore,
+`listenMatchBlockStatus` + banner de retry no `ChatScreen`) e S164 (causa
+raiz do build 18: banner passa a mostrar o `.code` do Firestore,
 `listenReactions` limitado às últimas 30 mensagens, rules revisadas sem
-edição) fechadas em código e auditadas nesta sessão, aguardando
-commit/push (GIT MANUAL).
+edição) já commitadas e empurradas. S165 (travamento do chat 1:1 quando
+o outro participante está online e ativo: referências novas em
+lastReadAt/deliveredAt/blockedBy a cada snapshot de `matches/{matchId}`
+— inclusive por escrita de typing — e resubscribe desnecessário de
+`listenReactions`) fechada em código e auditada nesta sessão (bloqueou
+1x por `.toMillis()` sem guard de null, corrigido e reverificado),
+commitada e empurrada nesta sessão via GIT AUTOMATICO.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S163 e S164 fechadas
-em código (ver ROADMAP.md § "Fechadas recentemente"), só falta
-commit/push manual e teste em aparelho (reproduzir os 3 sintomas do
-build 18; a S164 soma ler o `.code` do Firestore que aparece no banner
-pra confirmar a causa exata, e conferir que as reações seguem
-atualizando nas últimas 30 mensagens). S158, S159 e S160 seguem só com
-teste em aparelho pendente — a S160 em especial precisa reproduzir os 3
-sintomas de novo e, se o sumiço de mensagem persistir, rodar o triage
-do Firestore (ver ROADMAP.md § S160).
+Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
+seguem só com teste em aparelho pendente — a S160 em especial precisa
+reproduzir os 3 sintomas de novo e, se o sumiço de mensagem persistir,
+rodar o triage do Firestore (ver ROADMAP.md § S160). S163/S164/S165
+(chat 1:1) seguem SEM teste em aparelho — validação real depende do
+build 20 (S164+S165 juntas, ainda não gerado): banner de erro mostrando
+o `.code`, reações atualizando nas últimas 30 mensagens, e o travamento
+com o outro lado online deixando de acontecer.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

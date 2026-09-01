@@ -1476,6 +1476,25 @@ export const listenPresence = (userId: string, callback: (lastSeenAt: Date | nul
 // não há motivo pra um segundo listener só pra outro campo do mesmo doc.
 // S129-B — mesmo raciocínio pra deliveredAt: terceiro parâmetro do callback,
 // sem listener novo.
+// S165 — o doc matches/{matchId} também é escrito por typing a cada ~2s
+// (useTypingIndicator), o que dispara este onSnapshot sem que blockedBy/
+// lastReadAt/deliveredAt tenham mudado de conteúdo. Sem comparar por
+// conteúdo, o callback entregaria objetos/arrays NOVOS a cada ciclo de
+// digitação do outro lado, propagando até messageListExtraData e forçando
+// a FlatList a reprocessar todas as linhas visíveis.
+const sameStringArray = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((v, i) => v === b[i]);
+
+const sameTimestampRecord = (
+  a: Record<string, Timestamp>,
+  b: Record<string, Timestamp>,
+): boolean => {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key) => a[key] && b[key] && a[key].toMillis() === b[key].toMillis());
+};
+
 export const listenMatchBlockStatus = (
   matchId: string,
   callback: (
@@ -1484,11 +1503,28 @@ export const listenMatchBlockStatus = (
     deliveredAt: Record<string, Timestamp>,
   ) => void,
 ) => {
+  let lastBlockedBy: string[] = [];
+  let lastReadAtEmitted: Record<string, Timestamp> = {};
+  let lastDeliveredAtEmitted: Record<string, Timestamp> = {};
   return onSnapshot(
     doc(db, 'matches', matchId),
     (snap) => {
       const data = snap.data() as Match | undefined;
-      callback(data?.blockedBy ?? [], data?.lastReadAt ?? {}, data?.deliveredAt ?? {});
+      const nextBlockedBy = data?.blockedBy ?? [];
+      const nextReadAt = data?.lastReadAt ?? {};
+      const nextDeliveredAt = data?.deliveredAt ?? {};
+
+      if (!sameStringArray(lastBlockedBy, nextBlockedBy)) {
+        lastBlockedBy = nextBlockedBy;
+      }
+      if (!sameTimestampRecord(lastReadAtEmitted, nextReadAt)) {
+        lastReadAtEmitted = nextReadAt;
+      }
+      if (!sameTimestampRecord(lastDeliveredAtEmitted, nextDeliveredAt)) {
+        lastDeliveredAtEmitted = nextDeliveredAt;
+      }
+
+      callback(lastBlockedBy, lastReadAtEmitted, lastDeliveredAtEmitted);
     },
     (error) => {
       // Mesmo motivo do listenPresence: se o match for desfeito com o chat
@@ -1496,6 +1532,9 @@ export const listenMatchBlockStatus = (
       // estouraria sem este callback de erro. Mirror do retorno de sucesso
       // quando os campos não existem no doc.
       console.warn('[firestoreService] listenMatchBlockStatus falhou:', error);
+      lastBlockedBy = [];
+      lastReadAtEmitted = {};
+      lastDeliveredAtEmitted = {};
       callback([], {}, {});
     },
   );
