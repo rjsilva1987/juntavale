@@ -37,11 +37,6 @@ marcando (ressalva do ack metadata-only, ver ROADMAP.md § S166-B).
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.
-- S140 — bug do build 14 ao salvar perfil com nome editado — REAVALIADA,
-  possivelmente obsoleta após a S138; decisão de fechar ou manter aberta
-  PENDENTE. Ver ROADMAP.md § S140.
-- S144-B — enxugar carimbo do `firestore.rules` — a refazer (commit
-  `db12492` revertido em `fa757f5`). Ver ROADMAP.md § S144-B.
 
 ## Débitos técnicos ativos
 - S102-C — `messageImageUrl`/`matchId`/`messageId` sem validação de
