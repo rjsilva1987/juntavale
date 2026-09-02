@@ -41,7 +41,6 @@ import { ChatDebugOverlay } from '@/components/ChatDebugOverlay';
 import { EmptyState } from '@/components/EmptyState';
 import { ReportModal } from '@/components/ReportModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
-import { isAdminUid } from '@/config/admin';
 import { CHAT_DEBUG_OVERLAY } from '@/config/flags';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
@@ -583,10 +582,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
-  // S166-0 — instrumentação de diagnóstico (ChatDebugOverlay), só client,
-  // só sob flag + admin. Sem custo (comparação booleana) quando
-  // CHAT_DEBUG_OVERLAY é false, valor de build hoje.
-  const debugEnabled = CHAT_DEBUG_OVERLAY && isAdminUid(user?.uid);
+  // S166-0 — instrumentação de diagnóstico (ChatDebugOverlay), só client.
+  // CHAT_DEBUG_OVERLAY é o ÚNICO cadeado — nunca deve ir a `true` no repo
+  // (só local, pra depuração pontual em aparelho de dev/admin). Sem custo
+  // (comparação booleana) quando a flag é false, valor de build hoje.
+  const debugEnabled = CHAT_DEBUG_OVERLAY;
   if (debugEnabled) chatDebug.bump('render:ChatScreen');
   // S101 — messages é só a JANELA em tempo real (onSnapshot com
   // createdAt >= corte). O histórico anterior vive em olderMessages, buscado

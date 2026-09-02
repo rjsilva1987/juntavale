@@ -1,6 +1,7 @@
 // src/components/ChatDebugOverlay.tsx
-// S166-0 — overlay de diagnóstico do chat 1:1 (só sob CHAT_DEBUG_OVERLAY +
-// isAdminUid, ver ChatScreen.tsx). Lê chatDebug.getSnapshot() no PRÓPRIO
+// S166-0 — overlay de diagnóstico do chat 1:1. CHAT_DEBUG_OVERLAY (ver
+// ChatScreen.tsx) é o ÚNICO cadeado, nunca deve ir a `true` no repo. Lê
+// chatDebug.getSnapshot() no PRÓPRIO
 // ritmo (tick de 1s isolado aqui dentro, nunca via setInterval — ver
 // justificativa em chatDebug.ts) — nunca se inscreve em nada do ChatScreen,
 // então o setState deste componente nunca propaga re-render pro pai. Sem
