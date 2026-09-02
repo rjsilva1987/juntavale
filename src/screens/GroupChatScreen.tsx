@@ -204,17 +204,19 @@ const GroupMessageBubble = React.memo(function GroupMessageBubble({
               >
                 {item.text}
               </Text>
-              <Text
-                style={[styles.bubbleText, isMe && styles.bubbleTextMe, styles.bubbleTextMirror]}
-                pointerEvents="none"
-                onTextLayout={(e) => {
-                  if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
-                    setIsTextTruncated(true);
-                  }
-                }}
-              >
-                {item.text}
-              </Text>
+              {/* S167 — pointerEvents="none" é no-op em Text no Android (RN 0.81); por isso o wrapper View. */}
+              <View style={styles.bubbleTextMirrorWrap} pointerEvents="none">
+                <Text
+                  style={[styles.bubbleText, isMe && styles.bubbleTextMe, styles.bubbleTextMirror]}
+                  onTextLayout={(e) => {
+                    if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                      setIsTextTruncated(true);
+                    }
+                  }}
+                >
+                  {item.text}
+                </Text>
+              </View>
             </View>
             {isTextTruncated && !textExpanded && (
               <Pressable onPress={() => setTextExpanded(true)}>
@@ -919,7 +921,8 @@ const styles = StyleSheet.create({
   // 'relative' garante que o espelho (position absolute) se posicione
   // relativo a este wrapper, não à bolha inteira.
   bubbleTextWrap: { position: 'relative' },
-  bubbleTextMirror: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
+  bubbleTextMirrorWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
+  bubbleTextMirror: { opacity: 0 },
   // S149-F (item 1) — "ler mais" da bolha colapsada, mirror EXATO de
   // bubbleReadMore/bubbleReadMoreMe (ChatScreen.tsx:1996-2002, S130).
   bubbleReadMore: {

@@ -4,33 +4,28 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 02/09/2026
-**Commit atual:** b4e9fc0 — fix(chat): overlay de debug gateado so pela
-flag (S166-0). S163/S164/S165 (chat 1:1) e S166-0 (instrumentação de
-diagnóstico do chat: overlay gateado por `CHAT_DEBUG_OVERLAY`+admin,
-contadores por listener/render/stall) já commitadas e empurradas, todas
-SEM teste em aparelho. A medição da S166-0 em device (Expo Go,
---no-dev --minify) achou a tempestade: ~1640 snapshots por listener do
-doc do match pra ~30 escritas contadas numa troca de 5 mensagens. S166-B
-(causa provada: loop de escrita `useUnreadCount` → `markMatchDelivered`
-— `serverTimestamp()` pendente resolve `null` no snapshot local e
-redispara a própria escrita até o ack; corrigido com gate por
-`d.metadata.hasPendingWrites`, + contadores sub/unsub e bump de
-`markMatchDelivered` no chatDebug) fechada em código e auditada nesta
-sessão (APROVADA, ressalva não bloqueante sobre ack metadata-only de
-`deleteField()` do typing), pendente de commit/push — GIT MANUAL,
-comandos impressos no fim da sprint pro Raphael rodar.
+**Commit atual:** ff958ac — docs: descarta S166-A e S166-C, registra
+teste da S166-B e alinha ESTADO.md. Build 21 (1.0.11, e88927b) leva
+S166-0 + S166-B; a S166-B (corte do loop de escrita `useUnreadCount` →
+`markMatchDelivered`) foi CONFIRMADA em aparelho em 02/09 (~1,5
+snapshot por escrita, 1 assinatura ativa por listener, stalls ≤315 ms —
+ver ROADMAP § S166-B). S167 (toque longo do chat 1:1 morto desde a
+S158: `pointerEvents="none"` é no-op em `Text` no Android, o espelho do
+"ler mais" capturava o toque; corrigido com wrapper `View
+pointerEvents="none"` no espelho, `ChatScreen.tsx` +
+`GroupChatScreen.tsx`) fechada em código e auditada nesta sessão
+(APROVADA), pendente de commit/push — GIT MANUAL, comandos impressos no
+fim da sprint pro Raphael rodar.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento — S166-B só aguarda o
+Nenhuma sprint em código pendente de fechamento — S167 só aguarda o
 commit/push manual do Raphael. S158, S159 e S160 seguem só com teste em
 aparelho pendente — a S160 em especial precisa reproduzir os 3 sintomas
 de novo e, se o sumiço de mensagem persistir, rodar o triage do
-Firestore (ver ROADMAP.md § S160). Chat 1:1 (S163/S164/S165/S166-B):
-próximo passo é repetir a medição da S166-0 com a correção da S166-B —
-ligar `CHAT_DEBUG_OVERLAY` localmente, mesma troca de 5 mensagens,
-esperado snapshots ≈ escritas (~2 por escrita), `sub − unsub = 1` por
-listener, stalls de volta ao chão, e conferir se `deliveredAt` continua
-marcando (ressalva do ack metadata-only, ver ROADMAP.md § S166-B).
+Firestore (ver ROADMAP.md § S160). S167: testar em aparelho que o toque
+longo volta a abrir o sheet (texto/imagem/localização) e que reagir/
+responder/copiar/editar/apagar/denunciar, "ler mais" e
+arrastar-pra-responder seguem funcionando, no 1:1 e no grupo.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

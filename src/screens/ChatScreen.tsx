@@ -443,21 +443,23 @@ const MessageBubble = React.memo(function MessageBubble({
                           inteiro pra saber se passa de 6 linhas (ver
                           comentário de isTextTruncated acima). Invisível e
                           fora do fluxo de toque, de propósito. */}
-                      <Text
-                        style={[
-                          styles.bubbleText,
-                          isMe && styles.bubbleTextMe,
-                          styles.bubbleTextMirror,
-                        ]}
-                        pointerEvents="none"
-                        onTextLayout={(e) => {
-                          if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
-                            setIsTextTruncated(true);
-                          }
-                        }}
-                      >
-                        {item.text}
-                      </Text>
+                      {/* S167 — pointerEvents="none" é no-op em Text no Android (RN 0.81); por isso o wrapper View. */}
+                      <View style={styles.bubbleTextMirrorWrap} pointerEvents="none">
+                        <Text
+                          style={[
+                            styles.bubbleText,
+                            isMe && styles.bubbleTextMe,
+                            styles.bubbleTextMirror,
+                          ]}
+                          onTextLayout={(e) => {
+                            if (!isTextTruncated && e.nativeEvent.lines.length > 6) {
+                              setIsTextTruncated(true);
+                            }
+                          }}
+                        >
+                          {item.text}
+                        </Text>
+                      </View>
                     </View>
                     {isTextTruncated && !textExpanded && (
                       <Pressable onPress={() => setTextExpanded(true)}>
@@ -2291,7 +2293,8 @@ const styles = StyleSheet.create({
   // garante que o espelho (position absolute) se posicione relativo a este
   // wrapper, e não à bolha inteira (que pode ter citação/momentoRef acima).
   bubbleTextWrap: { position: 'relative' },
-  bubbleTextMirror: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
+  bubbleTextMirrorWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
+  bubbleTextMirror: { opacity: 0 },
   // S130 — "ler mais" da bolha colapsada.
   bubbleReadMore: {
     fontSize: theme.fontSize.sm,
