@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PRESENCE_ONLINE_MS } from '@/hooks/usePresenceHeartbeat';
 import { listenPresence } from '@/services/firestoreService';
+import { chatDebug } from '@/utils/chatDebug';
 
 // Intervalo do ticker que recalcula o rótulo sem depender de um novo
 // snapshot — a escada muda com o tempo (ex.: "Online" -> "visto há pouco")
@@ -35,7 +36,7 @@ export function buildPresenceLabel(lastSeenAt: Date | null, now: Date): string |
   return 'visto há alguns dias';
 }
 
-export function useOtherPresence(otherUid: string): UseOtherPresenceReturn {
+export function useOtherPresence(otherUid: string, debugEnabled?: boolean): UseOtherPresenceReturn {
   const [presenceLabel, setPresenceLabel] = useState<string | null>(null);
   const lastSeenAtRef = useRef<Date | null>(null);
   const labelRef = useRef<string | null>(null);
@@ -55,12 +56,13 @@ export function useOtherPresence(otherUid: string): UseOtherPresenceReturn {
     if (!otherUid) return;
 
     const unsub = listenPresence(otherUid, (lastSeenAt) => {
+      if (debugEnabled) chatDebug.bump('listenPresence');
       lastSeenAtRef.current = lastSeenAt;
       applyLabel(buildPresenceLabel(lastSeenAt, new Date()));
     });
 
     return unsub;
-  }, [otherUid]);
+  }, [otherUid, debugEnabled]);
 
   useEffect(() => {
     if (!otherUid) return;

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { listenTypingStatus, setTypingStatus } from '@/services/firestoreService';
+import { chatDebug } from '@/utils/chatDebug';
 
 // S89 — este debounce é QUEM de fato faz o "digitando..." sumir no caminho
 // normal: ele grava isTyping:false 1200ms depois da última tecla. O
@@ -25,7 +26,11 @@ interface UseTypingIndicatorReturn {
   handleTyping: () => void;
 }
 
-export function useTypingIndicator(matchId: string, currentUid: string): UseTypingIndicatorReturn {
+export function useTypingIndicator(
+  matchId: string,
+  currentUid: string,
+  debugEnabled?: boolean,
+): UseTypingIndicatorReturn {
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const isTypingRef = useRef(false);
   const lastSentAtRef = useRef(0);
@@ -34,8 +39,9 @@ export function useTypingIndicator(matchId: string, currentUid: string): UseTypi
   const sendStop = useCallback(() => {
     if (!currentUid || !isTypingRef.current) return;
     isTypingRef.current = false;
+    if (debugEnabled) chatDebug.bump('setTypingStatus');
     setTypingStatus(matchId, currentUid, false).catch(() => {});
-  }, [matchId, currentUid]);
+  }, [matchId, currentUid, debugEnabled]);
 
   const handleTyping = useCallback(() => {
     if (!currentUid) return;
@@ -44,17 +50,21 @@ export function useTypingIndicator(matchId: string, currentUid: string): UseTypi
     if (!isTypingRef.current || now - lastSentAtRef.current >= TYPING_REFRESH_THROTTLE_MS) {
       isTypingRef.current = true;
       lastSentAtRef.current = now;
+      if (debugEnabled) chatDebug.bump('setTypingStatus');
       setTypingStatus(matchId, currentUid, true).catch(() => {});
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(sendStop, TYPING_STOP_DEBOUNCE_MS);
-  }, [matchId, currentUid, sendStop]);
+  }, [matchId, currentUid, sendStop, debugEnabled]);
 
   useEffect(() => {
-    const unsub = listenTypingStatus(matchId, currentUid, setIsOtherTyping);
+    const unsub = listenTypingStatus(matchId, currentUid, (typing) => {
+      if (debugEnabled) chatDebug.bump('listenTypingStatus');
+      setIsOtherTyping(typing);
+    });
     return unsub;
-  }, [matchId, currentUid]);
+  }, [matchId, currentUid, debugEnabled]);
 
   useEffect(() => {
     return () => {

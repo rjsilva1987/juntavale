@@ -37,9 +37,12 @@ import Animated, {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { ChatDebugOverlay } from '@/components/ChatDebugOverlay';
 import { EmptyState } from '@/components/EmptyState';
 import { ReportModal } from '@/components/ReportModal';
 import { SkeletonPlaceholder } from '@/components/SkeletonPlaceholder';
+import { isAdminUid } from '@/config/admin';
+import { CHAT_DEBUG_OVERLAY } from '@/config/flags';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,6 +72,7 @@ import {
   REACTION_EMOJIS,
   ReactionEmoji,
 } from '@/services/firestoreService';
+import { chatDebug } from '@/utils/chatDebug';
 import { countCodePoints } from '@/utils/text';
 
 const SKELETON_PATTERN = [false, true, false, false, true];
@@ -161,6 +165,10 @@ interface MessageBubbleProps {
   onDragReply: (message: Message) => void;
   // S129-A — reversão do S79: tocar na citação leva até a mensagem original.
   onJumpToReply: (messageId: string) => void;
+  // S166-0 — habilita o bump de instrumentação no render desta bolha
+  // (ChatDebugOverlay). Default off, 100% compatível com quem já usa esta
+  // prop sem passar debugEnabled.
+  debugEnabled?: boolean;
 }
 
 // S157 — React.memo pra FlatList não re-renderizar todas as bolhas visíveis
@@ -179,7 +187,9 @@ const MessageBubble = React.memo(function MessageBubble({
   onLongPressReply,
   onDragReply,
   onJumpToReply,
+  debugEnabled,
 }: MessageBubbleProps) {
+  if (debugEnabled) chatDebug.bump('render:MessageBubble');
   const isMe = item.senderId === currentUid;
   const imageUrl = item.imageUrl;
   const location = item.location;
@@ -573,6 +583,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { matchId, otherUid, otherName, otherPhoto, draftMessage } = route.params;
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
+  // S166-0 — instrumentação de diagnóstico (ChatDebugOverlay), só client,
+  // só sob flag + admin. Sem custo (comparação booleana) quando
+  // CHAT_DEBUG_OVERLAY é false, valor de build hoje.
+  const debugEnabled = CHAT_DEBUG_OVERLAY && isAdminUid(user?.uid);
+  if (debugEnabled) chatDebug.bump('render:ChatScreen');
   // S101 — messages é só a JANELA em tempo real (onSnapshot com
   // createdAt >= corte). O histórico anterior vive em olderMessages, buscado
   // página a página sob toque e SEM listener; os dois são concatenados em
@@ -650,8 +665,12 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   // histórico é lido normalmente, só o envio fica bloqueado.
   const isUnverified = !profile?.verified;
   const flatListRef = React.useRef<FlatList>(null);
-  const { isOtherTyping, handleTyping } = useTypingIndicator(matchId, user?.uid ?? '');
-  const { presenceLabel } = useOtherPresence(otherUid);
+  const { isOtherTyping, handleTyping } = useTypingIndicator(
+    matchId,
+    user?.uid ?? '',
+    debugEnabled,
+  );
+  const { presenceLabel } = useOtherPresence(otherUid, debugEnabled);
 
   // Fundação do badge de não lidas (S27, ver useUnreadCount): marca
   // lastReadAt.{meuUid} ao focar a tela e de novo sempre que uma mensagem
@@ -824,6 +843,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       unsub = listenMessages(
         matchId,
         (msgs) => {
+          if (debugEnabled) chatDebug.bump('listenMessages');
           // S101 (correção) — garantia de "ao enviar mensagem própria, sempre
           // rola pro fim" aferida AQUI, na chegada da mensagem, e não por um
           // flag ligado antes do envio: upload de foto/permissão de localização
@@ -843,6 +863,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
           // cursor), a janela só cresce e nunca derruba nada, então
           // stillMissing é sempre vazio ali — o comportamento de hoje não
           // muda nesse caminho.
+          if (debugEnabled) chatDebug.bump('setMessages');
           setMessages((prev) => {
             const nextIds = new Set(msgs.map((m) => m.id));
             const stillMissing = prev.filter((m) => !nextIds.has(m.id));
@@ -870,6 +891,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             hasNewMessageBelowRef.current = true;
           }
           if (isViewingBottom && isFocusedRef.current && uid) {
+            if (debugEnabled) chatDebug.bump('markMatchRead');
             markMatchRead(matchId, uid).catch(() => {});
           }
         },
@@ -893,7 +915,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       cancelled = true;
       unsub?.();
     };
-  }, [matchId, uid, retryTick]);
+  }, [matchId, uid, retryTick, debugEnabled]);
 
   useFocusEffect(
     useCallback(() => {
@@ -923,14 +945,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (anchor && anchor.generation === generation && !hasNewMessageBelowRef.current) {
         anchor.promise
           .then(() => {
-            if (uid) markMatchRead(matchId, uid).catch(() => {});
+            if (uid) {
+              if (debugEnabled) chatDebug.bump('markMatchRead');
+              markMatchRead(matchId, uid).catch(() => {});
+            }
           })
           .catch(() => {});
       }
       return () => {
         isFocusedRef.current = false;
       };
-    }, [matchId, uid]),
+    }, [matchId, uid, debugEnabled]),
   );
 
   // S101 — "carregar mais": página anterior por getDocs + startAfter, sem
@@ -977,10 +1002,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (!wasNearBottom && isNearBottom && hasNewMessageBelow) {
         setHasNewMessageBelow(false);
         hasNewMessageBelowRef.current = false;
-        if (uid) markMatchRead(matchId, uid).catch(() => {});
+        if (uid) {
+          if (debugEnabled) chatDebug.bump('markMatchRead');
+          markMatchRead(matchId, uid).catch(() => {});
+        }
       }
     },
-    [hasNewMessageBelow, matchId, uid],
+    [hasNewMessageBelow, matchId, uid, debugEnabled],
   );
 
   // S142 — toque no indicador flutuante "nova mensagem": desce até o fim,
@@ -990,8 +1018,11 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
     flatListRef.current?.scrollToEnd({ animated: true });
     setHasNewMessageBelow(false);
     hasNewMessageBelowRef.current = false;
-    if (uid) markMatchRead(matchId, uid).catch(() => {});
-  }, [matchId, uid]);
+    if (uid) {
+      if (debugEnabled) chatDebug.bump('markMatchRead');
+      markMatchRead(matchId, uid).catch(() => {});
+    }
+  }, [matchId, uid, debugEnabled]);
 
   // S163 — retry manual do listener de mensagens: incrementa retryTick, que
   // está nas dependências do useEffect de listenMessages e reexecuta a
@@ -1039,9 +1070,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   }, [orderedMessages]);
 
   useEffect(() => {
-    const unsub = listenReactions(matchId, lastMessageIds, setReactions);
+    if (debugEnabled) chatDebug.bump('listenReactions:resubscribe');
+    const unsub = listenReactions(matchId, lastMessageIds, (nextReactions) => {
+      if (debugEnabled) chatDebug.bump('listenReactions');
+      setReactions(nextReactions);
+    });
     return unsub;
-  }, [matchId, lastMessageIds]);
+  }, [matchId, lastMessageIds, debugEnabled]);
 
   // S85-A — ponto único do filtro: a FlatList consome visibleMessages, não
   // messages direto (ver data={visibleMessages} abaixo). hiddenIds é só do
@@ -1167,12 +1202,13 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
 
   useEffect(() => {
     const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt, deliveredAt) => {
+      if (debugEnabled) chatDebug.bump('listenMatchBlockStatus');
       setBlockedBy(blocked);
       setOtherLastReadAt(lastReadAt);
       setOtherDeliveredAt(deliveredAt);
     });
     return unsub;
-  }, [matchId]);
+  }, [matchId, debugEnabled]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -1468,9 +1504,18 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
         onLongPressReply={setReplyOptionsTarget}
         onDragReply={setReplyTarget}
         onJumpToReply={handleJumpToReply}
+        debugEnabled={debugEnabled}
       />
     ),
-    [user?.uid, otherName, otherPhoto, otherUid, handleOpenLocation, handleJumpToReply],
+    [
+      user?.uid,
+      otherName,
+      otherPhoto,
+      otherUid,
+      handleOpenLocation,
+      handleJumpToReply,
+      debugEnabled,
+    ],
   );
 
   // S85-B — guarda de UX obrigatória junto da rule (mesmo bug do S49: sem
@@ -1521,6 +1566,7 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
+        {debugEnabled && <ChatDebugOverlay />}
         {/* Header */}
         <View style={styles.header}>
           <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
