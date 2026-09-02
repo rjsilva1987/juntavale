@@ -3,7 +3,7 @@
     "name": "JuntaVale",
     "slug": "juntavale",
     "scheme": "juntavale",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,7 +31,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.juntavale.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 21,
+      "versionCode": 22,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
