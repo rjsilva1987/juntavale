@@ -64,9 +64,10 @@ export function ChatDebugOverlay() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 8,
+    top: 64,
     right: 8,
     zIndex: 999,
+    elevation: 999,
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: theme.borderRadius.sm,
     paddingHorizontal: theme.spacing.xs,

@@ -2,9 +2,11 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
+import { CHAT_DEBUG_OVERLAY } from '@/config/flags';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/services/firebase';
 import { Match, markMatchDelivered } from '@/services/firestoreService';
+import { chatDebug } from '@/utils/chatDebug';
 import { isMatchUnread, shouldMarkDelivered } from '@/utils/matches';
 
 // Listener PRÓPRIO em vez de derivar de useActiveMatches: aquele hook
@@ -44,12 +46,18 @@ export function useUnreadCount(): number {
       // bloquear o cálculo de count acima. Mesmo padrão de tratamento de
       // erro de markMatchRead em ChatScreen.tsx (.catch(() => {})).
       snap.docs.forEach((d) => {
+        // S166-B — escrita local pendente devolve deliveredAt.{uid} como
+        // null (serverTimestamps:'none' default), o que faria
+        // shouldMarkDelivered voltar true e re-disparar a própria escrita em
+        // loop até o ack. O snapshot do ack (hasPendingWrites false) reavalia.
+        if (d.metadata.hasPendingWrites) return;
         const m = d.data() as Match;
         if (m.blockedBy && m.blockedBy.length > 0) return;
         const otherId = m.users.find((u) => u !== uid);
         if (otherId && blockedUsers.includes(otherId)) return;
 
         if (shouldMarkDelivered(m, uid)) {
+          if (CHAT_DEBUG_OVERLAY) chatDebug.bump('markMatchDelivered');
           markMatchDelivered(d.id, uid).catch(() => {});
         }
       });

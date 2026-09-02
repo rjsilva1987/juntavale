@@ -1201,13 +1201,17 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   }, [pendingScrollTarget, visibleMessages]);
 
   useEffect(() => {
+    if (debugEnabled) chatDebug.bump('block:sub');
     const unsub = listenMatchBlockStatus(matchId, (blocked, lastReadAt, deliveredAt) => {
       if (debugEnabled) chatDebug.bump('listenMatchBlockStatus');
       setBlockedBy(blocked);
       setOtherLastReadAt(lastReadAt);
       setOtherDeliveredAt(deliveredAt);
     });
-    return unsub;
+    return () => {
+      if (debugEnabled) chatDebug.bump('block:unsub');
+      unsub();
+    };
   }, [matchId, debugEnabled]);
 
   const handleSend = async () => {
@@ -1566,7 +1570,6 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
-        {debugEnabled && <ChatDebugOverlay />}
         {/* Header */}
         <View style={styles.header}>
           <AnimatedPressable onPress={() => navigation.canGoBack() && navigation.goBack()} style={styles.backBtn}>
@@ -1861,6 +1864,8 @@ export default function ChatScreen({ route, navigation }: ChatScreenProps) {
             </>
           )}
         </KeyboardAvoidingView>
+        {/* último filho de propósito — no Android o irmão posterior pinta por cima */}
+        {debugEnabled && <ChatDebugOverlay />}
       </SafeAreaView>
 
       {/* Attachment action sheet */}

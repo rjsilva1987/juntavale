@@ -3,37 +3,34 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 01/09/2026
-**Commit atual:** 290e0be — chore: allowlist de leitura nas permissoes do
-Claude Code. S162 (diagnóstico do chat 1:1 quebrado no build 18)
-encerrada sem tocar código. S163 (correção: callback de erro em
-`listenMessages`/`listenTypingStatus`/`listenMatchBlockStatus` + banner
-de retry no `ChatScreen`), S164 (causa raiz do build 18: banner passa a
-mostrar o `.code` do Firestore, `listenReactions` limitado às últimas 30
-mensagens, rules revisadas sem edição) e S165 (travamento do chat 1:1
-quando o outro participante está online e ativo: referências novas em
-lastReadAt/deliveredAt/blockedBy a cada snapshot de `matches/{matchId}`
-— inclusive por escrita de typing — e resubscribe desnecessário de
-`listenReactions`) já commitadas e empurradas, todas SEM teste em
-aparelho — build 20 (S164+S165) segue sem validação real, chat ainda
-trava com o outro lado online. S166-0 (instrumentação de diagnóstico do
-chat, sem correção — overlay gateado por `CHAT_DEBUG_OVERLAY`+admin,
-contadores por listener/render/stall) fechada em código e auditada
-nesta sessão (aprovada sem bloqueios), pendente de commit/push — GIT
-MANUAL, comandos impressos no fim da sprint pro Raphael rodar.
+**Atualizado:** 02/09/2026
+**Commit atual:** b4e9fc0 — fix(chat): overlay de debug gateado so pela
+flag (S166-0). S163/S164/S165 (chat 1:1) e S166-0 (instrumentação de
+diagnóstico do chat: overlay gateado por `CHAT_DEBUG_OVERLAY`+admin,
+contadores por listener/render/stall) já commitadas e empurradas, todas
+SEM teste em aparelho. A medição da S166-0 em device (Expo Go,
+--no-dev --minify) achou a tempestade: ~1640 snapshots por listener do
+doc do match pra ~30 escritas contadas numa troca de 5 mensagens. S166-B
+(causa provada: loop de escrita `useUnreadCount` → `markMatchDelivered`
+— `serverTimestamp()` pendente resolve `null` no snapshot local e
+redispara a própria escrita até o ack; corrigido com gate por
+`d.metadata.hasPendingWrites`, + contadores sub/unsub e bump de
+`markMatchDelivered` no chatDebug) fechada em código e auditada nesta
+sessão (APROVADA, ressalva não bloqueante sobre ack metadata-only de
+`deleteField()` do typing), pendente de commit/push — GIT MANUAL,
+comandos impressos no fim da sprint pro Raphael rodar.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
-seguem só com teste em aparelho pendente — a S160 em especial precisa
-reproduzir os 3 sintomas de novo e, se o sumiço de mensagem persistir,
-rodar o triage do Firestore (ver ROADMAP.md § S160). S163/S164/S165
-(chat 1:1) seguem SEM teste em aparelho — validação real depende do
-build 20 (S164+S165 juntas, já gerado): banner de erro mostrando o
-`.code`, reações atualizando nas últimas 30 mensagens, e o travamento
-com o outro lado online deixando de acontecer. Build 20 testado e o
-travamento PERSISTE — S166-0 instrumenta o chat pra medir a causa (ver
-ROADMAP.md § S166-0); próximo passo é ligar `CHAT_DEBUG_OVERLAY` num
-build de admin e ler o overlay em tela durante o travamento.
+Nenhuma sprint em código pendente de fechamento — S166-B só aguarda o
+commit/push manual do Raphael. S158, S159 e S160 seguem só com teste em
+aparelho pendente — a S160 em especial precisa reproduzir os 3 sintomas
+de novo e, se o sumiço de mensagem persistir, rodar o triage do
+Firestore (ver ROADMAP.md § S160). Chat 1:1 (S163/S164/S165/S166-B):
+próximo passo é repetir a medição da S166-0 com a correção da S166-B —
+ligar `CHAT_DEBUG_OVERLAY` localmente, mesma troca de 5 mensagens,
+esperado snapshots ≈ escritas (~2 por escrita), `sub − unsub = 1` por
+listener, stalls de volta ao chão, e conferir se `deliveredAt` continua
+marcando (ressalva do ack metadata-only, ver ROADMAP.md § S166-B).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

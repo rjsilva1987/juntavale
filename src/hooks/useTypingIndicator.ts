@@ -59,11 +59,15 @@ export function useTypingIndicator(
   }, [matchId, currentUid, sendStop, debugEnabled]);
 
   useEffect(() => {
+    if (debugEnabled) chatDebug.bump('typing:sub');
     const unsub = listenTypingStatus(matchId, currentUid, (typing) => {
       if (debugEnabled) chatDebug.bump('listenTypingStatus');
       setIsOtherTyping(typing);
     });
-    return unsub;
+    return () => {
+      if (debugEnabled) chatDebug.bump('typing:unsub');
+      unsub();
+    };
   }, [matchId, currentUid, debugEnabled]);
 
   useEffect(() => {
