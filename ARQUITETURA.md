@@ -65,6 +65,23 @@ reinstancia esses singletons.
 - `events/{eventId}` — evento presencial (S125). `title`, `creatorId`,
   `purgeAt`. Subcoleções: `participants/{uid}`, `joinRequests/{uid}`,
   `private/location`.
+- `listings/{listingId}` — anúncio de classificados (S168-A). `ownerId`,
+  `ownerNickname` (nickname, S135), `title`, `description`, `priceType`
+  (fixed/negotiable/donation), `price?` (só quando fixed), `category`
+  (catálogo fixo de 7 chaves), `uf` (sem cidade, imutável após create),
+  `photos[]` (0-3), `status` (pending/approved/rejected/sold/removed),
+  `rejectionReason?`/`reviewedAt?`/`reviewedBy?` (só admin, mesmo molde de
+  verifications), `createdAt`, `expiresAt` (+30 dias, computado no client).
+  Moderação por APROVAÇÃO PRÉVIA: nasce sempre `pending`; editar conteúdo
+  (dono) sempre volta pra `pending`; só `approved`/`rejected` são setados
+  pelo admin (`AdminListingsScreen`/`AdminListingDetailScreen`, mirror da
+  fila de verificações). Expiração é filtro 100% CLIENT
+  (`listApprovedListings`, `listingService.ts`) — sem Cloud Function de
+  expiração nesta sprint (decisão fechada), sem `where('expiresAt', ...)`
+  nas rules (armadilha S139/S125-A do ROADMAP). Sem subcoleção de
+  contato/chat nesta sprint (fica pra S168-B). Lê: dono, admin, e qualquer
+  verificado (só docs `approved`/`sold`). Escreve: dono cria/edita conteúdo
+  (sempre verificado), admin revisa.
 - `presence/{uid}` — `lastSeenAt` (S82).
 - `testerSignups/{signupId}` — só escrita pela landing (`site/`), fora do
   app RN.

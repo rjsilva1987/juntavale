@@ -47,6 +47,28 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S168 — Classificados no Explorar (sub-sprints A a C)
+**Status:** S168-A IMPLEMENTADA em 03/09/2026, auditoria APROVADA (2ª
+rodada — 1ª bloqueou por guarda de `rejectionReason` nas rules e
+header/FAB fora do gate de verificado, corrigidos). EXIGE deploy de
+`firestore.rules` + `storage.rules` (rules-stamp S168-A) +
+`firestore.indexes.json` (2 índices compostos novos de `listings`); sem
+Cloud Function nova (expiração = filtro client + rules). SEM teste em
+aparelho. Localização do anúncio: só UF (perfil não tem cidade — decisão
+do Raphael em 03/09). S168-B/S168-C sem decisão/sem recon.
+
+Ideia "Classificados / OLX de funcionários" (ver "Ideias sem número",
+levantada em 17/08) virou sprint numerada. A = anúncio básico (modelo
+`listings/{listingId}`, feed/detalhe/criação/edição/"meus anúncios",
+moderação por aprovação prévia mirror da fila de verificações, card
+"Classificados" na aba Explorar — exclusivo pra membro verificado). B =
+contato/chat entre interessado e anunciante (sem decisão de desenho ainda —
+via match existente? via subcoleção nova tipo `momentoRequests`? PARAR e
+perguntar ao Raphael antes de implementar). C = a definir (sem escopo
+levantado ainda).
+
+---
+
 ### S149 — Grupo: paridade do chat (sub-sprints A a F)
 **Status:** FECHADA · S149-A a S149-F todas FECHADAS (ver "Fechadas
 recentemente") · paridade do chat de grupo com o 1:1 completa.
@@ -527,5 +549,7 @@ push no SDK 54):
 
 ## Ideias sem número (não são sprint ainda)
 
-Classificados / "OLX de funcionários" · feed "rádio corredor" · joguinho de
-moedas · modelo de negócio. Todas levantadas em 17/08, nenhuma com decisão.
+Feed "rádio corredor" · joguinho de moedas · modelo de negócio. Todas
+levantadas em 17/08, nenhuma com decisão. ("Classificados / OLX de
+funcionários", também levantada em 17/08, virou sprint numerada — ver
+"Fila aberta" § S168.)

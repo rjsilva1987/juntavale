@@ -1,0 +1,272 @@
+// src/services/listingService.ts
+//
+// S168-A — camada única de acesso a Firestore/Storage pra "classificados"
+// (anúncios de itens/serviços entre a base, moderados por aprovação prévia,
+// exclusivos pra membro verificado). Nenhuma tela importa firebase/firestore
+// diretamente (convenção do projeto, ARQUITETURA.md) — ListingsScreen/
+// ListingDetailScreen/CreateListingScreen/MyListingsScreen/AdminListingsScreen/
+// AdminListingDetailScreen só chamam as funções abaixo. Mesmo molde de
+// groupService.ts/verificationService.ts.
+import {
+  addDoc,
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+import { ListingRejectionReason } from '@/constants/listingRejectionReasons';
+import { db, storage } from '@/services/firebase';
+
+export type ListingStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'removed';
+export type ListingPriceType = 'fixed' | 'negotiable' | 'donation';
+
+export interface Listing {
+  id: string;
+  ownerId: string;
+  // S135 — nome público é sempre o nickname (nunca o nome legal), copiado de
+  // users/{uid}.nickname no create — ver createListing abaixo.
+  ownerNickname: string;
+  title: string;
+  description: string;
+  priceType: ListingPriceType;
+  // Presente SÓ quando priceType === 'fixed' — ver createListing/
+  // updateListingContent (spread condicional / deleteField()).
+  price?: number;
+  category: string;
+  // Copiada de users/{uid}.uf no create; imutável depois (decisão fechada —
+  // sem cidade nesta sprint). Nunca reescrita por updateListingContent.
+  uf: string;
+  photos: string[];
+  status: ListingStatus;
+  // Só existe quando status é 'rejected' — mesmo padrão de rejectionReason em
+  // verifications (verificationService.ts).
+  rejectionReason?: ListingRejectionReason;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  createdAt: Timestamp;
+  // +30 dias a partir da criação, computado no client (Timestamp.fromMillis)
+  // — expiração é filtro CLIENT, nunca condição de rules (armadilha S139/
+  // S125-A do ROADMAP: `request.time` numa regra de list derruba o list
+  // inteiro, não filtra doc a doc).
+  expiresAt: Timestamp;
+}
+
+// Catálogo fixo de categoria — chaves também literais em firestore.rules
+// (bloco listings), mudar aqui exige atualizar as rules manualmente, mesmo
+// padrão de lookingFor.ts/supportCategories.ts.
+export const LISTING_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'eletronicos', label: 'Eletrônicos' },
+  { key: 'moveis', label: 'Móveis' },
+  { key: 'veiculos', label: 'Veículos' },
+  { key: 'roupas', label: 'Roupas' },
+  { key: 'imoveis', label: 'Imóveis/aluguel' },
+  { key: 'servicos', label: 'Serviços' },
+  { key: 'outros', label: 'Outros' },
+];
+
+// Mostrado no formulário de criação/edição (CreateListingScreen), acima do
+// botão de enviar — moderação humana continua sendo a barreira real (fila de
+// aprovação, AdminListingsScreen), isto é só o aviso pro anunciante.
+export const PROHIBITED_ITEMS: string[] = [
+  'Armas de qualquer tipo',
+  'Remédios e produtos de saúde',
+  'Bebidas alcoólicas e tabaco',
+  'Animais',
+  'Produtos financeiros, empréstimos e consórcios',
+];
+
+// Molde exato de normalize() em src/components/UfPicker.tsx:34-36 — lowercase
+// + remoção de acentos, pra busca por texto (ListingsScreen) tolerante a
+// acentuação/caixa. NÃO alterar UfPicker.tsx.
+export function normalizeText(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Molde exato de uploadProfilePhoto (firestoreService.ts:423-429):
+// fetch→blob→uploadBytes→getDownloadURL. Path images/listings/{uid}/{ts}.jpg,
+// mesma convenção de images/momentos/{uid} (storage.rules).
+export const uploadListingPhoto = async (uid: string, localUri: string): Promise<string> => {
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, `images/listings/${uid}/${Date.now()}.jpg`);
+  await uploadBytes(storageRef, blob);
+  return getDownloadURL(storageRef);
+};
+
+export interface CreateListingInput {
+  ownerId: string;
+  ownerNickname: string;
+  uf: string;
+  title: string;
+  description: string;
+  priceType: ListingPriceType;
+  price?: number;
+  category: string;
+  photos: string[];
+}
+
+// status nasce sempre 'pending' (moderação prévia) — o client nunca cria um
+// anúncio já aprovado. expiresAt = createdAt (aproximado, calculado no
+// momento do write) + 30 dias, computado no client (mesmo raciocínio de
+// expiresAt opcional em groups — aqui é sempre presente, sem opção "sem
+// prazo"). Spread condicional pro campo `price`: molde createGroup
+// (groupService.ts:192-215) — quando priceType !== 'fixed', a CHAVE não vai
+// no doc (nunca `price: undefined`, que o Firestore rejeitaria de qualquer
+// forma).
+export const createListing = async (input: CreateListingInput): Promise<string> => {
+  const ref = await addDoc(collection(db, 'listings'), {
+    ownerId: input.ownerId,
+    ownerNickname: input.ownerNickname,
+    title: input.title,
+    description: input.description,
+    priceType: input.priceType,
+    ...(input.priceType === 'fixed' ? { price: input.price } : {}),
+    category: input.category,
+    uf: input.uf,
+    photos: input.photos,
+    status: 'pending' as const,
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+  return ref.id;
+};
+
+export interface UpdateListingContentInput {
+  title: string;
+  description: string;
+  priceType: ListingPriceType;
+  price?: number;
+  category: string;
+  photos: string[];
+}
+
+// Edição do dono: SEMPRE volta pra 'pending' (fila de moderação de novo) —
+// nunca preserva 'approved'/'rejected'. Só os campos de conteúdo listados
+// abaixo — ownerId/ownerNickname/uf/createdAt/expiresAt são imutáveis por
+// aqui (reforçado nas rules, allow update do dono). deleteField() quando
+// priceType deixa de ser 'fixed', pro caso de editar um anúncio que já tinha
+// price gravado de uma versão anterior (mesmo raciocínio de aprovar depois
+// de rejeitar em reviewVerification, verificationService.ts).
+export const updateListingContent = async (
+  id: string,
+  input: UpdateListingContentInput,
+): Promise<void> => {
+  await updateDoc(doc(db, 'listings', id), {
+    title: input.title,
+    description: input.description,
+    priceType: input.priceType,
+    price: input.priceType === 'fixed' ? input.price : deleteField(),
+    category: input.category,
+    photos: input.photos,
+    status: 'pending' as const,
+  });
+};
+
+export const markListingSold = async (id: string): Promise<void> => {
+  await updateDoc(doc(db, 'listings', id), { status: 'sold' as const });
+};
+
+// Soft delete — nunca deleteDoc (mesmo padrão de moderação/histórico já
+// usado no projeto, ex.: blocks/verifications nunca são apagados).
+export const removeListing = async (id: string): Promise<void> => {
+  await updateDoc(doc(db, 'listings', id), { status: 'removed' as const });
+};
+
+// permission-denied aqui significa "anúncio removido/inacessível pro uid
+// atual" (mesmo princípio de getGroup, groupService.ts) — nunca erro
+// genérico; ListingDetailScreen trata como "anúncio indisponível".
+export const getListing = async (id: string): Promise<Listing | null> => {
+  try {
+    const snap = await getDoc(doc(db, 'listings', id));
+    return snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Listing, 'id'>) } : null;
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'permission-denied') return null;
+    throw error;
+  }
+};
+
+// Feed público (ListingsScreen, gate de verificado): só aprovados, mais
+// recentes primeiro, teto de 100. Filtro de expiração é CLIENT
+// (expiresAt.toMillis() > Date.now()) — a query não usa where('expiresAt',
+// '>', ...) de propósito (armadilha S139/S125-A: condição de request.time
+// dentro da regra de list derruba o list inteiro).
+export const listApprovedListings = async (): Promise<Listing[]> => {
+  const q = query(
+    collection(db, 'listings'),
+    where('status', '==', 'approved'),
+    orderBy('createdAt', 'desc'),
+    limit(100),
+  );
+  const snap = await getDocs(q);
+  const now = Date.now();
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Listing, 'id'>) }))
+    .filter((listing) => listing.expiresAt.toMillis() > now);
+};
+
+// "Meus anúncios" (MyListingsScreen) — todos os status do dono, mais
+// recentes primeiro, exceto 'removed' (soft delete, filtrado no client).
+export const listMyListings = async (uid: string): Promise<Listing[]> => {
+  const q = query(
+    collection(db, 'listings'),
+    where('ownerId', '==', uid),
+    orderBy('createdAt', 'desc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<Listing, 'id'>) }))
+    .filter((listing) => listing.status !== 'removed');
+};
+
+// Fila de moderação (AdminListingsScreen) — mais antigo primeiro, mesmo
+// critério de getPendingVerifications (verificationService.ts).
+export const listPendingListings = async (): Promise<Listing[]> => {
+  const q = query(
+    collection(db, 'listings'),
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'asc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Listing, 'id'>) }));
+};
+
+// Molde de reviewVerification (verificationService.ts:104-115) — union
+// discriminada por status: TypeScript já obriga rejectionReason a existir
+// quando status é 'rejected' e proíbe passá-lo quando é 'approved'.
+// deleteField() em vez de omitir a chave: cobre o caso de reprovar/aprovar em
+// sequência sobre o mesmo doc, quando ele já tem rejectionReason de uma
+// revisão anterior.
+export const reviewListing = async (
+  id: string,
+  decision:
+    { status: 'approved' } | { status: 'rejected'; rejectionReason: ListingRejectionReason },
+  adminUid: string,
+): Promise<void> => {
+  await updateDoc(doc(db, 'listings', id), {
+    status: decision.status,
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminUid,
+    rejectionReason: decision.status === 'rejected' ? decision.rejectionReason : deleteField(),
+  });
+};
+
+const listingPriceFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
+export function formatListingPrice(listing: Pick<Listing, 'priceType' | 'price'>): string {
+  if (listing.priceType === 'fixed') return listingPriceFormatter.format(listing.price ?? 0);
+  if (listing.priceType === 'donation') return 'Doação';
+  return 'A combinar';
+}

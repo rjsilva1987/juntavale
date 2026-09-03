@@ -1,3 +1,6 @@
+// rules-stamp: S168-A 2026-09-03 — classificados: novo bloco
+// images/listings/{uid}/{fileName}, molde exato de images/momentos/{uid}
+// (linha ~52).
 // storage.rules
 // Regras de PRODUÇÃO — deny by default: todo caminho sem regra explícita é
 // bloqueado (ver o catch-all no final do arquivo).
@@ -56,6 +59,21 @@ service firebase.storage {
     // amplo de propósito: audiência é a base inteira (decisão de produto do
     // S121), não só matches — mesmo raciocínio de avatars/{uid} logo acima.
     match /images/momentos/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isValidImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ───────────────────────── listing photos (S168-A) ─────────────────────────
+    //
+    // Foto de anúncio de classificados. Path images/listings/{uid}/{ts}.jpg,
+    // molde EXATO de images/momentos/{uid} acima (mesmo padrão de path,
+    // mesma regra) — read amplo pra qualquer autenticado (o gate real de
+    // "só verificado vê" é o firestore.rules de listings/{listingId}, não
+    // este arquivo).
+    match /images/listings/{uid}/{fileName} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn()
         && request.auth.uid == uid

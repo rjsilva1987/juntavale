@@ -1366,6 +1366,21 @@ export default function ProfileScreen() {
           </AnimatedPressable>
         )}
 
+        {/* S168-A — "Classificados pendentes" (fila de moderação de
+            anúncios), mesmo padrão de "Pedidos de conversa" acima: sem aba
+            própria (Stack puro), entrada só pro admin por aqui. Sem ponto de
+            badge — nenhum hook de contagem foi criado nesta sprint (fora de
+            escopo). */}
+        {isAdmin && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => navigation.navigate('AdminListings')}
+          >
+            <Ionicons name="pricetags-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Classificados pendentes</Text>
+          </AnimatedPressable>
+        )}
+
         {/* S95 — Painel Admin removido: Verificações/Suporte viraram abas
             próprias do admin (ver navigation/index.tsx MainTabs), os botões
             apontariam pra rotas que não existem mais no Stack. */}

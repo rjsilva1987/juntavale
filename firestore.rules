@@ -1,4 +1,15 @@
-// rules-stamp: S156 (27/08/2026 — teto de editar mensagem sobe de 500
+// rules-stamp: S168-A (03/09/2026 — classificados: novo bloco top-level
+// listings/{listingId} (moderação por aprovação prévia — status pending/
+// approved/rejected/sold/removed; sem cidade, só UF; allow get/list
+// separados como get/list de events/momentos [armadilha S139/S125-A do
+// ROADMAP] — list SEM condição de request.time/expiresAt, expiração é
+// filtro client; create exige verified()==true e keys().hasOnly fechado;
+// update do dono restrito a título/descrição/preço/categoria/fotos/status,
+// sempre volta pra 'pending' salvo os ramos sold/removed [affectedKeys
+// só ('status')]; update do admin restrito a status/reviewedAt/reviewedBy/
+// rejectionReason, mesmo molde do bloco verifications abaixo; delete
+// sempre false). Nenhum índice novo em members/joinRequests/participants —
+// listings não tem subcoleção nesta sprint (contato/chat é S168-B).) + S156 (27/08/2026 — teto de editar mensagem sobe de 500
 // para 2000: matches/{matchId}/messages [S92] e groups/{groupId}/messages
 // [S149-D] allow update, igualando ao allow create do mesmo bloco (2000,
 // valendo desde S77); tetos do client (MAX_MESSAGE_LENGTH/maxLength em
@@ -2081,6 +2092,132 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if false;
       }
+    }
+
+    // ───────────────────────── listings (S168-A — classificados) ─────────────────────────
+    //
+    // Anúncio moderado por aprovação prévia (status pending/approved/
+    // rejected/sold/removed). Sem subcoleção nesta sprint (contato/chat é
+    // S168-B, fora de escopo). Sem cidade — só UF (decisão fechada da spec).
+    // allow get/list SEPARADOS de propósito: mesma lição da S139/S125-A
+    // (momentos/{uid}, events/{eventId}) registrada no ROADMAP — uma
+    // condição dependente de request.time/expiresAt dentro da regra de
+    // list derruba o list INTEIRO, não filtra doc a doc; aqui nem chega a
+    // ser necessário porque a expiração é filtro 100% client
+    // (listApprovedListings, listingService.ts). `verified()` inline, mesmo
+    // padrão já usado em events/{eventId} allow create (linha ~1965).
+    match /listings/{listingId} {
+      allow get: if isSignedIn()
+        && (isAdmin()
+            || resource.data.ownerId == request.auth.uid
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                && resource.data.status in ['approved', 'sold']));
+
+      allow list: if isSignedIn()
+        && (isAdmin()
+            || resource.data.ownerId == request.auth.uid
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                && resource.data.status == 'approved'));
+
+      // Dono cria: só quem já é verificado (verified()==true), status nasce
+      // sempre 'pending'. `price` é a ÚNICA chave opcional do hasOnly — fora
+      // dela, hasAll fecha todo o resto como obrigatório. expiresAt: janela
+      // de +30 dias calculada no client (createListing, listingService.ts),
+      // rules só conferem que cai no futuro e não passa de +31 dias (folga
+      // de 1 dia pro relógio do client, mesmo raciocínio do teto de
+      // duration.value(30,'d') de groups/{groupId}).
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && request.resource.data.keys().hasOnly(
+             ['ownerId', 'ownerNickname', 'title', 'description', 'priceType', 'price',
+              'category', 'uf', 'photos', 'status', 'createdAt', 'expiresAt'])
+        && request.resource.data.keys().hasAll(
+             ['ownerId', 'ownerNickname', 'title', 'description', 'priceType',
+              'category', 'uf', 'photos', 'status', 'createdAt', 'expiresAt'])
+        && request.resource.data.ownerNickname is string
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 1000
+        && request.resource.data.priceType in ['fixed', 'negotiable', 'donation']
+        && (request.resource.data.priceType == 'fixed'
+              ? (request.resource.data.price is number
+                  && request.resource.data.price > 0 && request.resource.data.price <= 10000000)
+              : !('price' in request.resource.data))
+        && request.resource.data.category in
+             ['eletronicos', 'moveis', 'veiculos', 'roupas', 'imoveis', 'servicos', 'outros']
+        && request.resource.data.uf is string && request.resource.data.uf.size() == 2
+        && request.resource.data.photos is list && request.resource.data.photos.size() <= 3
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(31, 'd');
+
+      // Dono edita conteúdo: SEMPRE volta pra 'pending' (fila de novo) —
+      // exceto os dois ramos de status "terminal" (marcar vendido, excluir
+      // soft), que só tocam o campo `status` isolado. ownerId/ownerNickname/
+      // uf/createdAt/expiresAt IMUTÁVEIS pelo dono — garantido pelo
+      // affectedKeys().hasOnly nunca incluir esses campos; dono nunca seta
+      // 'approved'/'rejected' (fora da lista de status finais aceitos).
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'description', 'priceType', 'price', 'category', 'photos', 'status'])
+        && request.resource.data.status in ['pending', 'sold', 'removed']
+        && (
+          (request.resource.data.status == 'sold'
+            && resource.data.status == 'approved'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+          ||
+          (request.resource.data.status == 'removed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+          ||
+          (request.resource.data.status == 'pending'
+            && resource.data.status in ['pending', 'approved', 'rejected']
+            && request.resource.data.title is string
+            && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
+            && request.resource.data.description is string
+            && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 1000
+            && request.resource.data.priceType in ['fixed', 'negotiable', 'donation']
+            && (request.resource.data.priceType == 'fixed'
+                  ? (request.resource.data.price is number
+                      && request.resource.data.price > 0 && request.resource.data.price <= 10000000)
+                  : !('price' in request.resource.data))
+            && request.resource.data.category in
+                 ['eletronicos', 'moveis', 'veiculos', 'roupas', 'imoveis', 'servicos', 'outros']
+            && request.resource.data.photos is list && request.resource.data.photos.size() <= 3)
+        );
+
+      // Admin revisa: só mexe em status/reviewedAt/reviewedBy/
+      // rejectionReason, nunca reescreve conteúdo do dono — molde EXATO do
+      // bloco verifications/{uid} (linha ~2489). `resource.data.ownerId !=
+      // request.auth.uid` bloqueia o caso degenerado de um admin revisar o
+      // PRÓPRIO anúncio por esta via (ele já tem a via de dono acima).
+      // Auditoria S168-A (correção pós-bloqueio) — o ramo não-'rejected'
+      // checa PRESENÇA de `rejectionReason` no ESTADO FINAL
+      // (`!('rejectionReason' in request.resource.data)`), nunca
+      // `affectedKeys().hasAny(...)`: reviewListing sempre manda
+      // `rejectionReason: deleteField()` ao aprovar, então no fluxo
+      // rejeitado → dono reenvia (volta pra pending, doc ainda tem o
+      // rejectionReason antigo) → admin aprova, a REMOÇÃO do campo entra em
+      // affectedKeys() e a versão anterior (baseada em diff) negava a
+      // aprovação. Mesmo raciocínio já resolvido no bloco verifications.
+      allow update: if isAdmin()
+        && resource.data.ownerId != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason'])
+        && request.resource.data.status in ['approved', 'rejected', 'removed']
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.reviewedBy == request.auth.uid
+        && (request.resource.data.status == 'rejected'
+              ? request.resource.data.rejectionReason is string
+                  && request.resource.data.rejectionReason.size() > 0
+                  && request.resource.data.rejectionReason.size() <= 500
+              : !('rejectionReason' in request.resource.data));
+
+      allow delete: if false;
     }
 
     // ───────────────────────── collection group reads (S124-A) ─────────────────────────

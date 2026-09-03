@@ -3,32 +3,33 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 02/09/2026
-**Commit atual:** ff958ac — docs: descarta S166-A e S166-C, registra
-teste da S166-B e alinha ESTADO.md. Build 21 (1.0.11, e88927b) leva
-S166-0 + S166-B; a S166-B (corte do loop de escrita `useUnreadCount` →
-`markMatchDelivered`) foi CONFIRMADA em aparelho em 02/09 (~1,5
-snapshot por escrita, 1 assinatura ativa por listener, stalls ≤315 ms —
-ver ROADMAP § S166-B). S167 (toque longo do chat 1:1 morto desde a
-S158: `pointerEvents="none"` é no-op em `Text` no Android, o espelho do
-"ler mais" capturava o toque; corrigido com wrapper `View
-pointerEvents="none"` no espelho, `ChatScreen.tsx` +
-`GroupChatScreen.tsx`) fechada em código e auditada nesta sessão
-(APROVADA), pendente de commit/push — GIT MANUAL, comandos impressos no
-fim da sprint pro Raphael rodar.
+**Atualizado:** 03/09/2026
+**Commit atual:** o commit da S168-A (feat(listings), sucede f2ea074 —
+build 22 / 1.0.12, que leva a S167). S168-A (classificados no Explorar,
+parte A: modelo `listings`, feed/detalhe/criar/editar/"meus anúncios",
+fila de aprovação do admin, gate de verificado) IMPLEMENTADA e auditada
+(APROVADA na 2ª rodada) em 03/09 — ver ROADMAP § S168. EXIGE deploy
+pendente: `firestore.rules` + `storage.rules` (rules-stamp S168-A) +
+`firestore.indexes.json` (2 índices de `listings`); sem function nova.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento — S167 só aguarda o
-commit/push manual do Raphael. S158, S159 e S160 seguem só com teste em
-aparelho pendente — a S160 em especial precisa reproduzir os 3 sintomas
-de novo e, se o sumiço de mensagem persistir, rodar o triage do
-Firestore (ver ROADMAP.md § S160). S167: testar em aparelho que o toque
-longo volta a abrir o sheet (texto/imagem/localização) e que reagir/
-responder/copiar/editar/apagar/denunciar, "ler mais" e
-arrastar-pra-responder seguem funcionando, no 1:1 e no grupo.
+Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
+seguem só com teste em aparelho pendente — a S160 em especial precisa
+reproduzir os 3 sintomas de novo e, se o sumiço de mensagem persistir,
+rodar o triage do Firestore (ver ROADMAP.md § S160). S167: testar em
+aparelho que o toque longo volta a abrir o sheet (texto/imagem/
+localização) e que reagir/responder/copiar/editar/apagar/denunciar,
+"ler mais" e arrastar-pra-responder seguem funcionando, no 1:1 e no
+grupo. S168-A: depois do deploy (rules + storage + indexes), testar em
+aparelho o fluxo inteiro — criar anúncio (pending), aprovar/recusar como
+admin, edição volta pra pending, marcar vendido/excluir, gate de não
+verificado (nenhum dado real, CTA de verificação).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
+- S168-B — contato interessado↔anunciante nos classificados — sem
+  decisão de desenho (match existente? subcoleção nova?); S168-C sem
+  escopo. Ver ROADMAP.md § S168.
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.

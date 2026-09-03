@@ -32,6 +32,8 @@ import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomen
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
+import AdminListingDetailScreen from '@/screens/AdminListingDetailScreen';
+import AdminListingsScreen from '@/screens/AdminListingsScreen';
 import AdminReportDetailScreen from '@/screens/AdminReportDetailScreen';
 import AdminReportsScreen from '@/screens/AdminReportsScreen';
 import AdminSupportDetailScreen from '@/screens/AdminSupportDetailScreen';
@@ -42,12 +44,15 @@ import BlockedUsersScreen from '@/screens/BlockedUsersScreen';
 import ChatScreen from '@/screens/ChatScreen';
 import CreateEventScreen from '@/screens/CreateEventScreen';
 import CreateGroupScreen from '@/screens/CreateGroupScreen';
+import CreateListingScreen from '@/screens/CreateListingScreen';
 import EventDetailScreen from '@/screens/EventDetailScreen';
 import EventsScreen from '@/screens/EventsScreen';
 import GroupChatScreen from '@/screens/GroupChatScreen';
 import GroupDetailScreen from '@/screens/GroupDetailScreen';
 import GroupsScreen from '@/screens/GroupsScreen';
 import LikesScreen from '@/screens/LikesScreen';
+import ListingDetailScreen from '@/screens/ListingDetailScreen';
+import ListingsScreen from '@/screens/ListingsScreen';
 import LoginScreen from '@/screens/LoginScreen';
 import MatchesGridScreen from '@/screens/MatchesGridScreen';
 import MatchesScreen from '@/screens/MatchesScreen';
@@ -55,6 +60,7 @@ import MatchProfileScreen from '@/screens/MatchProfileScreen';
 import MomentoRequestChatScreen from '@/screens/MomentoRequestChatScreen';
 import MomentoRequestsScreen from '@/screens/MomentoRequestsScreen';
 import MomentosScreen from '@/screens/MomentosScreen';
+import MyListingsScreen from '@/screens/MyListingsScreen';
 import MyReportsScreen from '@/screens/MyReportsScreen';
 import MyTicketsScreen from '@/screens/MyTicketsScreen';
 import OnboardingScreen from '@/screens/OnboardingScreen';
@@ -122,6 +128,18 @@ export type RootStackParamList = {
   Events: undefined;
   CreateEvent: undefined;
   EventDetail: { eventId: string };
+  // S168-A — classificados: mesmo padrão de grupos/eventos acima, sem aba
+  // própria. Entrada pelo card "Classificados" na fileira do topo da aba
+  // Explorar (MomentosScreen). Admin: entrada por "Classificados pendentes"
+  // na ProfileScreen (mesmo padrão de "Pedidos de conversa"), telas de
+  // detalhe gated por isAdmin como AdminVerificationDetail/AdminSupportDetail
+  // /AdminReportDetail abaixo.
+  Listings: undefined;
+  ListingDetail: { listingId: string };
+  CreateListing: { listingId?: string } | undefined;
+  MyListings: undefined;
+  AdminListings: undefined;
+  AdminListingDetail: { listingId: string };
   Support: undefined;
   MyTickets: undefined;
   SupportThread: { ticketId: string };
@@ -445,6 +463,12 @@ export default function Navigation() {
             <Stack.Screen name="Events" component={EventsScreen} />
             <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
             <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+            {/* S168-A — classificados: mesmo bloco de grupos/eventos acima,
+                sem Tab.Screen. */}
+            <Stack.Screen name="Listings" component={ListingsScreen} />
+            <Stack.Screen name="ListingDetail" component={ListingDetailScreen} />
+            <Stack.Screen name="CreateListing" component={CreateListingScreen} />
+            <Stack.Screen name="MyListings" component={MyListingsScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />
@@ -466,6 +490,10 @@ export default function Navigation() {
                 />
                 <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
                 <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
+                {/* S168-A — fila de moderação de classificados, mesmo padrão
+                    das 3 telas de detalhe admin acima. */}
+                <Stack.Screen name="AdminListings" component={AdminListingsScreen} />
+                <Stack.Screen name="AdminListingDetail" component={AdminListingDetailScreen} />
               </>
             )}
           </Stack.Group>

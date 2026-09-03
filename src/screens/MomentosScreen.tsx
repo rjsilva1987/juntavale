@@ -328,6 +328,16 @@ export default function MomentosScreen() {
                     unseenAnsweredMomentoRequests > 0 ||
                     unreadMomentoAuthorMessages > 0) && <View style={styles.pendingDot} />}
                 </AnimatedPressable>
+                {/* S168-A — 4º card, classificados: mesmo vocabulário visual
+                    dos 3 acima, sem badge (fila de moderação é só admin,
+                    ver ProfileScreen). */}
+                <AnimatedPressable
+                  style={styles.exploreCard}
+                  onPress={() => navigation.navigate('Listings')}
+                >
+                  <Ionicons name="pricetags-outline" size={20} color={theme.colors.textSecondary} />
+                  <Text style={styles.exploreCardText}>Classificados</Text>
+                </AnimatedPressable>
               </View>
 
               <View style={styles.mySection}>
@@ -417,19 +427,22 @@ const styles = StyleSheet.create({
   // S145 — fileira Grupos/Eventos/Pedidos de conversa, mesmos tokens já
   // usados no resto do arquivo (surface/border/lg em feedCard acima) — sem
   // amarelo (secondary) de fundo, regra de ouro do tema.
-  exploreRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  // S168-A — 4º card (Classificados) apertou a fileira: gap/paddingVertical/
+  // fontSize reduzidos levemente SÓ nesta fileira (nada além, mesmos
+  // tokens de cor).
+  exploreRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   exploreCard: {
     flex: 1,
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.borderRadius.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: 6,
   },
   exploreCardText: {
-    fontSize: theme.fontSize.xs,
+    fontSize: 11,
     fontWeight: '600',
     color: theme.colors.textSecondary,
   },
