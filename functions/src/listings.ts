@@ -1,8 +1,8 @@
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 
 import {
-  ADMIN_UID,
   db,
+  getAdminPushTokens,
   getPushToken,
   getUserBasicInfo,
   isAdminUid,
@@ -23,7 +23,8 @@ import {
 // Texto sem o título do anúncio (privacidade na tela de bloqueio, mesma
 // regra do push de resultado de verificação — ver comentário S58 em
 // admin.ts): só o nickname do anunciante, como em `verification_new`.
-// Destinatário: só ADMIN_UID, igual a todas as functions de admin hoje.
+// Destinatário: TODOS os admins (getAdminPushTokens, S168-B2) — antes só
+// ADMIN_UID, igual a todas as functions de admin da época.
 export const onListingSubmitted = onDocumentWritten(
   { document: 'listings/{listingId}', region: REGION },
   async (event) => {
@@ -36,8 +37,8 @@ export const onListingSubmitted = onDocumentWritten(
     if (before?.status === 'pending') return; // já estava na fila: edição sem mudança de estado
     if (isAdminUid(after.ownerId as string | undefined)) return; // admin anunciando: modera o próprio
 
-    const token = await getPushToken(ADMIN_UID);
-    if (!token) return;
+    const tokens = await getAdminPushTokens();
+    if (tokens.length === 0) return;
 
     const name = (after.ownerNickname as string | undefined) || 'Alguém';
     // before === null → anúncio novo; before existente (approved/rejected) →
@@ -46,15 +47,15 @@ export const onListingSubmitted = onDocumentWritten(
       ? `${name} editou um anúncio, que voltou para a fila`
       : `${name} enviou um anúncio para revisão`;
 
-    await sendExpoNotifications([
-      {
-        to: token,
+    await sendExpoNotifications(
+      tokens.map((to) => ({
+        to,
         sound: 'default',
         title: 'Novo anúncio para aprovar',
         body,
         data: { type: 'listing_new', listingId },
-      },
-    ]);
+      })),
+    );
   },
 );
 

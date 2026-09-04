@@ -1,4 +1,7 @@
-// rules-stamp: S168-B 2026-09-03 — contato interessado↔anunciante: novo
+// rules-stamp: S168-B2 2026-09-04 — denúncia: admin passa a ler foto do chat
+// de classificado denunciado (images/listingChats/{chatId}, 4º literal de
+// admin no arquivo, mesmos dois uids de sempre) pra apurar a denúncia; write
+// continua só participante. + S168-B 2026-09-03 — contato interessado↔anunciante: novo
 // bloco images/listingChats/{chatId}/{fileName}, mirror exato de
 // images/chats/{matchId} (linha ~98), trocando firestore.get(matches/
 // $(matchId)).data.users por firestore.get(listingChats/$(chatId))
@@ -151,7 +154,13 @@ service firebase.storage {
              firestore.get(/databases/(default)/documents/listingChats/$(chatId)).data.participants;
       }
 
-      allow read: if isParticipant();
+      // S168-B2 — admin também lê, pra apurar denúncia de listingChat
+      // (AdminReportsScreen/AdminReportDetailScreen, "Abrir conversa") — 4º
+      // literal de admin no arquivo, mesmos dois uids dos outros 3. write
+      // continua só participante, sem isAdmin().
+      allow read: if isParticipant()
+        || (isSignedIn()
+            && request.auth.uid in ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3']);
       allow create, update: if isParticipant() && isValidImage();
       allow delete: if isParticipant();
     }

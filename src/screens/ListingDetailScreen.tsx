@@ -9,16 +9,31 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Dimensions,
+  Alert,
+} from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { ReportModal } from '@/components/ReportModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import {
+  isDuplicateReportError,
+  ListingReportReason,
+  LISTING_REPORT_REASON_LABELS,
+  reportUser,
+} from '@/services/blockService';
 import {
   formatListingPrice,
   getListing,
@@ -34,6 +49,7 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
   const { listingId } = route.params;
   const { user, profile } = useAuth();
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
+  const [reportVisible, setReportVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +65,37 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
     ? (LISTING_CATEGORIES.find((c) => c.key === listing.category)?.label ?? listing.category)
     : '';
 
+  // S168-B2 — denúncia do ANÚNCIO (não altera o anúncio em si), mesmo molde
+  // de handleReport em GroupDetailScreen.tsx, trocando groupContext por
+  // listingContext (reportUser, blockService.ts) e a mensagem de duplicata.
+  const handleReport = async (reason: ListingReportReason, details: string) => {
+    if (!user || !listing) return;
+    try {
+      await reportUser(
+        user.uid,
+        listing.ownerId,
+        reason,
+        details,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { listingId, listingTitle: listing.title },
+      );
+      setReportVisible(false);
+      Alert.alert('Denúncia enviada', 'Nossa equipe vai analisar.');
+    } catch (err) {
+      if (isDuplicateReportError(err)) {
+        setReportVisible(false);
+        Alert.alert('Denúncia já enviada', 'Você já denunciou este anúncio.');
+        return;
+      }
+      console.error('[ListingDetailScreen] falha ao denunciar anúncio:', err);
+      Alert.alert('Erro', 'Não foi possível enviar a denúncia.');
+    }
+  };
+
   return (
     <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -62,7 +109,17 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
           <Text style={styles.headerTitle} numberOfLines={1}>
             Anúncio
           </Text>
-          <View style={styles.backBtn} />
+          {listing && listing.ownerId !== user?.uid ? (
+            <AnimatedPressable
+              onPress={() => setReportVisible(true)}
+              style={styles.backBtn}
+              accessibilityLabel="Denunciar anúncio"
+            >
+              <Ionicons name="flag-outline" size={22} color={theme.colors.textSecondary} />
+            </AnimatedPressable>
+          ) : (
+            <View style={styles.backBtn} />
+          )}
         </View>
 
         {listing === undefined ? (
@@ -148,6 +205,14 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
           </ScrollView>
         )}
       </SafeAreaView>
+
+      <ReportModal
+        visible={reportVisible}
+        onClose={() => setReportVisible(false)}
+        onSubmit={handleReport}
+        title="Denunciar anúncio"
+        reasonLabels={LISTING_REPORT_REASON_LABELS}
+      />
     </Animated.View>
   );
 }

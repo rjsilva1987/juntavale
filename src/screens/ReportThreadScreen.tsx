@@ -26,7 +26,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useReportAlert } from '@/contexts/ReportAlertContext';
 import { RootStackParamList } from '@/navigation';
-import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { ALL_REPORT_REASON_LABELS } from '@/services/blockService';
 import {
   listenMyReports,
   listenReportMessages,
@@ -219,7 +219,7 @@ export default function ReportThreadScreen({ route, navigation }: ReportThreadSc
           </AnimatedPressable>
           <View style={styles.headerInfo}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {report ? REPORT_REASON_LABELS[report.reason] : 'Denúncia'}
+              {report ? ALL_REPORT_REASON_LABELS[report.reason] : 'Denúncia'}
             </Text>
             {report && (
               <View style={[styles.badge, isResolved ? styles.badgeResolved : styles.badgeOpen]}>

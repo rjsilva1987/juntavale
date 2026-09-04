@@ -4,24 +4,34 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S171 (feat(listings), sucede 20cb741 —
-S168-B1, foto como 1ª mensagem do chat de classificados). S171
-(Classificados abrem em "Todos os estados": `ListingsScreen` nasce com
-`uf = 'all'` e o chip binário virou `UfPicker includeAll`, só em memória)
-IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em 04/09 — client puro,
-sem deploy; ver ROADMAP § S171. Lote em andamento nesta sessão: S168-B2 →
-S172 → S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados
-(inalterados pela S171):
-`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated`
-(rules-stamp S168-B engloba o S168-A ainda não confirmado; indexes ganha
-1 índice novo de `listingChats`; `onListingSubmitted` é da S170).
+**Commit atual:** o commit da S168-B2 (feat(listings), sucede 0184688 —
+S171, Classificados abrem em "Todos os estados"). S168-B2 (denúncia de
+anúncio e de pessoa no chat de classificados com dedup nas rules por id
+determinístico; admin lê `listingChats` pra apurar; push de admin pra os
+2 uids via `getAdminPushTokens`) IMPLEMENTADA e auditada (APROVADA na 2ª
+rodada) em 04/09 — ver ROADMAP § S168. Lote em andamento nesta sessão:
+S172 → S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated`
+(rules-stamp S168-B2 engloba S168-B e o S168-A ainda não confirmado;
+storage stamp S168-B2; indexes ganha 1 índice novo de `listingChats`;
+`onVerificationSubmitted`/`onSupportMessageCreated`/`onListingSubmitted`
+mudaram na S168-B2 — push pra todos os admins).
 
 ## Sprints em andamento
-Lote S171 → S168-B2 → S172 → S168-C rodando em 04/09/2026 (S171 já
-commitada; as três seguintes em sequência, cada uma com commit próprio
-após auditoria). S171: testar em aparelho que Classificados abre em
-"Todos os estados", que o campo abre o seletor de UF e o feed corta pela
-UF escolhida, e que ao sair e voltar o filtro reseta. S158, S159 e S160
+Lote S171 → S168-B2 → S172 → S168-C rodando em 04/09/2026 (S171 e
+S168-B2 já commitadas; as duas seguintes em sequência, cada uma com
+commit próprio após auditoria). S171: testar em aparelho que
+Classificados abre em "Todos os estados", que o campo abre o seletor de
+UF e o feed corta pela UF escolhida, e que ao sair e voltar o filtro
+reseta. S168-B2 (depois do deploy de rules + storage + functions; push
+só em build): denunciar um anúncio de outra pessoa (bandeira no header,
+5 motivos próprios) → "Denúncia enviada"; denunciar de novo → "Denúncia
+já enviada"; denunciar a pessoa dentro do chat de classificado (bandeira
+só com chat existente) → idem; como admin, a lista de Denúncias mostra
+o tipo ("Anúncio"/"Chat de classificado") e "Abrir anúncio ›"/"Abrir
+conversa ›" abrem o anúncio e o chat em modo leitura (sem composer, fotos
+carregam); toque no link NÃO deve abrir também o detalhe da denúncia;
+verificação/chamado/anúncio novo → push chega nos 2 admins. S158, S159 e S160
 seguem só com teste em aparelho pendente — a S160 em especial precisa
 reproduzir os 3 sintomas de novo e, se o sumiço de mensagem persistir,
 rodar o triage do Firestore (ver ROADMAP.md § S160). S167: testar em
@@ -59,8 +69,9 @@ primeiro plano não mostra banner (S122).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
-- S168-B2 (denúncia dentro do chat de classificados) e S168-C — sem
-  escopo, sem recon. Ver ROADMAP.md § S168.
+- Push pro admin quando uma DENÚNCIA nova entra (não existe function
+  pra isso — a S168-B2 só fez as existentes irem pros 2 admins); decidir
+  se vale criar `onReportCreated`. Ver ROADMAP.md § S168.
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.

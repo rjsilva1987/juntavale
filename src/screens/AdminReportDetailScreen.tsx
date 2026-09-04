@@ -25,7 +25,7 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
-import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { ALL_REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   getReport,
@@ -92,6 +92,15 @@ export default function AdminReportDetailScreen({
   }, [reportId]);
 
   const isPending = report ? report.status === undefined || report.status === 'open' : false;
+
+  // S168-B2 — copiados pra const local: dentro dos onPress dos botões
+  // "Abrir anúncio"/"Abrir conversa" abaixo (closures), o TS só preserva o
+  // narrowing de `report.listingId != null` etc se a checagem for numa
+  // const, não numa property access repetida.
+  const listingId = report?.listingId;
+  const listingOwnerId = report?.listingOwnerId;
+  const listingInterestedId = report?.listingInterestedId;
+  const listingTitle = report?.listingTitle;
 
   const handleToggleStatus = () => {
     if (!report) return;
@@ -259,7 +268,9 @@ export default function AdminReportDetailScreen({
               ListHeaderComponent={
                 <View style={styles.detailCard}>
                   <View style={styles.detailTopRow}>
-                    <Text style={styles.reason}>{REPORT_REASON_LABELS[report.reason]}</Text>
+                    <Text style={styles.reason}>
+                      {ALL_REPORT_REASON_LABELS[report.reason] ?? report.reason}
+                    </Text>
                     <View
                       style={[styles.badge, isPending ? styles.badgeOpen : styles.badgeResolved]}
                     >
@@ -371,6 +382,60 @@ export default function AdminReportDetailScreen({
                         <Text style={styles.fieldValue} selectable>
                           {report.eventName}
                         </Text>
+                      )}
+                    </>
+                  )}
+
+                  {/* S168-B2 — presente só quando a denúncia partiu de um
+                      anúncio INTEIRO (ListingDetailScreen). listingChatId
+                      ausente distingue de "conversa denunciada" abaixo — uma
+                      denúncia de chat também carrega listingId, de contexto.
+                      listingTitle é cópia truncada, mesmo padrão de
+                      groupName/eventName acima. */}
+                  {!!listingId && !report.listingChatId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Anúncio denunciado</Text>
+                      {!!listingTitle && (
+                        <Text style={styles.fieldValue} selectable>
+                          {listingTitle}
+                        </Text>
+                      )}
+                      <AnimatedPressable
+                        style={styles.reopenBtn}
+                        onPress={() => navigation.navigate('ListingDetail', { listingId })}
+                      >
+                        <Text style={styles.reopenBtnText}>Abrir anúncio</Text>
+                      </AnimatedPressable>
+                    </>
+                  )}
+
+                  {/* S168-B2 — presente só quando a denúncia partiu da
+                      PESSOA dentro de um chat de classificado
+                      (ListingChatScreen) — os campos de listing sempre
+                      juntos (ver blockService.reportUser,
+                      listingChatContext). */}
+                  {!!report.listingChatId && (
+                    <>
+                      <Text style={styles.fieldLabel}>Conversa denunciada</Text>
+                      {!!listingTitle && (
+                        <Text style={styles.fieldValue} selectable>
+                          {listingTitle}
+                        </Text>
+                      )}
+                      {!!listingId && !!listingOwnerId && !!listingInterestedId && (
+                        <AnimatedPressable
+                          style={styles.reopenBtn}
+                          onPress={() =>
+                            navigation.navigate('ListingChat', {
+                              listingId,
+                              ownerId: listingOwnerId,
+                              interestedId: listingInterestedId,
+                              listingTitle: listingTitle ?? 'Anúncio',
+                            })
+                          }
+                        >
+                          <Text style={styles.reopenBtnText}>Abrir conversa</Text>
+                        </AnimatedPressable>
                       )}
                     </>
                   )}

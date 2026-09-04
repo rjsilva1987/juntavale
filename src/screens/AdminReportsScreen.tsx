@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,9 +12,15 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
 import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
-import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { ALL_REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
-import { listenReports, Report } from '@/services/reportService';
+import {
+  listenReports,
+  Report,
+  reportTargetType,
+  REPORT_TARGET_LABELS,
+} from '@/services/reportService';
+import { getFirestoreErrorCode } from '@/utils/firestoreError';
 import { getDisplayName } from '@/utils/profile';
 
 // Denúncia criada antes da S96-A não tem o campo `status` (client antigo do
@@ -39,16 +45,27 @@ export default function AdminReportsScreen() {
   const [reports, setReports] = useState<Report[]>([]);
   const [profiles, setProfiles] = useState<Record<string, UserProfile | null>>({});
   const [loading, setLoading] = useState(true);
+  // S168-B2 — bônus S169: sem isso, uma falha do listener (índice faltando,
+  // regra negando) deixava `loading` em true pra sempre, sem nenhum sinal
+  // (mesmo raciocínio do catch de listPendingListings, AdminListingsScreen).
+  const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
 
   // S96-B — listenReports em vez de getDocs+useFocusEffect (molde do
   // AdminSupportScreen): a tela vira Tab.Screen igual as outras 3 abas do
   // admin e listenReports já existe como listener real-time (S96-A), então
   // não há motivo pra recarregar manualmente a cada foco.
   useEffect(() => {
-    const unsub = listenReports((next) => {
-      setReports(next);
-      setLoading(false);
-    });
+    const unsub = listenReports(
+      (next) => {
+        setReports(next);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[AdminReportsScreen] listenReports:', err);
+        setLoadErrorCode(getFirestoreErrorCode(err));
+        setLoading(false);
+      },
+    );
     return unsub;
   }, []);
 
@@ -96,6 +113,14 @@ export default function AdminReportsScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
           </View>
+        ) : loadErrorCode ? (
+          // S168-B2 (bônus S169) — sem botão de retry: isto é um listener
+          // (onSnapshot), não um fetch único — ele já reconecta sozinho.
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Não foi possível carregar as denúncias."
+            subtitle={`erro: ${loadErrorCode}`}
+          />
         ) : sorted.length === 0 ? (
           <EmptyState icon="flag-outline" title="Nenhuma denúncia por aqui 🎉" />
         ) : (
@@ -105,6 +130,12 @@ export default function AdminReportsScreen() {
             contentContainerStyle={{ padding: theme.spacing.md, gap: 12 }}
             renderItem={({ item }) => {
               const pending = isPending(item);
+              const targetType = reportTargetType(item);
+              // S168-B2 — copiados pra const local: dentro dos onPress abaixo
+              // (closures), o TS só preserva o narrowing de `item.listingId
+              // != null` etc se a checagem for numa const, não numa
+              // property access repetida.
+              const { listingId, listingOwnerId, listingInterestedId, listingTitle } = item;
               return (
                 <AnimatedPressable
                   style={styles.card}
@@ -113,7 +144,7 @@ export default function AdminReportsScreen() {
                   <View style={styles.info}>
                     <View style={styles.cardTopRow}>
                       <Text style={styles.reason} numberOfLines={1}>
-                        {REPORT_REASON_LABELS[item.reason]}
+                        {ALL_REPORT_REASON_LABELS[item.reason] ?? item.reason}
                       </Text>
                       <View
                         style={[styles.badge, pending ? styles.badgeOpen : styles.badgeResolved]}
@@ -132,9 +163,40 @@ export default function AdminReportsScreen() {
                       {partyLabel(item.reporterId, profiles[item.reporterId])} denunciou{' '}
                       {partyLabel(item.reportedId, profiles[item.reportedId])}
                     </Text>
+                    <Text style={styles.targetType}>{REPORT_TARGET_LABELS[targetType]}</Text>
                     <Text style={styles.date}>
                       {item.createdAt ? dayjs(item.createdAt.toDate()).format('DD/MM HH:mm') : ''}
                     </Text>
+                    {/* S168-B2 — atalho direto pro anúncio/conversa denunciado,
+                        sem passar pelo AdminReportDetail. Só renderiza se os
+                        campos existirem (denúncia legada de listing sem esses
+                        campos não deveria existir, mas não custa a guarda). */}
+                    {targetType === 'listing' && listingId && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => navigation.navigate('ListingDetail', { listingId })}
+                      >
+                        <Text style={styles.openLink}>Abrir anúncio ›</Text>
+                      </Pressable>
+                    )}
+                    {targetType === 'listingChat' &&
+                      listingId &&
+                      listingOwnerId &&
+                      listingInterestedId && (
+                        <Pressable
+                          hitSlop={8}
+                          onPress={() =>
+                            navigation.navigate('ListingChat', {
+                              listingId,
+                              ownerId: listingOwnerId,
+                              interestedId: listingInterestedId,
+                              listingTitle: listingTitle ?? 'Anúncio',
+                            })
+                          }
+                        >
+                          <Text style={styles.openLink}>Abrir conversa ›</Text>
+                        </Pressable>
+                      )}
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
                 </AnimatedPressable>
@@ -190,6 +252,10 @@ const styles = StyleSheet.create({
   },
   parties: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
   date: { fontSize: theme.fontSize.xs, color: theme.colors.textLight },
+  // S168-B2 — rótulo do tipo de alvo (REPORT_TARGET_LABELS) e atalho pro
+  // anúncio/conversa denunciado.
+  targetType: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
+  openLink: { fontSize: theme.fontSize.sm, color: theme.colors.primary, marginTop: 2 },
 
   badge: {
     borderRadius: theme.borderRadius.full,

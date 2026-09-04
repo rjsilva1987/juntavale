@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-import { ReportReason } from '@/services/blockService';
+import { AnyReportReason } from '@/services/blockService';
 import { db, storage } from '@/services/firebase';
 import { countCodePoints } from '@/utils/text';
 
@@ -24,7 +24,7 @@ export interface Report {
   id: string;
   reporterId: string;
   reportedId: string;
-  reason: ReportReason;
+  reason: AnyReportReason;
   details: string;
   createdAt: Timestamp;
   // Ausente em denúncias criadas antes da S96-A (client rodando um build
@@ -64,6 +64,22 @@ export interface Report {
   // exibido no painel do admin, sem foto (evento não tem).
   eventId?: string;
   eventName?: string;
+  // S143-B — momentoRequestId/momentoRequestSenderId já eram gravados pelo
+  // client (blockService.reportUser, momentoRequestContext) e já eram
+  // aceitos por firestore.rules, mas nunca tinham entrado neste tipo —
+  // acrescentados agora (S168-B2) junto dos campos de listing abaixo.
+  momentoRequestId?: string;
+  momentoRequestSenderId?: string;
+  // S168-B2 — presentes só quando a denúncia partiu de um anúncio inteiro
+  // (ListingDetailScreen, listingId+listingTitle) ou da PESSOA dentro de um
+  // chat de classificado (ListingChatScreen, os cinco campos juntos) — ver
+  // blockService.reportUser. listingTitle é cópia truncada (<=80), mesmo
+  // padrão de groupName/eventName acima.
+  listingId?: string;
+  listingTitle?: string;
+  listingChatId?: string;
+  listingOwnerId?: string;
+  listingInterestedId?: string;
 }
 
 export interface ReportMessage {
@@ -82,22 +98,88 @@ export interface ReportMessage {
 // exigir índice composto) — por isso sem where de status aqui, mesmo
 // raciocínio de getSupportTickets em supportService.ts. Sem where também
 // cobre o dado legado: denúncia sem o campo status precisa aparecer igual.
-export const listenReports = (callback: (reports: Report[]) => void) => {
+// S168-B2 — onError opcional: sem ele, uma falha do listener (índice
+// faltando, regra negando) deixava a tela presa em loading pra sempre, sem
+// nenhum sinal (mesmo raciocínio do catch de listPendingListings,
+// AdminListingsScreen.tsx, S169).
+export const listenReports = (
+  callback: (reports: Report[]) => void,
+  onError?: (error: unknown) => void,
+) => {
   const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snap) => {
-    const reports = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Report, 'id'>) }));
-    callback(reports);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const reports = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Report, 'id'>) }));
+      callback(reports);
+    },
+    onError,
+  );
 };
 
 // Denúncias feitas pelo próprio usuário — where('reporterId', ...) sozinho
 // não exige índice composto, mesmo padrão de subscribeMyTickets.
-export const listenMyReports = (uid: string, callback: (reports: Report[]) => void) => {
+export const listenMyReports = (
+  uid: string,
+  callback: (reports: Report[]) => void,
+  onError?: (error: unknown) => void,
+) => {
   const q = query(collection(db, 'reports'), where('reporterId', '==', uid));
-  return onSnapshot(q, (snap) => {
-    const reports = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Report, 'id'>) }));
-    callback(reports);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const reports = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Report, 'id'>) }));
+      callback(reports);
+    },
+    onError,
+  );
+};
+
+// S168-B2 — rótulo do tipo de alvo, pro painel do admin. Ordem de checagem
+// importa: listingChatId antes de listingId porque uma denúncia de chat
+// também carrega listingId (contexto), então listingId sozinho não basta
+// pra distinguir os dois.
+export type ReportTargetType =
+  | 'listingChat'
+  | 'listing'
+  | 'message'
+  | 'momento'
+  | 'group'
+  | 'event'
+  | 'momentoRequest'
+  | 'profile';
+
+export const reportTargetType = (
+  r: Pick<
+    Report,
+    | 'listingChatId'
+    | 'listingId'
+    | 'messageId'
+    | 'momentoId'
+    | 'groupId'
+    | 'eventId'
+    | 'momentoRequestId'
+  >,
+): ReportTargetType => {
+  if (r.listingChatId) return 'listingChat';
+  if (r.listingId) return 'listing';
+  if (r.messageId) return 'message';
+  if (r.momentoId) return 'momento';
+  if (r.groupId) return 'group';
+  if (r.eventId) return 'event';
+  if (r.momentoRequestId) return 'momentoRequest';
+  return 'profile';
+};
+
+export const REPORT_TARGET_LABELS: Record<ReportTargetType, string> = {
+  listingChat: 'Chat de classificado',
+  listing: 'Anúncio',
+  message: 'Mensagem',
+  momento: 'Momento',
+  group: 'Grupo',
+  event: 'Evento',
+  momentoRequest: 'Pedido de conversa',
+  profile: 'Perfil',
 };
 
 // S96-B — fetch único da denúncia pra AdminReportDetailScreen, mesmo padrão

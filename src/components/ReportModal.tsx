@@ -1,6 +1,6 @@
 // src/components/ReportModal.tsx
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Text,
   StyleSheet,
@@ -17,24 +17,30 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { theme } from '@/constants/theme';
 import { ReportReason, REPORT_REASON_LABELS } from '@/services/blockService';
 
-const REASONS = Object.keys(REPORT_REASON_LABELS) as ReportReason[];
-
-interface ReportModalProps {
+interface ReportModalProps<R extends string = ReportReason> {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (reason: ReportReason, details: string) => Promise<void>;
+  onSubmit: (reason: R, details: string) => Promise<void>;
   // S102-C — título customizável: reusado também pra denúncia de uma
   // mensagem específica do chat (ChatScreen), não só de perfil.
   title?: string;
+  // S168-B2 — lista de motivos custom (ex.: LISTING_REPORT_REASON_LABELS,
+  // ListingDetailScreen); default = motivos de pessoa (REPORT_REASON_LABELS),
+  // mesmos de sempre. Nenhum caller existente passa isso, então nenhum muda
+  // de comportamento.
+  reasonLabels?: Record<R, string>;
 }
 
-export function ReportModal({
+export function ReportModal<R extends string = ReportReason>({
   visible,
   onClose,
   onSubmit,
   title = 'Denunciar usuário',
-}: ReportModalProps) {
-  const [reason, setReason] = useState<ReportReason | null>(null);
+  reasonLabels,
+}: ReportModalProps<R>) {
+  const labels = (reasonLabels ?? REPORT_REASON_LABELS) as Record<R, string>;
+  const reasons = useMemo(() => Object.keys(labels) as R[], [labels]);
+  const [reason, setReason] = useState<R | null>(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -72,7 +78,7 @@ export function ReportModal({
               <Text style={styles.title}>{title}</Text>
               <Text style={styles.subtitle}>Selecione o motivo da denúncia</Text>
 
-              {REASONS.map((r) => {
+              {reasons.map((r) => {
                 const active = reason === r;
                 return (
                   <AnimatedPressable
@@ -86,7 +92,7 @@ export function ReportModal({
                       size={20}
                       color={active ? theme.colors.primary : theme.colors.textLight}
                     />
-                    <Text style={styles.reasonText}>{REPORT_REASON_LABELS[r]}</Text>
+                    <Text style={styles.reasonText}>{labels[r]}</Text>
                   </AnimatedPressable>
                 );
               })}

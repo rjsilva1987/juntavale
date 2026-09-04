@@ -2,6 +2,7 @@
 import { collection, doc, deleteDoc, getDocs, setDoc, addDoc, query, where, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '@/services/firebase';
+import { countCodePoints } from '@/utils/text';
 
 export type ReportReason =
   | 'spam'
@@ -17,6 +18,44 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   inappropriate_behavior: 'Comportamento inadequado',
   other: 'Outro',
 };
+
+// S168-B2 — motivos de denúncia de ANÚNCIO (ListingDetailScreen). 'other' é
+// compartilhado com ReportReason de propósito (mesma chave, mesmo label).
+export type ListingReportReason =
+  | 'prohibited_item'
+  | 'scam_or_suspicious_price'
+  | 'duplicate_listing'
+  | 'inappropriate_content'
+  | 'other';
+
+export const LISTING_REPORT_REASON_LABELS: Record<ListingReportReason, string> = {
+  prohibited_item: 'Item proibido',
+  scam_or_suspicious_price: 'Golpe ou preço suspeito',
+  duplicate_listing: 'Anúncio duplicado',
+  inappropriate_content: 'Conteúdo impróprio',
+  other: 'Outro',
+};
+
+export type AnyReportReason = ReportReason | ListingReportReason;
+
+// Rótulo de qualquer denúncia (painel admin, MyReports, ReportThread).
+export const ALL_REPORT_REASON_LABELS: Record<AnyReportReason, string> = {
+  ...REPORT_REASON_LABELS,
+  ...LISTING_REPORT_REASON_LABELS,
+};
+
+// S168-B2 — trunca pro teto de 80 code points que firestore.rules exige em
+// listingTitle (reports/{reportId}) — mesmo mecanismo de truncateReplyQuote
+// (ListingChatScreen.tsx), sem util compartilhada pronta pra reusar aqui.
+const truncateListingTitle = (value: string): string =>
+  countCodePoints(value) > 80 ? Array.from(value).slice(0, 80).join('') : value;
+
+// S168-B2 — traduz o permission-denied provocado pelo id determinístico
+// (ver reportUser abaixo) em "você já denunciou isso", sem espalhar a
+// checagem de err.code pelos callers novos (ListingDetailScreen/
+// ListingChatScreen).
+export const isDuplicateReportError = (err: unknown): boolean =>
+  (err as { code?: string })?.code === 'permission-denied';
 
 export const blockUser = async (blockerUid: string, blockedUid: string) => {
   await setDoc(doc(db, 'blocks', `${blockerUid}_${blockedUid}`), {
@@ -56,10 +95,19 @@ export const unblockUser = async (blockerUid: string, blockedUid: string) => {
 // sprint). momentoRequestSenderId é o senderId ORIGINAL do pedido — dá
 // contexto de qual dos dois papéis (autor ou remetente) era o senderId,
 // já que reportedId sozinho não diz isso.
+// S168-B2 — listingContext: denúncia de um ANÚNCIO inteiro
+// (ListingDetailScreen), reportedId é o ownerId do anúncio. listingChatContext:
+// denúncia da PESSOA dentro de um chat de classificado (ListingChatScreen),
+// reportedId é o outro participante. Os dois usam id DETERMINÍSTICO em vez
+// de addDoc (ver dispatch no fim da função) — é a dedup: 2ª denúncia do
+// mesmo uid pro mesmo alvo vira UPDATE do doc já existente, que só o admin
+// pode (firestore.rules), e o setDoc falha com permission-denied
+// (isDuplicateReportError acima traduz isso pro client). Nunca os dois
+// contexts juntos na mesma chamada, mesma regra de mutex dos contexts acima.
 export const reportUser = async (
   reporterId: string,
   reportedId: string,
-  reason: ReportReason,
+  reason: AnyReportReason,
   details?: string,
   messageContext?: {
     matchId: string;
@@ -84,8 +132,16 @@ export const reportUser = async (
     momentoRequestId: string;
     momentoRequestSenderId: string;
   },
+  listingContext?: { listingId: string; listingTitle: string },
+  listingChatContext?: {
+    listingChatId: string;
+    listingId: string;
+    ownerId: string;
+    interestedId: string;
+    listingTitle: string;
+  },
 ) => {
-  await addDoc(collection(db, 'reports'), {
+  const data = {
     reporterId,
     reportedId,
     reason,
@@ -129,7 +185,40 @@ export const reportUser = async (
           momentoRequestSenderId: momentoRequestContext.momentoRequestSenderId,
         }
       : {}),
-  });
+    ...(listingContext
+      ? {
+          listingId: listingContext.listingId,
+          listingTitle: truncateListingTitle(listingContext.listingTitle),
+        }
+      : {}),
+    ...(listingChatContext
+      ? {
+          listingChatId: listingChatContext.listingChatId,
+          listingId: listingChatContext.listingId,
+          listingOwnerId: listingChatContext.ownerId,
+          listingInterestedId: listingChatContext.interestedId,
+          listingTitle: truncateListingTitle(listingChatContext.listingTitle),
+        }
+      : {}),
+  };
+
+  // Dedup por id determinístico: só entra aqui quando a denúncia carrega
+  // contexto de listing — doc já existente faz o setDoc virar UPDATE nas
+  // rules (só admin pode), então a 2ª denúncia do mesmo uid pro mesmo alvo
+  // falha com permission-denied em vez de criar um 2º doc. Sem contexto de
+  // listing, comportamento INTOCADO: addDoc com id aleatório, como sempre foi.
+  if (listingContext) {
+    await setDoc(doc(db, 'reports', `listing_${listingContext.listingId}_${reporterId}`), data);
+    return;
+  }
+  if (listingChatContext) {
+    await setDoc(
+      doc(db, 'reports', `listingChat_${listingChatContext.listingChatId}_${reporterId}`),
+      data,
+    );
+    return;
+  }
+  await addDoc(collection(db, 'reports'), data);
 };
 
 export const getBlockedUsers = async (uid: string): Promise<string[]> => {

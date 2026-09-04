@@ -89,14 +89,22 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // deixando denúncia legada de fora da contagem. Mesmo raciocínio de
     // listenReports (reportService.ts): sem where nenhum, filtra tudo
     // client-side. Volume baixo (painel admin), mesmo trade-off já aceito lá.
-    const unsub = onSnapshot(collection(db, 'reports'), (snap) => {
-      const pending = snap.docs.filter((d) => {
-        const { status, lastSenderId } = d.data() as Report;
-        const isPending = status === undefined || status === 'open';
-        return isPending && !isAdminUid(lastSenderId);
-      });
-      setPendingReports(pending.length);
-    });
+    const unsub = onSnapshot(
+      collection(db, 'reports'),
+      (snap) => {
+        const pending = snap.docs.filter((d) => {
+          const { status, lastSenderId } = d.data() as Report;
+          const isPending = status === undefined || status === 'open';
+          return isPending && !isAdminUid(lastSenderId);
+        });
+        setPendingReports(pending.length);
+      },
+      // S168-B2 — sem isso, uma falha do listener (índice faltando, regra
+      // negando) passava batido: o badge só congelava no último número
+      // visto, sem nenhum sinal em log — mesmo raciocínio do listener de
+      // listings logo abaixo.
+      (err) => console.error('[AdminAlertContext] reports listener:', err),
+    );
     return unsub;
   }, [isAdmin]);
 

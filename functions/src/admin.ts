@@ -7,10 +7,10 @@ import {
 import nodemailer from 'nodemailer';
 
 import {
-  ADMIN_UID,
   bucket,
   db,
   GMAIL_APP_PASSWORD,
+  getAdminPushTokens,
   getPushToken,
   isAdminUid,
   REGION,
@@ -127,18 +127,19 @@ export const onVerificationSubmitted = onDocumentWritten(
     const userData = userSnap.data();
     const name = ((userData?.nickname ?? userData?.name) as string | undefined) ?? 'Alguém';
 
-    const token = await getPushToken(ADMIN_UID);
-    if (!token) return;
+    // S168-B2 — um push por admin (getAdminPushTokens), não só ADMIN_UID.
+    const tokens = await getAdminPushTokens();
+    if (tokens.length === 0) return;
 
-    await sendExpoNotifications([
-      {
-        to: token,
+    await sendExpoNotifications(
+      tokens.map((to) => ({
+        to,
         sound: 'default',
         title: 'Novo pedido de verificação',
         body: `${name} enviou uma selfie para revisão`,
         data: { type: 'verification_new' },
-      },
-    ]);
+      })),
+    );
   },
 );
 
@@ -189,36 +190,39 @@ export const onSupportMessageCreated = onDocumentCreated(
     // "é a 1ª mensagem de um chamado novo" sem precisar de um campo à parte.
     const isNewTicket = !!ticket.createdAt && ticket.createdAt.isEqual(messageCreatedAt);
 
-    let recipientUid: string;
+    // S168-B2 — `tokens` no lugar de um `token` só: ramo admin continua um
+    // destinatário único (o dono do ticket); ramo usuário agora manda pra
+    // TODOS os admins (getAdminPushTokens), não só ADMIN_UID.
+    let tokens: string[];
     let title: string;
     let body: string;
     if (isAdminUid(message.senderId)) {
-      recipientUid = ticket.uid;
+      const recipientUid = ticket.uid;
+      // Admin abrindo/respondendo chamado na própria conta: não notifica a si
+      // mesmo, mas o update do lastMessageAt acima já aconteceu de qualquer forma.
+      if (recipientUid === message.senderId) return;
       title = 'Equipe JuntaVale';
       body = 'Sua solicitação foi respondida';
+      const t = await getPushToken(recipientUid);
+      tokens = t ? [t] : [];
     } else {
-      recipientUid = ADMIN_UID;
+      tokens = await getAdminPushTokens();
       const categoryLabel = SUPPORT_CATEGORY_LABELS[ticket.category] ?? ticket.category;
       title = isNewTicket ? 'Novo chamado de suporte' : 'Nova resposta em chamado';
       body = categoryLabel;
     }
 
-    // Admin abrindo/respondendo chamado na própria conta: não notifica a si
-    // mesmo, mas o update do lastMessageAt acima já aconteceu de qualquer forma.
-    if (recipientUid === message.senderId) return;
+    if (tokens.length === 0) return;
 
-    const token = await getPushToken(recipientUid);
-    if (!token) return;
-
-    await sendExpoNotifications([
-      {
-        to: token,
+    await sendExpoNotifications(
+      tokens.map((to) => ({
+        to,
         sound: 'default',
         title,
         body,
         data: { type: 'support', ticketId },
-      },
-    ]);
+      })),
+    );
   },
 );
 

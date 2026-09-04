@@ -1,4 +1,10 @@
-// rules-stamp: S168-B (03/09/2026 — classificados: contato
+// rules-stamp: S168-B2 (04/09/2026 — denúncia de anúncio/chat de
+// classificado com dedup por id determinístico [reason condicional por
+// listingId/listingChatId, campos listingId/listingTitle/listingChatId/
+// listingOwnerId/listingInterestedId em reports/{reportId}] + admin passa a
+// ler listingChats/{chatId} [get/list/messages.read] pra apurar denúncia;
+// ramo de chat ancorado em listingChats/{chatId} (correção pós-auditoria)) +
+// S168-B (03/09/2026 — classificados: contato
 // interessado↔anunciante via chat 1:1 SEM match — novo bloco top-level
 // listingChats/{chatId} [+ subcoleção messages], inserido logo ANTES de
 // momentoRequests/{requestId}; allow get permite doc inexistente [mesmo
@@ -460,7 +466,8 @@ service cloud.firestore {
     // S115 — dois uids admin, hardcoded de propósito: Rules não importa
     // src/config/admin.ts, então esta lista precisa ser mantida em sincronia
     // manual com ADMIN_UIDS no app (e com os literais iguais já usados na
-    // regra de create de matches/{matchId} e nos 3 literais de storage.rules).
+    // regra de create de matches/{matchId} e nos 4 literais de storage.rules,
+    // S168-B2).
     function isAdmin() {
       return isSignedIn()
         && request.auth.uid in ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3'];
@@ -2322,8 +2329,19 @@ service cloud.firestore {
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reportedId is string
         && request.resource.data.reportedId != request.auth.uid
-        && request.resource.data.reason in
-             ['spam', 'offensive_content', 'fake_profile', 'inappropriate_behavior', 'other']
+        // S168-B2 — motivo válido depende do TIPO de denúncia: anúncio
+        // inteiro (listingId presente, SEM listingChatId — ver bloco
+        // S168-B2 abaixo) usa os 5 motivos de ANÚNCIO
+        // (ListingReportReason); qualquer outro caso (pessoa — perfil,
+        // mensagem, momento, grupo, evento, pedido de conversa, OU pessoa
+        // dentro de um chat de classificado) usa os 5 motivos de PESSOA de
+        // sempre (ReportReason), intocados.
+        && (('listingId' in request.resource.data && !('listingChatId' in request.resource.data))
+              ? request.resource.data.reason in
+                  ['prohibited_item', 'scam_or_suspicious_price', 'duplicate_listing',
+                   'inappropriate_content', 'other']
+              : request.resource.data.reason in
+                  ['spam', 'offensive_content', 'fake_profile', 'inappropriate_behavior', 'other'])
         // S77 — 2000 = 4x o maxLength do ReportModal.tsx (500): client conta
         // por code point; aqui virou guarda de abuso, não é número solto —
         // mexer nele significa mexer no maxLength do ReportModal E aqui.
@@ -2404,11 +2422,50 @@ service cloud.firestore {
             || request.resource.data.momentoRequestId is string)
         && (!('momentoRequestSenderId' in request.resource.data)
             || request.resource.data.momentoRequestSenderId is string)
+        // S168-B2 — denúncia de ANÚNCIO (listingId+listingTitle, id
+        // determinístico 'listing_{listingId}_{uid}') ou de PESSOA dentro de
+        // um chat de classificado (listingChatId+listingId+listingOwnerId+
+        // listingInterestedId+listingTitle, id 'listingChat_{chatId}_{uid}').
+        // O id determinístico é a dedup: doc já existente vira UPDATE, que
+        // só o admin pode.
+        && (!('listingTitle' in request.resource.data)
+            || (request.resource.data.listingTitle is string
+                && request.resource.data.listingTitle.size() <= 80))
+        && (!('listingId' in request.resource.data) || request.resource.data.listingId is string)
+        && (!('listingChatId' in request.resource.data) || request.resource.data.listingChatId is string)
+        && (!('listingOwnerId' in request.resource.data) || request.resource.data.listingOwnerId is string)
+        && (!('listingInterestedId' in request.resource.data) || request.resource.data.listingInterestedId is string)
+        // anúncio: id determinístico + reportedId é o dono real do anúncio
+        && (!('listingId' in request.resource.data) || 'listingChatId' in request.resource.data
+            || (request.resource.data.keys().hasAll(['listingId', 'listingTitle'])
+                && reportId == 'listing_' + request.resource.data.listingId + '_' + request.auth.uid
+                && get(/databases/$(database)/documents/listings/$(request.resource.data.listingId)).data.ownerId
+                     == request.resource.data.reportedId))
+        // chat: id determinístico, chatId coerente com listingId+interestedId,
+        // denunciante e denunciado são os dois participantes
+        && (!('listingChatId' in request.resource.data)
+            || (request.resource.data.keys().hasAll(
+                  ['listingChatId', 'listingId', 'listingOwnerId', 'listingInterestedId', 'listingTitle'])
+                && request.resource.data.listingChatId
+                     == request.resource.data.listingId + '_' + request.resource.data.listingInterestedId
+                && reportId == 'listingChat_' + request.resource.data.listingChatId + '_' + request.auth.uid
+                // ancora no doc REAL do chat (mesmo raciocínio do get() de
+                // listings/ no ramo de anúncio acima): ownerId/interestedId
+                // declarados têm que bater com listingChats/{chatId} — sem
+                // isso um uid forjaria listingOwnerId contra qualquer
+                // pessoa. Chat inexistente → get() falha → create negado.
+                && get(/databases/$(database)/documents/listingChats/$(request.resource.data.listingChatId)).data.ownerId
+                     == request.resource.data.listingOwnerId
+                && get(/databases/$(database)/documents/listingChats/$(request.resource.data.listingChatId)).data.interestedId
+                     == request.resource.data.listingInterestedId
+                && request.auth.uid in [request.resource.data.listingOwnerId, request.resource.data.listingInterestedId]
+                && request.resource.data.reportedId in [request.resource.data.listingOwnerId, request.resource.data.listingInterestedId]))
         && request.resource.data.keys().hasOnly(
              ['reporterId', 'reportedId', 'reason', 'details', 'createdAt', 'status',
               'matchId', 'messageId', 'messageText', 'messageImageUrl',
               'momentoId', 'momentoText', 'momentoPhotoUrl', 'groupId', 'groupName',
-              'eventId', 'eventName', 'momentoRequestId', 'momentoRequestSenderId']);
+              'eventId', 'eventName', 'momentoRequestId', 'momentoRequestSenderId',
+              'listingId', 'listingTitle', 'listingChatId', 'listingOwnerId', 'listingInterestedId']);
 
       // S96-A — só o admin decide o desfecho, e só alternando status entre
       // 'open' e 'resolved' — affectedKeys().hasOnly(['status']) garante que
@@ -2765,13 +2822,19 @@ service cloud.firestore {
       // get: doc inexistente é PERMITIDO (padrão S143-C de momentoRequests —
       // o interessado escuta o doc ANTES da 1ª mensagem; exists:false não
       // vaza nenhum dado real).
+      // S168-B2 — admin também lê (get/list) e lê messages (abaixo), pra
+      // apurar uma denúncia de listingChat (AdminReportsScreen/
+      // AdminReportDetailScreen, "Abrir conversa"). Só leitura: create/
+      // update/delete NÃO ganham isAdmin(), continuam só do participante.
       allow get: if isSignedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
-        && (resource == null || request.auth.uid in resource.data.participants);
+        && (isAdmin()
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                && (resource == null || request.auth.uid in resource.data.participants)));
 
       allow list: if isSignedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
-        && request.auth.uid in resource.data.participants;
+        && (isAdmin()
+            || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                && request.auth.uid in resource.data.participants));
 
       // Só o INTERESSADO cria (interestedId==auth.uid, ownerId!=auth.uid);
       // anúncio precisa existir, estar 'approved' e o ownerId/título
@@ -2830,9 +2893,11 @@ service cloud.firestore {
 
       match /messages/{messageId} {
         // participante do chat pai + verificado (mirror groups/{groupId}/messages, linha ~1799-1803)
+        // S168-B2 — admin também lê, mesmo motivo do get/list do doc pai acima.
         allow read: if isSignedIn()
-          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
-          && request.auth.uid in get(/databases/$(database)/documents/listingChats/$(chatId)).data.participants;
+          && (isAdmin()
+              || (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+                  && request.auth.uid in get(/databases/$(database)/documents/listingChats/$(chatId)).data.participants));
 
         allow create: if isSignedIn()
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true

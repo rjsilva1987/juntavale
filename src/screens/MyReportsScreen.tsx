@@ -13,7 +13,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useReportAlert } from '@/contexts/ReportAlertContext';
 import { RootStackParamList } from '@/navigation';
-import { REPORT_REASON_LABELS } from '@/services/blockService';
+import { ALL_REPORT_REASON_LABELS } from '@/services/blockService';
 import { getUserProfile } from '@/services/firestoreService';
 import { listenMyReports, Report } from '@/services/reportService';
 import { getDisplayName } from '@/utils/profile';
@@ -29,7 +29,7 @@ type MyReportsScreenProps = NativeStackScreenProps<RootStackParamList, 'MyReport
 // uid que a tela do admin tem). Nome vazio/só espaço (dado legado) cai no
 // mesmo "só motivo" — nunca um "·" solto.
 function reportedTitle(reason: Report['reason'], name: string | null | undefined): string {
-  const label = REPORT_REASON_LABELS[reason];
+  const label = ALL_REPORT_REASON_LABELS[reason];
   if (name === null) return `${label} · Conta excluída`;
   if (name && name.trim().length > 0) return `${label} · ${name}`;
   return label;

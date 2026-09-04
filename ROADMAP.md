@@ -170,7 +170,41 @@ preview "📷 Foto", mesmo catch de corrida permission-denied → getDoc) →
 upload → `sendListingChatMessage`, e `deleteListingChatImage` apaga o
 órfão no Storage se a mensagem falhar depois do upload. Caminho de texto
 (`handleSend`) intocado. SEM teste em aparelho.
-S168-B2 (denúncia dentro desse chat) e S168-C sem escopo/sem recon.
+S168-B2 IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
+AUTOMATICO), auditoria APROVADA na 2ª rodada (1ª bloqueou: o ramo de
+denúncia de chat nas rules validava `listingOwnerId`/`listingInterestedId`
+só contra o próprio payload — corrigido ancorando os dois num `get()` de
+`listingChats/{chatId}`). A) Denúncia: botão `flag-outline` no header do
+`ListingDetailScreen` (anúncio, só pra quem não é dono; motivos próprios
+`ListingReportReason` — item proibido / golpe ou preço suspeito / anúncio
+duplicado / conteúdo impróprio / outro) e do `ListingChatScreen` (a
+pessoa, só participante com chat existente; motivos de pessoa). Reusa
+`ReportModal` (agora genérico, prop `reasonLabels`) e a fila `reports`
+com campos novos `listingId`/`listingTitle`/`listingChatId`/
+`listingOwnerId`/`listingInterestedId`. Dedup NAS RULES por id
+determinístico (`listing_{listingId}_{uid}` / `listingChat_{chatId}_{uid}`
+via `setDoc`; doc existente vira update, que só admin pode →
+`permission-denied` = "já denunciou"); ramo anúncio ancora `reportedId` no
+`ownerId` real do anúncio; ramo chat ancora no doc real do chat. Denunciar
+NÃO altera o anúncio. `AdminReportsScreen` mostra o tipo do alvo
+(`REPORT_TARGET_LABELS`) e atalhos "Abrir anúncio ›"/"Abrir conversa ›";
+`AdminReportDetailScreen` idem com botões. Admin passa a LER
+`listingChats` (get/list/messages.read) e as fotos em
+`images/listingChats` (storage) pra apurar; `ListingChatScreen` em modo
+leitura pra não participante (sem composer, sem markRead, sem ações).
+Bônus S169: `listenReports`/`listenMyReports` com `onError`,
+`AdminReportsScreen` mostra `erro: <code>`, `AdminAlertContext` loga o
+erro. B) Push pra TODOS os admins: `getAdminPushTokens()` em
+`functions/src/shared` itera `ADMIN_UIDS` (mesma lista de `isAdminUid`;
+client/rules/storage já tinham os 2 uids) e substitui
+`getPushToken(ADMIN_UID)` em `onVerificationSubmitted`,
+`onSupportMessageCreated` (ramo usuário) e `onListingSubmitted` — 1 push
+por admin por evento. NÃO existe (nem foi criada) function de push pra
+denúncia nova — fica como pergunta de produto. EXIGE deploy de
+`firestore.rules` (stamp S168-B2) + `storage.rules` (stamp S168-B2) +
+`functions:onVerificationSubmitted,onSupportMessageCreated,onListingSubmitted`.
+SEM teste em aparelho.
+S168-C (privacidade.html + Data Safety) em andamento no mesmo lote.
 
 Ideia "Classificados / OLX de funcionários" (ver "Ideias sem número",
 levantada em 17/08) virou sprint numerada. A = anúncio básico (modelo
@@ -181,7 +215,8 @@ contato/chat entre interessado e anunciante (decisão do Raphael em
 03/09/2026: collection própria `listingChats`, NUNCA em `matches/`; molde
 do chat de grupo; conversa segue aberta com banner quando o anúncio
 encerra; sem denúncia/bloqueio/contador público nesta sprint — denúncia
-fica pra S168-B2). C = a definir (sem escopo levantado ainda).
+fica pra S168-B2). C = privacidade.html + docs/loja/data-safety-classificados.md
+(escopo fechado em 04/09/2026, no lote).
 
 ---
 

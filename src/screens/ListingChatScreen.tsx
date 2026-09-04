@@ -34,10 +34,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { ReportModal } from '@/components/ReportModal';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import { isDuplicateReportError, reportUser, ReportReason } from '@/services/blockService';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   createListingChatWithFirstMessage,
@@ -186,6 +188,12 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
   const chatId = listingChatId(listingId, interestedId);
   const isOwner = user?.uid === ownerId;
   const otherUid = isOwner ? interestedId : ownerId;
+  // S168-B2 — admin abrindo o chat pra apurar uma denúncia (via
+  // AdminReportsScreen/AdminReportDetailScreen, "Abrir conversa") não é nem
+  // ownerId nem interestedId — firestore.rules libera get/list/messages.read
+  // pra admin mesmo assim (isAdmin()), então a tela precisa de um modo
+  // leitura próprio pra quem cai aqui sem ser participante.
+  const isParticipant = user?.uid === ownerId || user?.uid === interestedId;
 
   const [chat, setChat] = useState<ListingChat | null | undefined>(undefined);
   const [messages, setMessages] = useState<ListingChatMessage[]>([]);
@@ -197,6 +205,7 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<ListingChatMessage | null>(null);
   const [replyTarget, setReplyTarget] = useState<ListingChatReplyTo | null>(null);
+  const [reportVisible, setReportVisible] = useState(false);
   const flatListRef = useRef<FlatList<ListingChatMessage>>(null);
   const sendingRef = useRef(false);
   // Evita Alert/goBack duplicado se o listener do chat e o de mensagens
@@ -245,8 +254,10 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
         setMessages(msgs);
         // Leitura (b) — mirror do critério de isMatchUnread: só marca lido
         // quando a ÚLTIMA mensagem já foi confirmada pelo servidor e não foi
-        // o próprio uid quem mandou.
-        if (user && !lastMessageHasPendingWrites) {
+        // o próprio uid quem mandou. S168-B2 — nunca pra quem não é
+        // participante (admin em modo leitura): firestore.rules nega o
+        // update de lastReadAt de qualquer uid fora de participants.
+        if (user && isParticipant && !lastMessageHasPendingWrites) {
           const last = msgs[msgs.length - 1];
           if (last && last.senderId !== user.uid) {
             markListingChatRead(chatId, user.uid).catch(() => {});
@@ -256,15 +267,15 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
       handleListenerError,
     );
     return unsub;
-  }, [chatExists, chatId, user, handleListenerError]);
+  }, [chatExists, chatId, user, isParticipant, handleListenerError]);
 
   // Leitura (a) — no mount, sempre que o doc já existe (independente de quem
   // mandou a última mensagem), mirror de markGroupMessagesSeen
-  // (GroupChatScreen.tsx).
+  // (GroupChatScreen.tsx). S168-B2 — mesma guarda de isParticipant acima.
   useEffect(() => {
-    if (!user || !chatExists) return;
+    if (!user || !chatExists || !isParticipant) return;
     markListingChatRead(chatId, user.uid).catch(() => {});
-  }, [chatExists, chatId, user]);
+  }, [chatExists, chatId, user, isParticipant]);
 
   useEffect(() => {
     let cancelled = false;
@@ -403,6 +414,38 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
     handleSendImage(result.assets[0].uri);
   };
 
+  // S168-B2 — denúncia da PESSOA do outro lado do chat (não do anúncio —
+  // isso é ListingDetailScreen), mesmo molde de handleReport de
+  // GroupDetailScreen.tsx, trocando groupContext por listingChatContext.
+  const handleReport = async (reason: ReportReason, details: string) => {
+    if (!user) return;
+    try {
+      await reportUser(
+        user.uid,
+        otherUid,
+        reason,
+        details,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { listingChatId: chatId, listingId, ownerId, interestedId, listingTitle: headerTitle },
+      );
+      setReportVisible(false);
+      Alert.alert('Denúncia enviada', 'Nossa equipe vai analisar.');
+    } catch (err) {
+      if (isDuplicateReportError(err)) {
+        setReportVisible(false);
+        Alert.alert('Denúncia já enviada', 'Você já denunciou esta pessoa nesta conversa.');
+        return;
+      }
+      console.error('[ListingChatScreen] falha ao denunciar usuário:', err);
+      Alert.alert('Erro', 'Não foi possível enviar a denúncia.');
+    }
+  };
+
   // "Responder" só em mensagem não apagada (spec, ao contrário do grupo, que
   // não tem essa guarda). Mensagem já apagada não recebe onLongPress na
   // bolha (ver ListingChatMessageBubble acima), então na prática
@@ -418,6 +461,14 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
     (!actionTarget.createdAt ||
       Date.now() - actionTarget.createdAt.toMillis() < LISTING_CHAT_DELETE_FOR_EVERYONE_WINDOW_MS);
 
+  // S168-B2 — admin em modo leitura (!isParticipant) não abre o sheet de
+  // ações (Responder/Copiar/Apagar) — são ações de quem participa da
+  // conversa, e as rules já negam qualquer escrita dele mesmo assim.
+  const handleLongPressMessage = (message: ListingChatMessage) => {
+    if (!isParticipant) return;
+    setActionTarget(message);
+  };
+
   const renderMessage = ({ item }: { item: ListingChatMessage }) => {
     const isMe = item.senderId === user?.uid;
     return (
@@ -426,7 +477,7 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
         isMe={isMe}
         getReplySenderLabel={getReplySenderLabel}
         onViewImage={setViewerImage}
-        onLongPress={setActionTarget}
+        onLongPress={handleLongPressMessage}
       />
     );
   };
@@ -463,7 +514,17 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
               </Text>
             </View>
           </AnimatedPressable>
-          <View style={styles.backBtn} />
+          {isParticipant && chatExists ? (
+            <AnimatedPressable
+              onPress={() => setReportVisible(true)}
+              style={styles.backBtn}
+              accessibilityLabel="Denunciar usuário"
+            >
+              <Ionicons name="flag-outline" size={22} color={theme.colors.textSecondary} />
+            </AnimatedPressable>
+          ) : (
+            <View style={styles.backBtn} />
+          )}
         </View>
 
         {showClosedBanner && (
@@ -493,7 +554,11 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
               ListEmptyComponent={
                 <EmptyState
                   icon="chatbubble-ellipses-outline"
-                  title="Envie uma mensagem para o anunciante"
+                  title={
+                    isParticipant
+                      ? 'Envie uma mensagem para o anunciante'
+                      : 'Nenhuma mensagem nesta conversa'
+                  }
                 />
               }
             />
@@ -506,7 +571,18 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
             </View>
           )}
 
-          {isUnverified ? (
+          {!isParticipant ? (
+            // S168-B2 — admin abriu esta conversa pra apurar uma denúncia
+            // (AdminReportsScreen/AdminReportDetailScreen, "Abrir conversa").
+            // Sem composer, sem banner de verificação: rules negam qualquer
+            // escrita de quem não é participante mesmo assim.
+            <View
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
+            >
+              <Ionicons name="eye-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedBannerText}>Visualização do admin — somente leitura</Text>
+            </View>
+          ) : isUnverified ? (
             <Pressable
               style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
               onPress={() => navigation.navigate('Verification')}
@@ -571,6 +647,13 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ReportModal
+        visible={reportVisible}
+        onClose={() => setReportVisible(false)}
+        onSubmit={handleReport}
+        title="Denunciar usuário"
+      />
 
       <Modal
         visible={attachSheetVisible}

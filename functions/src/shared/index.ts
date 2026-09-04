@@ -15,9 +15,11 @@ export const GMAIL_APP_PASSWORD = defineSecret('GMAIL_APP_PASSWORD');
 // S115 — dois uids admin, hardcoded de propósito — mesmo padrão de
 // src/config/admin.ts e dos literais em firestore.rules/storage.rules: nenhum
 // destes arquivos importa o outro, então precisam ficar em sincronia manual.
-// ADMIN_UID segue apontando pro uid ORIGINAL: usado como VALOR (destinatário/
-// remetente de push em admin.ts), não só comparação — sem "qual dos dois
-// admins" pra decidir ali.
+// S168-B2 — ADMIN_UID já NÃO é destinatário de push em nenhuma function
+// (getAdminPushTokens abaixo substituiu getPushToken(ADMIN_UID) em todas);
+// segue exportado só por compatibilidade com quem ainda o usa como VALOR
+// fora de push (ex.: comparações pontuais) — sem "qual dos dois admins" pra
+// decidir ali.
 export const ADMIN_UIDS = ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3'];
 export const ADMIN_UID = ADMIN_UIDS[0];
 export const isAdminUid = (uid?: string | null): boolean => !!uid && ADMIN_UIDS.includes(uid);
@@ -26,6 +28,17 @@ export async function getPushToken(uid: string): Promise<string | null> {
   const snap = await db.doc(`users/${uid}/private/push`).get();
   const token = snap.data()?.token as string | undefined;
   return token && Expo.isExpoPushToken(token) ? token : null;
+}
+
+// S168-B2 — um push por admin por evento: itera ADMIN_UIDS (mesma lista de
+// isAdminUid), pula admin sem token e o uid excluído (ex.: o próprio
+// remetente). Substitui getPushToken(ADMIN_UID) em todas as functions de
+// admin — ADMIN_UID segue exportado só por compatibilidade.
+export async function getAdminPushTokens(excludeUid?: string): Promise<string[]> {
+  const tokens = await Promise.all(
+    ADMIN_UIDS.filter((uid) => uid !== excludeUid).map((uid) => getPushToken(uid)),
+  );
+  return tokens.filter((t): t is string => !!t);
 }
 
 export async function getUserBasicInfo(

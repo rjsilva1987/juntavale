@@ -8,7 +8,8 @@
 // Rules não importa deste arquivo, então os mesmos dois uids ficam também
 // hardcoded, fora daqui, em MAIS QUATRO lugares que precisam ser mantidos em
 // sincronia manual: functions/src/index.ts (ADMIN_UIDS local), firestore.rules
-// (isAdmin() e a regra de create de matches) e storage.rules (3 literais).
+// (isAdmin() e a regra de create de matches) e storage.rules (4 literais,
+// S168-B2).
 export const ADMIN_UIDS = ['Gd0pJi8WjYS60JHOnhIx9R6vktJ3', '358dfiUwFlbFV0Z3KCyvKXwGGxD3'] as const;
 
 export const ADMIN_UID = ADMIN_UIDS[0];
