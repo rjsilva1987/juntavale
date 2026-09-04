@@ -100,6 +100,20 @@ simulados, nenhuma falha; ressalva residual: duplo toque no mesmo tick em
 `listings (status ASC, expiresAt ASC)`) + `functions:expireListings`
 (nova, scheduled). Lado client (`'expired'`, botão Renovar, roteamento de
 `listing_expired`) só entra em build novo. SEM teste em aparelho.
+S172-A IMPLEMENTADA em 04/09/2026 (lote S175/S172-A/S174, modo AUTOMATICO
++ GIT AUTOMATICO), auditoria APROVADA na 1ª rodada (9 cenários de rules
+simulados). Bug: anúncio `expired` editado pelo dono voltava pra
+`pending` com `expiresAt` vencido e, aprovado, expirava de novo na rodada
+seguinte. Correção: `reviewListing` escreve `expiresAt = agora +
+LISTING_TTL_MS` em TODA aprovação (recusa não toca), e o ramo ADMIN das
+rules ganha `'expiresAt'` no `hasOnly` + cláusula `status == 'approved'
+? (expiresAt no futuro e ≤ +31d) : !hasAny(['expiresAt'])`. Ramo do dono
+e `expireListings` intocados. Ressalva pré-existente ampliada: o ramo
+admin não checa o status de origem, então um admin poderia "aprovar" um
+`approved`/`sold` e estender o prazo por via lateral — só a fila
+`pending` chega à tela hoje; fica como risco anotado. EXIGE deploy de
+`firestore.rules` (stamp S172-A). Lado client só em build novo. SEM
+teste em aparelho.
 
 Reverte a decisão "sem Cloud Function de expiração" da S168-A: scheduled
 function `expireListings` (`functions/src/listings.ts`, `0 9 * * *`

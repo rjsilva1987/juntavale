@@ -275,6 +275,11 @@ export const listPendingListings = async (): Promise<Listing[]> => {
 // deleteField() em vez de omitir a chave: cobre o caso de reprovar/aprovar em
 // sequência sobre o mesmo doc, quando ele já tem rejectionReason de uma
 // revisão anterior.
+// S172-A — TODA aprovação renova o prazo (+30 dias a partir de agora), mesmo
+// teto de +31d do create e de renewListing nas rules. Sem isso um anúncio
+// expirado que o dono editou (volta pra pending com expiresAt vencido)
+// expiraria de novo na rodada seguinte de expireListings. Recusa não toca
+// expiresAt.
 export const reviewListing = async (
   id: string,
   decision:
@@ -286,6 +291,14 @@ export const reviewListing = async (
     reviewedAt: serverTimestamp(),
     reviewedBy: adminUid,
     rejectionReason: decision.status === 'rejected' ? decision.rejectionReason : deleteField(),
+    // S172-A — TODA aprovação renova o prazo (+30 dias a partir de agora),
+    // mesmo teto de +31d do create e de renewListing nas rules. Sem isso um
+    // anúncio expirado que o dono editou (volta pra pending com expiresAt
+    // vencido) expiraria de novo na rodada seguinte de expireListings.
+    // Recusa não toca expiresAt.
+    ...(decision.status === 'approved'
+      ? { expiresAt: Timestamp.fromMillis(Date.now() + LISTING_TTL_MS) }
+      : {}),
   });
 };
 

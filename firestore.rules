@@ -1,4 +1,5 @@
-// rules-stamp: S172 (04/09/2026 — expiração de anúncio com renovação em 1
+// rules-stamp: S172-A (04/09/2026 — aprovação do admin renova expiresAt
+// [+30d, teto +31d]; recusa/removed não tocam expiresAt) + S172 (04/09/2026 — expiração de anúncio com renovação em 1
 // toque: allow update do dono ganha ramo 'expired'→'approved'
 // [status+expiresAt, prazo novo no futuro, teto +31d] + affectedKeys()
 // externo ganha 'expiresAt' + ramo 'pending' nega explicitamente tocar
@@ -2229,8 +2230,9 @@ service cloud.firestore {
         );
 
       // Admin revisa: só mexe em status/reviewedAt/reviewedBy/
-      // rejectionReason, nunca reescreve conteúdo do dono — molde EXATO do
-      // bloco verifications/{uid} (linha ~2489). `resource.data.ownerId !=
+      // rejectionReason (+ expiresAt quando aprova, S172-A), nunca reescreve
+      // conteúdo do dono — molde EXATO do bloco verifications/{uid} (linha
+      // ~2489). `resource.data.ownerId !=
       // request.auth.uid` bloqueia o caso degenerado de um admin revisar o
       // PRÓPRIO anúncio por esta via (ele já tem a via de dono acima).
       // Auditoria S168-A (correção pós-bloqueio) — o ramo não-'rejected'
@@ -2245,7 +2247,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         && resource.data.ownerId != request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason'])
+             .hasOnly(['status', 'reviewedAt', 'reviewedBy', 'rejectionReason', 'expiresAt'])
         && request.resource.data.status in ['approved', 'rejected', 'removed']
         && request.resource.data.reviewedAt == request.time
         && request.resource.data.reviewedBy == request.auth.uid
@@ -2253,7 +2255,17 @@ service cloud.firestore {
               ? request.resource.data.rejectionReason is string
                   && request.resource.data.rejectionReason.size() > 0
                   && request.resource.data.rejectionReason.size() <= 500
-              : !('rejectionReason' in request.resource.data));
+              : !('rejectionReason' in request.resource.data))
+        // S172-A — aprovar SEMPRE renova o prazo: expiresAt no futuro e no
+        // máximo +31d (mesmo teto do create e do ramo de renovação do dono).
+        // Cliente antigo que aprove sem mandar expiresAt só passa se o prazo
+        // atual ainda estiver no futuro. Recusa/removed não podem tocar
+        // expiresAt.
+        && (request.resource.data.status == 'approved'
+              ? (request.resource.data.expiresAt is timestamp
+                  && request.resource.data.expiresAt > request.time
+                  && request.resource.data.expiresAt <= request.time + duration.value(31, 'd'))
+              : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['expiresAt']));
 
       allow delete: if false;
     }
