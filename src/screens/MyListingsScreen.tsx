@@ -20,6 +20,7 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
+  Modal,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
 import { listenMyListingChats } from '@/services/listingChatService';
 import {
+  canEditListing,
   formatListingPrice,
   Listing,
   listMyListings,
@@ -62,6 +64,8 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
   const [chatCounts, setChatCounts] = useState<Record<string, number>>({});
   // S172 — evita duplo toque em "Renovar" enquanto a chamada está em voo.
   const [renewingId, setRenewingId] = useState<string | null>(null);
+  // S176 — anúncio alvo do sheet "⋯" (toque longo no card ou botão dedicado).
+  const [menuTarget, setMenuTarget] = useState<Listing | null>(null);
 
   useEffect(() => {
     if (!user || profile?.verified !== true) {
@@ -97,16 +101,24 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
   );
 
   const handleMarkSold = (listing: Listing) => {
-    Alert.alert('Marcar como vendido?', `"${listing.title}" some do feed de classificados.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Marcar vendido',
-        onPress: async () => {
-          await markListingSold(listing.id);
-          load();
+    Alert.alert(
+      'Marcar como vendido?',
+      `"${listing.title}" sai do feed de classificados. Não dá pra voltar: se quiser anunciar de novo, crie outro anúncio.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Marcar vendido',
+          onPress: async () => {
+            try {
+              await markListingSold(listing.id);
+              load();
+            } catch {
+              Alert.alert('Erro', 'Não foi possível marcar como vendido. Tente de novo.');
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   // S172 — renovação em 1 toque: sem Alert de confirmação (é "1 toque" por
@@ -125,17 +137,25 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
   };
 
   const handleRemove = (listing: Listing) => {
-    Alert.alert('Excluir anúncio?', 'Essa ação não pode ser desfeita.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          await removeListing(listing.id);
-          load();
+    Alert.alert(
+      'Excluir anúncio?',
+      'As fotos e o anúncio somem de vez. As conversas continuam legíveis para os dois lados, com o aviso "Anúncio encerrado".',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeListing(listing.id, listing.photos);
+              load();
+            } catch {
+              Alert.alert('Erro', 'Não foi possível excluir o anúncio. Tente de novo.');
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const badgeStyleForStatus = (status: Listing['status']) => {
@@ -191,6 +211,7 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                 <AnimatedPressable
                   style={styles.card}
                   onPress={() => navigation.navigate('ListingDetail', { listingId: item.id })}
+                  onLongPress={() => setMenuTarget(item)}
                 >
                   <View style={styles.cardTopRow}>
                     {item.photos[0] ? (
@@ -267,14 +288,6 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                   </Pressable>
 
                   <View style={styles.actionsRow}>
-                    {item.status === 'approved' && (
-                      <AnimatedPressable
-                        style={styles.actionBtn}
-                        onPress={() => handleMarkSold(item)}
-                      >
-                        <Text style={styles.actionBtnText}>Marcar vendido</Text>
-                      </AnimatedPressable>
-                    )}
                     {item.status === 'expired' && (
                       <AnimatedPressable
                         style={[styles.actionBtn, styles.actionBtnPrimary]}
@@ -286,16 +299,27 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                         </Text>
                       </AnimatedPressable>
                     )}
+                    {canEditListing(item.status) && (
+                      <AnimatedPressable
+                        style={styles.actionBtn}
+                        onPress={() => navigation.navigate('CreateListing', { listingId: item.id })}
+                      >
+                        <Text style={styles.actionBtnText}>Editar</Text>
+                      </AnimatedPressable>
+                    )}
+                    {/* S176 — demais ações (marcar vendido/excluir) saem daqui
+                        e vão pro sheet "⋯" abaixo. */}
                     <AnimatedPressable
-                      style={styles.actionBtn}
-                      onPress={() => navigation.navigate('CreateListing', { listingId: item.id })}
+                      style={styles.moreBtn}
+                      hitSlop={8}
+                      onPress={() => setMenuTarget(item)}
+                      accessibilityLabel="Mais opções"
                     >
-                      <Text style={styles.actionBtnText}>Editar</Text>
-                    </AnimatedPressable>
-                    <AnimatedPressable style={styles.actionBtn} onPress={() => handleRemove(item)}>
-                      <Text style={[styles.actionBtnText, styles.actionBtnTextDestructive]}>
-                        Excluir
-                      </Text>
+                      <Ionicons
+                        name="ellipsis-horizontal"
+                        size={18}
+                        color={theme.colors.textSecondary}
+                      />
                     </AnimatedPressable>
                   </View>
                 </AnimatedPressable>
@@ -303,6 +327,56 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
             }}
           />
         )}
+
+        {/* S176 — sheet "⋯" do card (toque longo ou botão dedicado), mesmo
+            molde do sheet de toque longo em ChatScreen.tsx (Modal
+            transparent + backdrop + sheetOption). */}
+        <Modal
+          visible={!!menuTarget}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setMenuTarget(null)}
+        >
+          <Pressable style={styles.sheetBackdrop} onPress={() => setMenuTarget(null)}>
+            <View style={styles.sheet}>
+              <Text style={styles.sheetTitle} numberOfLines={1}>
+                {menuTarget?.title}
+              </Text>
+              {menuTarget?.status === 'approved' && (
+                <AnimatedPressable
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    const target = menuTarget;
+                    setMenuTarget(null);
+                    if (!target) return;
+                    handleMarkSold(target);
+                  }}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={22} color={theme.colors.text} />
+                  <Text style={styles.sheetOptionText}>Marcar como vendido</Text>
+                </AnimatedPressable>
+              )}
+              {menuTarget?.status === 'approved' && <View style={styles.sheetDivider} />}
+              <AnimatedPressable
+                style={styles.sheetOption}
+                onPress={() => {
+                  const target = menuTarget;
+                  setMenuTarget(null);
+                  if (!target) return;
+                  handleRemove(target);
+                }}
+              >
+                <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
+                <Text style={[styles.sheetOptionText, styles.sheetOptionTextDestructive]}>
+                  Excluir anúncio
+                </Text>
+              </AnimatedPressable>
+              <AnimatedPressable style={styles.sheetCancel} onPress={() => setMenuTarget(null)}>
+                <Text style={styles.sheetCancelText}>Cancelar</Text>
+              </AnimatedPressable>
+            </View>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </Animated.View>
   );
@@ -402,4 +476,42 @@ const styles = StyleSheet.create({
   // destacar dos demais botões de contorno neutro.
   actionBtnPrimary: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   actionBtnTextPrimary: { color: theme.colors.onPrimary },
+  // S176 — botão "⋯" (mais opções), sempre no fim da actionsRow.
+  moreBtn: { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 4 },
+
+  // S176 — sheet do "⋯", molde ChatScreen.tsx:2383-2421.
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    paddingBottom: 32,
+  },
+  sheetTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    paddingBottom: theme.spacing.sm,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+  },
+  sheetOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  sheetOptionTextDestructive: { color: theme.colors.error },
+  sheetDivider: { height: 0.5, backgroundColor: theme.colors.border },
+  sheetCancel: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  sheetCancelText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.nope },
 });

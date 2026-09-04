@@ -47,6 +47,53 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S176 — Classificados: marcar como vendido e excluir anúncio (lado do dono)
+**Status:** IMPLEMENTADA em 04/09/2026 (sprint avulsa, modo AUTOMATICO +
+GIT AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada (sem
+falhas; 2 ressalvas cosméticas: estilo `actionBtnTextDestructive` ficou
+órfão em MyListingsScreen; `removeBtn` usa marginTop `sm` quando "Excluir
+anúncio" é o único botão do detalhe). Client puro — NÃO exige deploy: os
+ramos sold/removed das rules (S168-A) e o delete do dono em
+`storage.rules` (S168-B2) já existem. Só entra em build novo. SEM teste em
+aparelho.
+
+A recon mostrou que `markListingSold`/`removeListing` e os botões inline
+de Meus anúncios já existiam desde a S168-A — a sprint virou redesenho +
+limpeza de Storage + detalhe do dono. MyListingsScreen: botões inline
+"Marcar vendido"/"Excluir" saem da `actionsRow`; entra botão ⋯ e toque
+longo no card, os dois abrindo um sheet (molde S167, `Modal` + backdrop +
+opções) com "Marcar como vendido" (só approved) e "Excluir anúncio"
+(qualquer status, inclusive expired/sold); "Renovar" (S172) continua
+inline; "Editar" só aparece se `canEditListing(status)` (novo helper no
+service, espelha o ramo de edição das rules: pending/approved/rejected/
+expired). ListingDetailScreen do dono: "Editar anúncio" some pra sold/
+removed; ganha "Marcar como vendido" (approved) e "Excluir anúncio"
+(qualquer status), inline no fim do ScrollView (sem rodapé fixo/insets);
+sucesso → `goBack()` (Meus anúncios recarrega no foco). Confirmações
+iguais nas duas telas: vendido avisa que sai do feed e não volta; excluir
+avisa que fotos e anúncio somem e que as conversas continuam legíveis com
+"Anúncio encerrado" (S168-B já cobre sold e removed). `removeListing(id,
+photos)`: `updateDoc` só com `status: 'removed'` e DEPOIS
+`deleteListingPhotosBestEffort` — `deleteObject(ref(storage, url))
+.catch(() => {})` por foto (molde momentoService), nunca por prefixo: o
+path `images/listings/{uid}/` é plano, sem listingId, e apagar por
+prefixo (molde S173, Admin SDK) levaria fotos de outros anúncios do
+mesmo dono. Erros do Firestore viram `Alert('Erro', …)`; selo "Vendido"
+já existia (`STATUS_LABEL`/`badgeNeutral`). Rules, indexes, functions,
+listingChats e feed intocados.
+
+Decisões tomadas no automático (Portão 1, nenhuma abre frente nova):
+seguir a spec e migrar pro menu ⋯/toque longo mesmo com botões inline já
+funcionais; menu só com os dois itens da spec (Editar e Renovar ficam
+inline); botões do detalhe inline no ScrollView, não rodapé fixo;
+esconder "Editar" pra sold/removed (rules já negam); excluir pending/
+rejected com denúncia associada segue permitido (soft delete, denúncias
+ficam); selo "Vendido" mantém o badge neutro; limpeza de Storage por URL
+e não por prefixo; sucesso no detalhe faz `goBack()` em vez de estado
+local.
+
+---
+
 ### S174 — Push pros admins quando entra uma denúncia nova
 **Status:** IMPLEMENTADA em 04/09/2026 (lote S175/S172-A/S174, modo
 AUTOMATICO + GIT AUTOMATICO), auditoria APROVADA na 1ª rodada (sem

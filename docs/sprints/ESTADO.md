@@ -4,11 +4,13 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S174 (feat(functions), sucede a716da1 —
-S172-A, aprovação renova expiresAt). Lote 2 de 04/09/2026 FECHADO: S175
-(672b102) → S172-A (a716da1) → S174. Lote 1 (S171 0184688 → S168-B2
-5fa69ed → S172 cc60168 → S173 88885eb → S168-C 9bfa568) fechado.
-`docs/loja/` versionado (S175). Deploys pendentes acumulados:
+**Commit atual:** o commit da S176 (feat(listings), sucede 54c6533 — bump
+versionCode 24 / 1.0.14 / iOS build 4 cobrindo S168-B..S175). S176
+(avulsa, AUTOMATICO + GIT AUTOMATICO) FECHADA: client puro, sem deploy.
+Lote 2 de 04/09/2026 FECHADO: S175 (672b102) → S172-A (a716da1) → S174
+(f0dda02). Lote 1 (S171 0184688 → S168-B2 5fa69ed → S172 cc60168 → S173
+88885eb → S168-C 9bfa568) fechado. `docs/loja/` versionado (S175).
+Deploys pendentes acumulados:
 `firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount,functions:onReportCreated`
 (rules-stamp S172-A engloba S172, S168-B2, S168-B e o S168-A ainda não
 confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
@@ -18,12 +20,25 @@ hosting = `site/privacidade.html` + `site/excluir-conta.html`;
 `onSupportMessageCreated`/`onListingSubmitted` mudaram na S168-B2;
 `expireListings` é nova, S172; `deleteAccount` mudou na S173;
 `onReportCreated` é nova, S174). Lado client de S168-B2/S172/S172-A/S174
-só entra em build novo (versionCode 23 / 1.0.13 ainda é o da
-S168-A+S169+S170).
+entra no build versionCode 24 / 1.0.14 (bump 54c6533); o lado client da
+S176 só entra nesse build se ele ainda não tiver sido gerado — senão
+precisa de bump novo.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. Dos lotes 1 e 2 de
-04/09 fica só teste em aparelho e deploy. S174 (depois do deploy da
+Nenhuma sprint em código pendente de fechamento. Da S176 e dos lotes 1 e
+2 de 04/09 fica só teste em aparelho e deploy. S176 (build novo, sem
+deploy): em Meus anúncios, toque longo no card ou ⋯ abre o sheet;
+"Marcar como vendido" só em anúncio Aprovado → confirmação → selo
+"Vendido", some do feed, "Editar" some; "Excluir anúncio" em qualquer
+status (inclusive Expirado e Vendido) → confirmação avisando fotos/
+anúncio somem e conversas continuam com "Anúncio encerrado" → anúncio
+some de Meus anúncios e as fotos somem de `images/listings/{uid}/` no
+Storage (só as daquele anúncio; as de outros anúncios do mesmo dono
+ficam); "Renovar" continua inline em Expirado. No detalhe do próprio
+anúncio: mesmos dois botões abaixo de "Editar anúncio", sucesso volta pra
+Meus anúncios já atualizado; "Editar anúncio" não aparece em Vendido.
+Interessado que abre o chat de um anúncio vendido/excluído vê "Anúncio
+encerrado" (S168-B). S174 (depois do deploy da
 function, em build novo, push só em build): usuário comum denuncia
 (perfil, mensagem, anúncio ou chat de classificado) → os 2 admins
 recebem "Nova denúncia para revisar" sem nenhum dado da denúncia e o

@@ -22,7 +22,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { deleteObject, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { ListingRejectionReason } from '@/constants/listingRejectionReasons';
 import { db, storage } from '@/services/firebase';
@@ -188,11 +188,26 @@ export const markListingSold = async (id: string): Promise<void> => {
   await updateDoc(doc(db, 'listings', id), { status: 'sold' as const });
 };
 
+// S176 — best-effort por URL (nunca por prefixo: o path é
+// images/listings/{uid}/{fileName}, sem listingId, então apagar por prefixo
+// levaria fotos de OUTROS anúncios do mesmo dono). Roda DEPOIS do updateDoc
+// de removeListing — se a rule negar o status, nada é apagado.
+export const deleteListingPhotosBestEffort = async (photos: string[]): Promise<void> => {
+  await Promise.all(photos.map((url) => deleteObject(ref(storage, url)).catch(() => {})));
+};
+
 // Soft delete — nunca deleteDoc (mesmo padrão de moderação/histórico já
 // usado no projeto, ex.: blocks/verifications nunca são apagados).
-export const removeListing = async (id: string): Promise<void> => {
+export const removeListing = async (id: string, photos: string[]): Promise<void> => {
   await updateDoc(doc(db, 'listings', id), { status: 'removed' as const });
+  await deleteListingPhotosBestEffort(photos);
 };
+
+// S176 — espelha o ramo de edição do allow update do dono (firestore.rules,
+// status in ['pending','approved','rejected','expired']); sold/removed dão
+// permission-denied.
+export const canEditListing = (status: Listing['status']): boolean =>
+  status === 'pending' || status === 'approved' || status === 'rejected' || status === 'expired';
 
 // S172 — renovação em 1 toque: expired → approved com +30 dias, SEM voltar
 // pra fila (conteúdo não mudou). Rules só aceitam esse par de campos e só a

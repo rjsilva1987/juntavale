@@ -35,10 +35,13 @@ import {
   reportUser,
 } from '@/services/blockService';
 import {
+  canEditListing,
   formatListingPrice,
   getListing,
   Listing,
   LISTING_CATEGORIES,
+  markListingSold,
+  removeListing,
 } from '@/services/listingService';
 
 type ListingDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'ListingDetail'>;
@@ -64,6 +67,61 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
   const categoryLabel = listing
     ? (LISTING_CATEGORIES.find((c) => c.key === listing.category)?.label ?? listing.category)
     : '';
+
+  // S176 — dono do anúncio (usada nos botões de marcar vendido/excluir
+  // abaixo; a checagem inline em ownerId !== user?.uid, mais acima no
+  // header/editBtn, continua como estava).
+  const isOwner = !!user && !!listing && listing.ownerId === user.uid;
+
+  // S176 — mesmos título/corpo/botões/mensagens de erro de
+  // MyListingsScreen.handleMarkSold; sucesso volta pra "Meus anúncios"
+  // (recarrega no foco e mostra o selo/remoção), sem setListing local.
+  const handleMarkSold = () => {
+    if (!listing) return;
+    Alert.alert(
+      'Marcar como vendido?',
+      `"${listing.title}" sai do feed de classificados. Não dá pra voltar: se quiser anunciar de novo, crie outro anúncio.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Marcar vendido',
+          onPress: async () => {
+            try {
+              await markListingSold(listing.id);
+              if (navigation.canGoBack()) navigation.goBack();
+            } catch {
+              Alert.alert('Erro', 'Não foi possível marcar como vendido. Tente de novo.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // S176 — mesmos título/corpo/botões/mensagens de erro de
+  // MyListingsScreen.handleRemove.
+  const handleRemove = () => {
+    if (!listing) return;
+    Alert.alert(
+      'Excluir anúncio?',
+      'As fotos e o anúncio somem de vez. As conversas continuam legíveis para os dois lados, com o aviso "Anúncio encerrado".',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeListing(listing.id, listing.photos);
+              if (navigation.canGoBack()) navigation.goBack();
+            } catch {
+              Alert.alert('Erro', 'Não foi possível excluir o anúncio. Tente de novo.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // S168-B2 — denúncia do ANÚNCIO (não altera o anúncio em si), mesmo molde
   // de handleReport em GroupDetailScreen.tsx, trocando groupContext por
@@ -163,13 +221,36 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
               <Text style={styles.sectionTitle}>Descrição</Text>
               <Text style={styles.description}>{listing.description}</Text>
 
-              {listing.ownerId === user?.uid && (
+              {listing.ownerId === user?.uid && canEditListing(listing.status) && (
                 <AnimatedPressable
                   style={styles.editBtn}
                   onPress={() => navigation.navigate('CreateListing', { listingId })}
                 >
                   <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
                   <Text style={styles.editBtnText}>Editar anúncio</Text>
+                </AnimatedPressable>
+              )}
+
+              {/* S176 — ações do dono: marcar vendido (só approved) e
+                  excluir (qualquer status), mesmo padrão inline do editBtn
+                  acima (sem rodapé fixo/insets). */}
+              {isOwner && listing.status === 'approved' && (
+                <AnimatedPressable style={styles.editBtn} onPress={handleMarkSold}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={18}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.editBtnText}>Marcar como vendido</Text>
+                </AnimatedPressable>
+              )}
+              {isOwner && (
+                <AnimatedPressable
+                  style={[styles.editBtn, styles.removeBtn]}
+                  onPress={handleRemove}
+                >
+                  <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
+                  <Text style={[styles.editBtnText, styles.removeBtnText]}>Excluir anúncio</Text>
                 </AnimatedPressable>
               )}
 
@@ -282,6 +363,9 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   editBtnText: { color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: '700' },
+  // S176 — variante destrutiva do editBtn ("Excluir anúncio").
+  removeBtn: { borderColor: theme.colors.error, marginTop: theme.spacing.sm },
+  removeBtnText: { color: theme.colors.error },
 
   // S168-B — mesmo raio/padding de editBtn acima, preenchido (primary) em
   // vez de contorno — REGRA DE OURO: onPrimary, nunca texto branco sobre
