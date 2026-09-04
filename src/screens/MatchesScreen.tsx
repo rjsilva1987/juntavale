@@ -2,8 +2,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
-import React, { useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, Alert, Modal, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -15,7 +15,7 @@ import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
 import { RootStackParamList } from '@/navigation';
-import { LastMessage, UserProfile } from '@/services/firestoreService';
+import { LastMessage, UserProfile, updateUserProfile } from '@/services/firestoreService';
 import { hasValidLastMessage, isMatchUnread } from '@/utils/matches';
 import { getDisplayName } from '@/utils/profile';
 
@@ -29,6 +29,8 @@ interface ConversationRow {
   otherProfile?: UserProfile;
   lastMessage: LastMessage;
   unread: boolean;
+  // S178 — conversa fixada no topo da lista (ver pinnedIds abaixo).
+  pinned: boolean;
 }
 
 // firstName() foi removido na S135: nickname já nasce curto de propósito
@@ -38,7 +40,7 @@ interface ConversationRow {
 
 export default function MatchesScreen({ navigation, listingChatsUnread }: MatchesScreenProps) {
   const { user, profile } = useAuth();
-  const { matches: activeMatches, loading } = useActiveMatches();
+  const { matches: activeMatches, matchIds, loading } = useActiveMatches();
   // S168-B — card "Classificados", mirror visual do exploreCard de
   // MomentosScreen.tsx, full-width com chevron. Renderizado SÓ pra
   // verificado, SEMPRE (mesmo com 0 conversas) — ver listingsCard abaixo.
@@ -52,9 +54,17 @@ export default function MatchesScreen({ navigation, listingChatsUnread }: Matche
       .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
   }, [activeMatches]);
 
+  // S178 — ids fixados no topo (máx. 3), fonte única = profile.pinnedMatchIds.
+  const pinnedIds = useMemo<string[]>(
+    () => profile?.pinnedMatchIds ?? [],
+    [profile?.pinnedMatchIds],
+  );
+
   // Conversas de match com preview, ordenadas pela última mensagem — mesmo
   // critério de "createdAt ausente vira Infinity" (mensagem ainda
   // resolvendo o serverTimestamp local não deve saltar pro fim da lista).
+  // S178 — fixadas primeiro; dentro de cada grupo (fixada/não fixada),
+  // mesmo critério de sempre (lastMessage.createdAt desc).
   const rows = useMemo<ConversationRow[]>(() => {
     const matchRows: ConversationRow[] = activeMatches.filter(hasValidLastMessage).map((m) => ({
       id: m.id,
@@ -62,13 +72,67 @@ export default function MatchesScreen({ navigation, listingChatsUnread }: Matche
       otherProfile: m.otherProfile,
       lastMessage: m.lastMessage,
       unread: isMatchUnread(m, user?.uid ?? ''),
+      pinned: pinnedIds.includes(m.id),
     }));
     return matchRows.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       const ta = a.lastMessage.createdAt?.toMillis() ?? Infinity;
       const tb = b.lastMessage.createdAt?.toMillis() ?? Infinity;
       return tb - ta;
     });
-  }, [activeMatches, user]);
+  }, [activeMatches, user, pinnedIds]);
+
+  // S178 — sheet de toque longo do card (molde MyListingsScreen.tsx).
+  const [menuTarget, setMenuTarget] = useState<ConversationRow | null>(null);
+
+  // S178 — limpeza de pins órfãos: só o UNMATCH (Cloud Function apaga o doc
+  // em matches/*) remove o id de matchIds — bloquear (por qualquer lado) NÃO
+  // apaga o doc (a Cloud Function de bloqueio arquiva o match com arrayUnion
+  // em blockedBy, ver functions/src/chat.ts), então um match bloqueado continua em
+  // matchIds e o pin NÃO é podado (fica só invisível enquanto bloqueado —
+  // activeMatches, esse sim, já filtra bloqueio noutro lugar — e volta a
+  // aparecer se desbloquear). matchIds vem de useActiveMatches ANTES do
+  // filtro de bloqueio (ids brutos do snapshot), diferente de activeMatches
+  // (pós-filtro) — usar activeMatches aqui podaria pin de match bloqueado
+  // que ainda existe. Só roda depois que o hook entregou o 1º snapshot
+  // (loading:false) e com matchIds não vazio: lista vazia pode ser
+  // cache/offline momentâneo ou usuário sem nenhum match — em ambos os casos
+  // não há base confiável pra podar, e um pin de match que não existe mais é
+  // só invisível, não atrapalha ninguém.
+  const matchIdsKey = matchIds.join(',');
+  const pinnedKey = pinnedIds.join(',');
+  const uid = user?.uid;
+  useEffect(() => {
+    if (loading || !uid || !matchIdsKey) return;
+    const currentMatchIds = matchIdsKey.split(',');
+    const currentPinnedIds = pinnedKey ? pinnedKey.split(',') : [];
+    const kept = currentPinnedIds.filter((id) => currentMatchIds.includes(id));
+    if (kept.length !== currentPinnedIds.length) {
+      updateUserProfile(uid, { pinnedMatchIds: kept }).catch(() => {});
+    }
+  }, [matchIdsKey, pinnedKey, uid, loading]);
+
+  // S178 — fixar/desafixar uma conversa. O id gravado é SEMPRE matchId (doc
+  // em matches/*), nunca o uid do outro perfil.
+  const togglePin = async (row: ConversationRow) => {
+    if (!user) return;
+    if (!row.pinned && pinnedIds.length >= 3) {
+      Alert.alert('Limite atingido', 'Você pode fixar até 3 conversas.');
+      return;
+    }
+    const nextPinnedIds = row.pinned
+      ? pinnedIds.filter((id) => id !== row.matchId)
+      : [...pinnedIds, row.matchId];
+    try {
+      await updateUserProfile(user.uid, { pinnedMatchIds: nextPinnedIds });
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      Alert.alert(
+        'Erro',
+        `Não foi possível ${row.pinned ? 'desafixar' : 'fixar'} a conversa (erro: ${code ?? 'desconhecido'})`,
+      );
+    }
+  };
 
   // Gate client-side: só evita a navegação e explica o motivo. A garantia
   // real é a rule de create em matches/{matchId}/messages (verified==true) —
@@ -162,6 +226,7 @@ export default function MatchesScreen({ navigation, listingChatsUnread }: Matche
         style={styles.matchCard}
         entering={FadeInDown}
         onPress={() => handleOpenChat(item.matchId, item.otherProfile)}
+        onLongPress={() => setMenuTarget(item)}
       >
         <View style={styles.avatarWrap}>
           {item.otherProfile?.photoURL ? (
@@ -197,7 +262,12 @@ export default function MatchesScreen({ navigation, listingChatsUnread }: Matche
           </Text>
         </View>
 
-        {unread && <View style={styles.unreadDot} />}
+        {(item.pinned || unread) && (
+          <View style={styles.metaCol}>
+            {item.pinned && <Ionicons name="pin" size={14} color={theme.colors.textSecondary} />}
+            {unread && <View style={styles.unreadDot} />}
+          </View>
+        )}
       </AnimatedPressable>
     );
   };
@@ -276,6 +346,44 @@ export default function MatchesScreen({ navigation, listingChatsUnread }: Matche
           renderItem={renderConversation}
         />
       )}
+
+      {/* S178 — sheet de toque longo do card, molde MyListingsScreen.tsx
+          (Modal transparent + backdrop + sheetOption). */}
+      <Modal
+        visible={!!menuTarget}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMenuTarget(null)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setMenuTarget(null)}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle} numberOfLines={1}>
+              {menuTarget?.otherProfile?.nickname ?? 'Conversa'}
+            </Text>
+            <AnimatedPressable
+              style={styles.sheetOption}
+              onPress={() => {
+                const target = menuTarget;
+                setMenuTarget(null);
+                if (!target) return;
+                togglePin(target);
+              }}
+            >
+              <Ionicons
+                name={menuTarget?.pinned ? 'pin-outline' : 'pin'}
+                size={22}
+                color={theme.colors.text}
+              />
+              <Text style={styles.sheetOptionText}>
+                {menuTarget?.pinned ? 'Desafixar conversa' : 'Fixar conversa'}
+              </Text>
+            </AnimatedPressable>
+            <AnimatedPressable style={styles.sheetCancel} onPress={() => setMenuTarget(null)}>
+              <Text style={styles.sheetCancelText}>Cancelar</Text>
+            </AnimatedPressable>
+          </View>
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
 }
@@ -429,4 +537,41 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: theme.colors.primary,
   },
+  // S178 — coluna à direita do card com o alfinete de fixado + o ponto de
+  // não lida, lado a lado.
+  metaCol: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+
+  // S178 — sheet de toque longo do card, molde MyListingsScreen.tsx:483-516.
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    paddingBottom: 32,
+  },
+  sheetTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+    paddingBottom: theme.spacing.sm,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+  },
+  sheetOptionText: { fontSize: theme.fontSize.md, color: theme.colors.text },
+  sheetCancel: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: theme.colors.border,
+  },
+  sheetCancelText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.nope },
 });

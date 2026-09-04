@@ -10,6 +10,9 @@ export interface MatchWithProfile extends Match {
 
 interface UseActiveMatchesReturn {
   matches: MatchWithProfile[];
+  // S178 — ids brutos (inclui matches bloqueados, que continuam existindo)
+  // pra MatchesScreen podar pinnedMatchIds só de doc apagado.
+  matchIds: string[];
   loading: boolean;
 }
 
@@ -21,6 +24,7 @@ interface UseActiveMatchesReturn {
 export function useActiveMatches(): UseActiveMatchesReturn {
   const { user, profile } = useAuth();
   const [matches, setMatches] = useState<MatchWithProfile[]>([]);
+  const [matchIds, setMatchIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,10 +44,11 @@ export function useActiveMatches(): UseActiveMatchesReturn {
         return !m.otherProfile || !blockedUsers.includes(m.otherProfile.uid);
       });
       setMatches(visible);
+      setMatchIds(rawMatches.map((m) => m.id));
       setLoading(false);
     });
     return unsub;
   }, [user, profile?.blockedUsers]);
 
-  return { matches, loading };
+  return { matches, matchIds, loading };
 }

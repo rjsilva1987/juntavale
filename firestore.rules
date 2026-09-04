@@ -1,4 +1,4 @@
-// rules-stamp: S172-A (04/09/2026 — aprovação do admin renova expiresAt
+// rules-stamp: S178 (04/09/2026 — pinnedMatchIds no hasOnly do update do dono + validação list ≤3 em isValidProfile) + S172-A (04/09/2026 — aprovação do admin renova expiresAt
 // [+30d, teto +31d]; recusa/removed não tocam expiresAt) + S172 (04/09/2026 — expiração de anúncio com renovação em 1
 // toque: allow update do dono ganha ramo 'expired'→'approved'
 // [status+expiresAt, prazo novo no futuro, teto +31d] + affectedKeys()
@@ -691,6 +691,11 @@ service cloud.firestore {
         // cada item seja de fato um AboutFieldId do catálogo — mesma
         // decisão de about acima: catálogo muda no client, sem deploy.
         && (!('aboutHidden' in data) || (data.aboutHidden is list && data.aboutHidden.size() <= 30))
+        // S178 — "Fixar conversas no topo": até 3 matchIds fixados pelo
+        // próprio dono na aba Conversas (matches 1:1). Mesmo molde condicional
+        // de about/aboutHidden acima (ausente = sempre válido); teto de 3 é o
+        // limite de produto, não um teto de tamanho de doc como os de cima.
+        && (!('pinnedMatchIds' in data) || (data.pinnedMatchIds is list && data.pinnedMatchIds.size() <= 3))
         && (!('prompts' in data) || isValidPrompts(data.prompts))
         // S59 — slot único do prompt da semana, separado de prompts[] acima.
         && (!('weeklyPromptAnswer' in data) || isValidWeeklyPromptAnswer(data.weeklyPromptAnswer))
@@ -896,7 +901,7 @@ service cloud.firestore {
              ['age', 'birthDate', 'bio', 'photoURL', 'photos', 'interests',
               'gender', 'lookingFor', 'uf', 'vale', 'location', 'filters', 'prompts', 'lastActiveAt',
               'reengagementOptOut', 'paused', 'places', 'events', 'weeklyPromptAnswer', 'about',
-              'aboutHidden', 'poll'])
+              'aboutHidden', 'poll', 'pinnedMatchIds'])
         // lastActiveAt só entra via serverTimestamp() do client — se a chave
         // foi tocada nesta escrita, o valor tem que ser o horário do próprio
         // servidor, nunca um timestamp arbitrário mandado pelo client.

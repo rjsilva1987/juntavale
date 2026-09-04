@@ -45,6 +45,62 @@ possivelmente a categoria na App Store — e colide com a defesa do nicho
 enviada à Apple no 4.3(b), que descreve o app pela comunidade credenciada.
 Nada de recon ou implementação antes dessa decisão.
 
+### S178-B — Fixar conversas: grupos e classificados
+**Status:** ABERTA · sem decisões · sem recon
+
+Extensão da S178 (fixar até 3 conversas no topo, só matches 1:1 na aba
+Conversas). Cobriria a aba Grupos (GroupsScreen) e a lista de chats de
+classificado (ListingChatsScreen). Decisões em aberto: limite compartilhado
+ou por lista; campo próprio (`pinnedGroupIds`/`pinnedListingChatIds`) ou
+um só; se o card "Classificados" da aba Conversas conta como conversa.
+
+---
+
+### S178 — Fixar conversas no topo (matches 1:1, aba Conversas)
+**Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
+GIT AUTOMATICO, trilha completa), auditoria APROVADA na 2ª rodada (1ª
+BLOQUEOU: a poda de pins usava a lista já filtrada por bloqueio e apagaria
+o pin de um match apenas bloqueado; corrigido). EXIGE deploy de
+`firestore:rules` (stamp S178 — `pinnedMatchIds` no `hasOnly` do update do
+dono + validação `is list && size() <= 3` em `isValidProfile`); sem
+function, sem índice. Lado client entra no build 26 (testável em Expo Go
+depois do deploy das rules). SEM teste em aparelho.
+
+Persistência em `users/{uid}.pinnedMatchIds` (campo privado do dono, máx.
+3 ids de `matches/*`), nunca no doc do match. MatchesScreen: `rows`
+ordena em memória fixadas primeiro e, dentro de cada grupo, por
+`lastMessage.createdAt` desc (sem orderBy, sem índice); ícone Ionicons
+`pin` 14px `textSecondary` na coluna de meta do card; toque longo no card
+abre o sheet (molde MyListingsScreen S176) com título = nickname, uma
+opção "Fixar conversa"/"Desafixar conversa" e "Cancelar"; ao tentar a 4ª:
+Alert "Limite atingido — Você pode fixar até 3 conversas."; erro de
+escrita vira Alert com o code (S164). Poda de órfãos: `useActiveMatches`
+passa a expor `matchIds` (ids BRUTOS do snapshot de `getMatches`, antes do
+filtro de bloqueio); o effect só roda com `loading:false`, uid e lista não
+vazia, e grava `kept` uma única vez se algum id fixado não existir mais
+(unmatch apaga o doc); bloqueio mantém o doc → o pin fica, invisível
+enquanto bloqueado e volta ao desbloquear. Deps por conteúdo
+(`matchIds.join`, `pinnedIds.join`, uid, loading), sem `eslint-disable`.
+Fora: carrossel "Novos matches", grupos e classificados (→ S178-B).
+
+Ressalvas (não bloqueantes): usuário que fica com ZERO matches mantém o id
+órfão até ganhar um match novo (invisível); janela de corrida estreita
+entre `togglePin` e a poda, autocorrigida no snapshot seguinte; título do
+sheet usa `nickname` cru (conta legada sem nickname vê "Conversa").
+
+Teste (Expo Go, depois do deploy das rules): toque longo num card da lista
+"Mensagens" → sheet → "Fixar conversa" → card sobe pro topo com alfinete;
+fixar 3 e tentar a 4ª → Alert do limite; "Desafixar" volta pra ordem por
+última mensagem; mandar mensagem numa não fixada não passa por cima das
+fixadas; desfazer match fixado → o id some de `pinnedMatchIds` no console;
+bloquear o outro lado de uma fixada → o id CONTINUA no array e a conversa
+volta fixada ao desbloquear. Antes do deploy das rules, fixar dá Alert
+"erro: permission-denied" (esperado).
+
+Decisões tomadas no automático: trilha completa; fixar só na lista
+principal de conversas (não no carrossel "Novos matches"); ícone Ionicons
+`pin`; rules no menor ramo (hasOnly + isValidProfile); bloqueio não poda.
+
 ---
 
 ### S179 — Chat de classificado: Alert "Conversa indisponível" indevido na 1ª mensagem

@@ -112,6 +112,8 @@ export interface UserProfile {
   filters?: DiscoverFilters;
   createdAt?: Timestamp;
   blockedUsers?: string[];
+  // S178 — ids de matches fixados no topo da aba Conversas (máx. 3)
+  pinnedMatchIds?: string[];
   verified?: boolean;
   // Selo fundador (S51) — atribuído SÓ por Cloud Function (assignFounderNumber,
   // Admin SDK); o client nunca escreve este campo, ver firestore.rules

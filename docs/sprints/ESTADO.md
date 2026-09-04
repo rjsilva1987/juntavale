@@ -4,9 +4,9 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** 190867c (S177, badge da aba Conversas) + S179 commitada
-neste commit (lote 3 de 04/09/2026, AUTOMATICO + GIT AUTOMATICO, em
-andamento: S179 → S178 → S181 → S180). Lote 2 (S175 672b102 → S172-A
+**Commit atual:** 4c2f136 (S179) + S178 commitada neste commit (lote 3
+de 04/09/2026, AUTOMATICO + GIT AUTOMATICO, em andamento: S179 4c2f136 →
+S178 → S181 → S180). Lote 2 (S175 672b102 → S172-A
 a716da1 → S174 f0dda02) e lote 1 (S171 0184688 → S168-B2 5fa69ed → S172
 cc60168 → S173 88885eb → S168-C 9bfa568) fechados; S176 (4bc25fa) e
 S177 (190867c) avulsas fechadas.
@@ -16,19 +16,27 @@ storage stamp S168-B2, indexes, hosting, functions onListingSubmitted/
 onVerificationSubmitted/onSupportMessageCreated/expireListings/
 deleteAccount/onReportCreated/onListingChatMessageCreated) foi deployado
 em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Deploys
-pendentes DESTA rodada (lote 3): S179 nenhum (client puro). As sprints
-seguintes do lote acrescentam aqui o que tocarem.
+pendentes DESTA rodada (lote 3): S179 nenhum (client puro); S178
+`firebase deploy --only firestore:rules` (stamp S178, auditoria externa
+das rules antes). As sprints seguintes do lote acrescentam aqui.
 
-**Build 26 (pendente):** acumula o lado client de S177 Parte A (badge) e
-S179 (chat de classificado sem Alert falso na 1ª mensagem); as sprints
-seguintes do lote acrescentam aqui.
+**Build 26 (pendente):** acumula o lado client de S177 Parte A (badge),
+S179 (chat de classificado sem Alert falso na 1ª mensagem) e S178 (fixar
+até 3 conversas no topo); as sprints seguintes do lote acrescentam aqui.
 
 ## Sprints em andamento
-Lote 3 de 04/09/2026: S179 commitada; S178 (fixar conversas), S181
-(permissão de push) e S180 (órfãos de deleteAccount + admin encerra/
-exclui) em sequência. Das sprints anteriores fica só teste em aparelho:
+Lote 3 de 04/09/2026: S179 e S178 commitadas; S181 (permissão de push) e
+S180 (órfãos de deleteAccount + admin encerra/exclui) em sequência. Das
+sprints anteriores fica só teste em aparelho:
 
-S179 (Expo Go serve, 2 contas verificadas): "Tenho interesse" → tela
+S178 (Expo Go, depois do deploy das rules): toque longo num card de
+"Mensagens" → sheet → "Fixar conversa" → card sobe pro topo com alfinete;
+fixar 3 e tentar a 4ª → Alert "Você pode fixar até 3 conversas";
+"Desafixar" volta pra ordem por última mensagem; desfazer match fixado →
+o id some de `users/{uid}.pinnedMatchIds`; bloquear o outro lado de uma
+fixada → o id continua e a conversa volta fixada ao desbloquear; antes do
+deploy das rules, fixar dá "erro: permission-denied" (esperado). S179
+(Expo Go serve, 2 contas verificadas): "Tenho interesse" → tela
 vazia sem Alert → 1ª mensagem (texto; e foto como 1ª mensagem em outro
 anúncio) → nenhum Alert, mensagem aparece e a conversa segue; o outro
 lado de uma conta apagada (S173) ainda vê "Conversa indisponível (erro:
