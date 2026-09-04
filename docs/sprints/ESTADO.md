@@ -4,25 +4,32 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S172 (feat(listings), sucede 5fa69ed —
-S168-B2, denúncia + push pra todos os admins). S172 (scheduled
-`expireListings` approved→expired + push `listing_expired`; botão
-"Renovar" em Meus anúncios devolve pra approved com +30d sem fila; ramo
-próprio nas rules) IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em
-04/09 — ver ROADMAP § S172. Lote em andamento nesta sessão: S173 (purge
-de Classificados no deleteAccount, decisão do Raphael em 04/09) →
-S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados:
-`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings`
+**Commit atual:** o commit da S173 (feat(functions), sucede cc60168 —
+S172, expiração com renovação). S173 (`deleteAccount` apaga anúncios do
+dono + `images/listings/{uid}` e `listingChats` em que participa +
+`messages` + `images/listingChats/{chatId}`; `reports` intacto)
+IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em 04/09 — ver ROADMAP §
+S173. Lote em andamento nesta sessão: só falta S168-C (privacidade.html +
+docs/loja, ver "Sprints em andamento"). Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount`
 (rules-stamp S172 engloba S168-B2, S168-B e o S168-A ainda não
 confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
 `listingChats` participants+lastMessageAt e `listings` status+expiresAt;
 `onVerificationSubmitted`/`onSupportMessageCreated`/`onListingSubmitted`
-mudaram na S168-B2; `expireListings` é nova, S172).
+mudaram na S168-B2; `expireListings` é nova, S172; `deleteAccount` mudou
+na S173). Hosting (`site/privacidade.html`) entra na lista quando a
+S168-C fechar.
 
 ## Sprints em andamento
 Lote S171 → S168-B2 → S172 → S173 → S168-C rodando em 04/09/2026 (S171,
-S168-B2 e S172 já commitadas; S173 e S168-C em sequência, cada uma com
-commit próprio após auditoria). S172 (depois do deploy de rules + indexes
+S168-B2, S172 e S173 já commitadas; S168-C em andamento). S173 (depois
+do deploy de `functions:deleteAccount`): com uma conta de teste que tem
+anúncio com foto e um chat de classificado nos dois papéis, excluir a
+conta → anúncio some do feed e de `listings`, `images/listings/{uid}`
+vazio, `listingChats` do uid apagados com `messages` e fotos, o outro
+participante recebe "conversa indisponível" ao abrir; denúncias antigas
+continuam no painel do admin (com "Abrir anúncio" levando a "anúncio
+indisponível"). S172 (depois do deploy de rules + indexes
 + function, em build com push): anúncio approved com `expiresAt` no
 passado → na rodada das 09:00 vira "Expirado" em Meus anúncios, some do
 feed, dono recebe "Um anúncio seu expirou. Toque para renovar." e o toque

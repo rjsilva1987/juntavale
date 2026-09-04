@@ -90,14 +90,15 @@ reinstancia esses singletons.
   Lê: dono, admin, e qualquer verificado (só docs `approved`/`sold` —
   `expired` fica invisível pra quem não é dono/admin). Escreve: dono
   cria/edita conteúdo/renova (sempre verificado), admin revisa,
-  `expireListings` expira.
+  `expireListings` expira. Apagados pelo `deleteAccount` (S173).
 - `listingChats/{chatId}` — chat 1:1 SEM match entre o interessado e o dono
   de um anúncio (S168-B), `chatId = ${listingId}_${interestedId}`. `ownerId`,
   `interestedId`, `participants[]` (`[ownerId, interestedId]`, nessa ordem),
   `listingTitle` (snapshot do título), `lastMessage`/`lastMessageAt`
   (escritos pelo CLIENT, não por Cloud Function — decisão desta sprint),
   `lastReadAt` (mirror S27). Subcoleção `messages/{messageId}` (mirror de
-  `groups/{groupId}/messages` sem edição, só "apagar pra todos").
+  `groups/{groupId}/messages` sem edição, só "apagar pra todos"). Apagados
+  pelo `deleteAccount` (S173).
 - `presence/{uid}` — `lastSeenAt` (S82).
 - `testerSignups/{signupId}` — só escrita pela landing (`site/`), fora do
   app RN.
@@ -134,7 +135,7 @@ no ROADMAP (S170).
 | `expireMomentos` | `onSchedule` a cada hora | apaga momentos expirados (molde de expiração) |
 | `expireGroups` | `onSchedule` a cada hora | idem grupos |
 | `expireEvents` | `onSchedule` diário 3h | idem eventos |
-| `deleteAccount` | `onCall` | apaga em cascata todos os dados do usuário + Auth |
+| `deleteAccount` | `onCall` | apaga em cascata todos os dados do usuário + listings do dono (+ images/listings/{uid}) + listingChats em que participa (+ messages + images/listingChats/{chatId}) (S173) + Auth |
 | `unmatch` | `onCall` | apaga um match a pedido de um participante |
 | `onTesterSignupCreated` | `onDocumentCreated testerSignups/{id}` | email via Gmail pro contato |
 | `onPollVoteCreated` | `onDocumentCreated users/.../pollVotes/{voterUid}` | incrementa `pollCounts` + push (molde de contador agregado via `increment`) |

@@ -47,6 +47,31 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S173 — deleteAccount apaga os dados de Classificados
+**Status:** IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
+AUTOMATICO), auditoria APROVADA na 1ª rodada (sem falhas; ressalvas só de
+escala já pré-existentes no desenho do `deleteAccount`). EXIGE deploy de
+`functions:deleteAccount`. Sem rules/índices/client. SEM teste em aparelho.
+
+Sprint aberta no meio do lote por decisão do Raphael (04/09/2026, portão
+de produto da S168-C): a recon achou que `deleteAccount` não apagava
+anúncios, fotos em `images/listings/{uid}` nem `listingChats`, e a
+política de privacidade não podia afirmar exclusão completa. Dois blocos
+novos em `functions/src/account.ts`, entre "participações em eventos" e
+`avatars/{uid}`, cada um em try/catch próprio: (1) `listings` do dono →
+`deleteDocsInBatches` (sem subcoleção) + `bucket.deleteFiles` de
+`images/listings/{uid}/` (path é por uid do dono, 1 chamada — molde de
+avatars); (2) `listingChats` em que o uid participa (dono OU
+interessado, `participants array-contains`) → `recursiveDelete`
+(subcoleção `messages`) + `deleteFiles` de `images/listingChats/{chatId}/`
+(molde exato do bloco de matches). Nenhum índice novo (queries sem
+orderBy). `reports` continua intacto — denúncias de anúncio/chat ficam
+com `listingId`/`listingChatId` como referência solta. O outro
+participante recebe `permission-denied` no listener e
+`ListingChatScreen` já trata como "conversa indisponível".
+
+---
+
 ### S172 — Expiração de anúncio com renovação em 1 toque
 **Status:** IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
 AUTOMATICO), auditoria APROVADA na 1ª rodada (12 cenários de rules

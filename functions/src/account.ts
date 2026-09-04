@@ -216,6 +216,40 @@ export const deleteAccount = onCall(
       console.error('[deleteAccount] falha ao apagar participações em eventos:', uid, error);
     }
 
+    // S173 — Classificados (1/2): anúncios do dono. Sem subcoleção, então
+    // deleteDocsInBatches (molde de swipes/blocks), e as fotos ficam em
+    // images/listings/{uid}/ (path por uid do DONO, não por anúncio —
+    // listingService.uploadListingPhoto), então UMA chamada de deleteFiles,
+    // molde de avatars/{uid}. Denúncias que apontam pro listingId ficam
+    // (reports nunca é apagado, ver comentário abaixo) — mesmo padrão já
+    // aceito com matches apagados.
+    try {
+      const listingsSnap = await db.collection('listings').where('ownerId', '==', uid).get();
+      await deleteDocsInBatches(listingsSnap.docs.map((d) => d.ref));
+      await bucket.deleteFiles({ prefix: `images/listings/${uid}/` });
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar listings:', error);
+    }
+
+    // S173 — Classificados (2/2): chats de classificado em que o uid
+    // participa, como dono OU interessado (participants é sempre
+    // [ownerId, interestedId]). Tem subcoleção messages → recursiveDelete
+    // por doc + fotos em images/listingChats/{chatId}/, molde EXATO do bloco
+    // de matches acima. O outro participante recebe permission-denied no
+    // listener e ListingChatScreen já trata como "conversa indisponível".
+    try {
+      const listingChatsSnap = await db
+        .collection('listingChats')
+        .where('participants', 'array-contains', uid)
+        .get();
+      for (const chatDoc of listingChatsSnap.docs) {
+        await db.recursiveDelete(chatDoc.ref);
+        await bucket.deleteFiles({ prefix: `images/listingChats/${chatDoc.id}/` });
+      }
+    } catch (error) {
+      console.error('[deleteAccount] falha ao apagar listingChats:', error);
+    }
+
     // f) Storage do perfil — avatares.
     try {
       await bucket.deleteFiles({ prefix: `avatars/${uid}/` });
@@ -237,8 +271,11 @@ export const deleteAccount = onCall(
     // NÃO apaga a coleção `reports` NEM images/reports/ (S113): denúncias
     // feitas pelo usuário (reporterId) ou recebidas por ele (reportedId) são
     // registro de moderação e permanecem por decisão de produto, fotos
-    // anexadas incluídas, mesmo após a exclusão da conta. Não "consertar"
-    // isso depois adicionando um bucket.deleteFiles aqui.
+    // anexadas incluídas, mesmo após a exclusão da conta. Denúncias de
+    // anúncio/chat de classificado (S168-B2, campos `listingId`/
+    // `listingChatId`) seguem a mesma regra: ficam como referência solta
+    // mesmo com o listing/listingChat já apagado acima (S173). Não
+    // "consertar" isso depois adicionando um bucket.deleteFiles aqui.
 
     // h) Auth — por último, e de propósito FORA do padrão try/catch-e-loga
     // das etapas acima: se apagar a conta em si falhar, o erro precisa
