@@ -89,7 +89,8 @@ export type RootStackParamList = {
           | 'Perfil'
           | 'Verificacoes'
           | 'Chamados'
-          | 'Denuncias';
+          | 'Denuncias'
+          | 'Classificados';
       };
   Chat: {
     matchId: string;
@@ -129,16 +130,14 @@ export type RootStackParamList = {
   CreateEvent: undefined;
   EventDetail: { eventId: string };
   // S168-A — classificados: mesmo padrão de grupos/eventos acima, sem aba
-  // própria. Entrada pelo card "Classificados" na fileira do topo da aba
-  // Explorar (MomentosScreen). Admin: entrada por "Classificados pendentes"
-  // na ProfileScreen (mesmo padrão de "Pedidos de conversa"), telas de
-  // detalhe gated por isAdmin como AdminVerificationDetail/AdminSupportDetail
-  // /AdminReportDetail abaixo.
+  // própria. Entrada pública continua pelo card "Classificados" na fileira
+  // do topo da aba Explorar (MomentosScreen). S169 — admin entra pela aba
+  // `Classificados` (MainTabs), não mais por botão na ProfileScreen; só o
+  // detalhe segue no Stack, gated por isAdmin.
   Listings: undefined;
   ListingDetail: { listingId: string };
   CreateListing: { listingId?: string } | undefined;
   MyListings: undefined;
-  AdminListings: undefined;
   AdminListingDetail: { listingId: string };
   Support: undefined;
   MyTickets: undefined;
@@ -185,6 +184,8 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
   Chamados: { label: 'Chamados', icon: 'chatbox-ellipses' },
   // S96-B — 4ª aba do admin, denúncias entre usuários (S96-A criou os dados).
   Denuncias: { label: 'Denúncias', icon: 'flag' },
+  // S169 — 5ª aba do admin, fila de moderação de classificados (S168-A).
+  Classificados: { label: 'Classificados', icon: 'pricetags' },
 };
 
 function MainTabs() {
@@ -230,7 +231,7 @@ function MainTabs() {
   // S94-B — contagem de pendências pras abas do admin. O Provider já devolve
   // 0/0 pra quem não é admin (ver AdminAlertContext), então não precisa
   // repetir o isAdmin aqui pra decidir se lê os valores.
-  const { pendingVerifications, pendingTickets, pendingReports } = useAdminAlert();
+  const { pendingVerifications, pendingTickets, pendingReports, pendingListings } = useAdminAlert();
 
   // S95 — aba Perfil é idêntica nos dois papéis (mesmo badge de
   // verificação/suporte, nada ligado a unreadCount de Conversas), então o
@@ -315,6 +316,16 @@ function MainTabs() {
             {() => (
               <ErrorBoundary>
                 <AdminReportsScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen
+            name="Classificados"
+            options={{ tabBarBadge: pendingListings > 0 ? pendingListings : undefined }}
+          >
+            {() => (
+              <ErrorBoundary>
+                <AdminListingsScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>
@@ -490,9 +501,9 @@ export default function Navigation() {
                 />
                 <Stack.Screen name="AdminSupportDetail" component={AdminSupportDetailScreen} />
                 <Stack.Screen name="AdminReportDetail" component={AdminReportDetailScreen} />
-                {/* S168-A — fila de moderação de classificados, mesmo padrão
-                    das 3 telas de detalhe admin acima. */}
-                <Stack.Screen name="AdminListings" component={AdminListingsScreen} />
+                {/* S168-A/S169 — AdminListings virou Tab.Screen (ver
+                    MainTabs); só o detalhe segue no Stack, mesmo padrão das
+                    3 telas de detalhe admin acima. */}
                 <Stack.Screen name="AdminListingDetail" component={AdminListingDetailScreen} />
               </>
             )}

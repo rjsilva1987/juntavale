@@ -4,13 +4,14 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 03/09/2026
-**Commit atual:** o commit da S168-A (feat(listings), sucede f2ea074 —
-build 22 / 1.0.12, que leva a S167). S168-A (classificados no Explorar,
-parte A: modelo `listings`, feed/detalhe/criar/editar/"meus anúncios",
-fila de aprovação do admin, gate de verificado) IMPLEMENTADA e auditada
-(APROVADA na 2ª rodada) em 03/09 — ver ROADMAP § S168. EXIGE deploy
-pendente: `firestore.rules` + `storage.rules` (rules-stamp S168-A) +
-`firestore.indexes.json` (2 índices de `listings`); sem function nova.
+**Commit atual:** o commit da S169 (fix(listings), sucede cb70c88 —
+S168-A). S169 (lado admin dos classificados: fila sem loading infinito,
+código do Firestore no EmptyState da fila e da lista pública, 5ª aba
+`Classificados` do admin com badge de pendentes) IMPLEMENTADA e auditada
+(APROVADA na 1ª rodada) em 03/09 — ver ROADMAP § S169. Client puro, sem
+deploy. Da S168-A: `firestore.indexes.json` já deployado em 03/09
+(informado pelo Raphael na S169); `firestore.rules` + `storage.rules`
+(rules-stamp S168-A) — confirmar se o deploy já foi feito.
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
@@ -23,7 +24,14 @@ localização) e que reagir/responder/copiar/editar/apagar/denunciar,
 grupo. S168-A: depois do deploy (rules + storage + indexes), testar em
 aparelho o fluxo inteiro — criar anúncio (pending), aprovar/recusar como
 admin, edição volta pra pending, marcar vendido/excluir, gate de não
-verificado (nenhum dado real, CTA de verificação).
+verificado (nenhum dado real, CTA de verificação). S169: testar em
+aparelho como admin que a aba "Classificados" aparece entre Denúncias e
+Perfil com badge igual ao número de anúncios pending, que a fila carrega
+o anúncio cadastrado (sem loading infinito) e abre o detalhe, que o badge
+cai ao aprovar/recusar, e que o botão "Classificados pendentes" sumiu do
+Perfil. Se a fila ainda falhar, o EmptyState mostra `erro: <code>` — esse
+código é o diagnóstico (`failed-precondition` = índice; `permission-
+denied` = rules).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.

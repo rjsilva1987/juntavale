@@ -12,18 +12,21 @@ interface AdminAlertContextType {
   pendingVerifications: number;
   pendingTickets: number;
   pendingReports: number;
+  pendingListings: number;
 }
 
 const AdminAlertContext = createContext<AdminAlertContextType>({
   pendingVerifications: 0,
   pendingTickets: 0,
   pendingReports: 0,
+  pendingListings: 0,
 });
 
 export const useAdminAlert = () => useContext(AdminAlertContext);
 
-// S94-B (+ S96-B: reports) — contador de pendencias pras abas
-// Verificacoes/Chamados/Denuncias do admin. GUARDA OBRIGATORIA:
+// S94-B (+ S96-B: reports; S169: listings) — contador de pendencias pras
+// abas Verificacoes/Chamados/Denuncias/Classificados do admin. GUARDA
+// OBRIGATORIA:
 // firestore.rules só libera list()/onSnapshot em verifications, support e
 // reports pra quem bate com isAdmin() (uid in ADMIN_UIDS) — mesma checagem de
 // getPendingVerifications em verificationService.ts. Montar estes listeners
@@ -36,6 +39,7 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [pendingVerifications, setPendingVerifications] = useState(0);
   const [pendingTickets, setPendingTickets] = useState(0);
   const [pendingReports, setPendingReports] = useState(0);
+  const [pendingListings, setPendingListings] = useState(0);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -96,8 +100,35 @@ export const AdminAlertProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return unsub;
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingListings(0);
+      return;
+    }
+    // S169 — badge da aba Classificados (fila de moderação, S168-A). Mesmo
+    // molde de verifications: só where, sem orderBy (índice single-field
+    // automático). firestore.rules libera list em `listings` pra isAdmin()
+    // sem condição sobre o doc, então o admin enxerga todo pending.
+    const q = query(collection(db, 'listings'), where('status', '==', 'pending'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setPendingListings(snap.size);
+      },
+      (error) => {
+        // Erro não é engolido: fica logado e o badge zera em vez de
+        // congelar num número velho.
+        console.warn('[AdminAlertContext] listener de listings falhou:', error);
+        setPendingListings(0);
+      },
+    );
+    return unsub;
+  }, [isAdmin]);
+
   return (
-    <AdminAlertContext.Provider value={{ pendingVerifications, pendingTickets, pendingReports }}>
+    <AdminAlertContext.Provider
+      value={{ pendingVerifications, pendingTickets, pendingReports, pendingListings }}
+    >
       {children}
     </AdminAlertContext.Provider>
   );

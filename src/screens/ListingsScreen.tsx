@@ -28,6 +28,7 @@ import {
   listApprovedListings,
   normalizeText,
 } from '@/services/listingService';
+import { getFirestoreErrorCode } from '@/utils/firestoreError';
 
 const SKELETON_COUNT = 6;
 const ALL_CATEGORIES = 'all';
@@ -41,6 +42,7 @@ export default function ListingsScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>(ALL_CATEGORIES);
   // Padrão: UF do próprio perfil; perfil sem UF cai em "Todo o Brasil".
@@ -49,11 +51,13 @@ export default function ListingsScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
+    setLoadErrorCode(null);
     try {
       setListings(await listApprovedListings());
     } catch (err) {
       console.error('[ListingsScreen] falha ao carregar classificados:', err);
       setLoadError(true);
+      setLoadErrorCode(getFirestoreErrorCode(err));
     } finally {
       setLoading(false);
     }
@@ -187,6 +191,7 @@ export default function ListingsScreen() {
               <EmptyState
                 icon="alert-circle-outline"
                 title="Não foi possível carregar os classificados."
+                subtitle={loadErrorCode ? `erro: ${loadErrorCode}` : undefined}
                 buttonLabel="Tentar de novo"
                 onButtonPress={load}
               />

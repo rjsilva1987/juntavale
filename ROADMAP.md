@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 02/09/2026
+**Última atualização:** 03/09/2026
 
 ---
 
@@ -44,6 +44,39 @@ tab bar, a primeira impressão do app, a ficha das duas lojas e
 possivelmente a categoria na App Store — e colide com a defesa do nicho
 enviada à Apple no 4.3(b), que descreve o app pela comunidade credenciada.
 Nada de recon ou implementação antes dessa decisão.
+
+---
+
+### S169 — Classificados, lado admin (fila sem loading infinito + aba com badge)
+**Status:** IMPLEMENTADA em 03/09/2026, auditoria APROVADA (1ª rodada, sem
+falhas). Client puro: NÃO exige deploy de rules, functions nem indexes.
+SEM teste em aparelho.
+
+Parte A (bug): a fila "Classificados pendentes" ficava em loading infinito.
+Causa em duas camadas: (1) `listPendingListings` pedia `where(status==pending)
++ orderBy(createdAt, asc)`, e a doc do Firestore exige um índice composto
+POR DIREÇÃO — `firestore.indexes.json` só declara `(status ASC, createdAt
+DESC)`, então a query devolvia `failed-precondition` (índice FALTANDO, não
+"em construção"; o deploy de 03/09 não resolvia); (2) `AdminListingsScreen`
+fazia `await` sem try/catch, e a rejeição deixava `loading` em `true` pra
+sempre. Correção: a fila consulta `createdAt desc` (índice já declarado e
+deployado, o mesmo de `listApprovedListings`) e inverte no cliente; a fila
+e a lista pública ganham `try/catch/finally` + EmptyState com "Tentar de
+novo" e a linha `erro: <code do Firestore>` (helper novo
+`getFirestoreErrorCode` em `src/utils/firestoreError.ts`). Gate de
+verificado da lista pública e ChatScreen intocados.
+
+Parte B: fila vira 5ª aba inferior do admin, `Classificados` (ícone
+`pricetags`), entre Denúncias e Perfil, com `tabBarBadge` numérico de
+`pending` ao vivo (`pendingListings` em `AdminAlertContext`, molde S94-B
+com callback de erro). Precedente S95: saiu o `Stack.Screen AdminListings`,
+a rota do `RootStackParamList` e o botão "Classificados pendentes" da
+ProfileScreen. Decisões tomadas no automático: aba (não dot no Perfil),
+badge só de `pending`, correção da query por `desc`+`reverse` em vez de
+3º índice.
+
+Débito anotado (fora do escopo): `listenReports`/`AdminReportsScreen` têm
+o mesmo padrão de listener sem callback de erro.
 
 ---
 

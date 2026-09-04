@@ -5,6 +5,10 @@
 // fila de verificação, aqui não é preciso buscar perfil/nome legal à parte —
 // o próprio doc do anúncio já carrega ownerNickname (S135: nome público é
 // sempre nickname).
+// S169 — virou Tab.Screen `Classificados` do admin (ver navigation/index.tsx
+// MainTabs), mesmo movimento do S95 com Verificações/Chamados; carrega a
+// cada foco (useFocusEffect) e mostra o código do Firestore quando a query
+// falha.
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,16 +23,32 @@ import { EmptyState } from '@/components/EmptyState';
 import { theme } from '@/constants/theme';
 import { RootStackParamList } from '@/navigation';
 import { Listing, listPendingListings } from '@/services/listingService';
+import { getFirestoreErrorCode } from '@/utils/firestoreError';
 
 export default function AdminListingsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setListings(await listPendingListings());
-    setLoading(false);
+    setLoadError(false);
+    setLoadErrorCode(null);
+    try {
+      setListings(await listPendingListings());
+    } catch (err) {
+      // S169 — sem este catch, uma rejeição de getDocs (índice faltando =
+      // failed-precondition, rules = permission-denied, rede = unavailable)
+      // deixava `loading` em true pra sempre, sem nenhum sinal. O código
+      // vai pro EmptyState abaixo: único canal de diagnóstico em campo.
+      console.error('[AdminListingsScreen] falha ao carregar fila:', err);
+      setLoadError(true);
+      setLoadErrorCode(getFirestoreErrorCode(err));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -55,6 +75,14 @@ export default function AdminListingsScreen() {
           <View style={styles.center}>
             <ActivityIndicator color={theme.colors.primary} />
           </View>
+        ) : loadError ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title="Não foi possível carregar a fila."
+            subtitle={loadErrorCode ? `erro: ${loadErrorCode}` : undefined}
+            buttonLabel="Tentar de novo"
+            onButtonPress={load}
+          />
         ) : listings.length === 0 ? (
           <EmptyState icon="pricetags-outline" title="Nenhum anúncio pendente" />
         ) : (

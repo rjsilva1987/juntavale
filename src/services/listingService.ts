@@ -230,14 +230,21 @@ export const listMyListings = async (uid: string): Promise<Listing[]> => {
 
 // Fila de moderação (AdminListingsScreen) — mais antigo primeiro, mesmo
 // critério de getPendingVerifications (verificationService.ts).
+// S169 — a query consulta `createdAt desc` e inverte no cliente: a doc do
+// Firestore exige um índice composto POR DIREÇÃO (`==` + orderBy asc e
+// `==` + orderBy desc são índices distintos), e firestore.indexes.json só
+// declara (status ASC, createdAt DESC) — o mesmo que listApprovedListings
+// usa. Consultar `asc` aqui exigiria um 3º índice que nunca foi declarado
+// nem deployado: era isso que devolvia failed-precondition e travava a
+// fila. Fila é pequena e sem limit, inverter em memória custa nada.
 export const listPendingListings = async (): Promise<Listing[]> => {
   const q = query(
     collection(db, 'listings'),
     where('status', '==', 'pending'),
-    orderBy('createdAt', 'asc'),
+    orderBy('createdAt', 'desc'),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Listing, 'id'>) }));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Listing, 'id'>) })).reverse();
 };
 
 // Molde de reviewVerification (verificationService.ts:104-115) — union
