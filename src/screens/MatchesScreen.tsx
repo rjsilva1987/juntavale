@@ -14,13 +14,14 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
-import { useUnreadListingChats } from '@/hooks/useUnreadListingChats';
 import { RootStackParamList } from '@/navigation';
 import { LastMessage, UserProfile } from '@/services/firestoreService';
 import { hasValidLastMessage, isMatchUnread } from '@/utils/matches';
 import { getDisplayName } from '@/utils/profile';
 
-type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'>;
+type MatchesScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Main'>, 'navigation'> & {
+  listingChatsUnread: number;
+};
 
 interface ConversationRow {
   id: string;
@@ -35,13 +36,12 @@ interface ConversationRow {
 // truncar em .split(' ')[0] reintroduziria o mesmo problema de truncamento
 // que a S135 existe pra resolver (ver S134/raiz do card).
 
-export default function MatchesScreen({ navigation }: MatchesScreenProps) {
+export default function MatchesScreen({ navigation, listingChatsUnread }: MatchesScreenProps) {
   const { user, profile } = useAuth();
   const { matches: activeMatches, loading } = useActiveMatches();
   // S168-B — card "Classificados", mirror visual do exploreCard de
   // MomentosScreen.tsx, full-width com chevron. Renderizado SÓ pra
   // verificado, SEMPRE (mesmo com 0 conversas) — ver listingsCard abaixo.
-  const listingChatsUnread = useUnreadListingChats();
 
   // Novos matches (sem mensagem válida ainda) x conversas com preview —
   // padrão Tinder. Legado com lastMessage string antiga cai em newMatches

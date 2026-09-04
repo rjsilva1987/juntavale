@@ -4,15 +4,19 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S176 (feat(listings), sucede 54c6533 — bump
-versionCode 24 / 1.0.14 / iOS build 4 cobrindo S168-B..S175). S176
-(avulsa, AUTOMATICO + GIT AUTOMATICO) FECHADA: client puro, sem deploy.
+**Commit atual:** 9892b2d (bump versionCode 25 / 1.0.15 / iOS build 5,
+S176). Working tree com a S177 (avulsa, AUTOMATICO + GIT MANUAL)
+IMPLEMENTADA e auditada em 04/09/2026, AGUARDANDO commit/push pelo
+Raphael: Parte A client puro (badge da aba Conversas soma listingChats),
+sem deploy; Parte B encerrada sem alteração de código.
 Lote 2 de 04/09/2026 FECHADO: S175 (672b102) → S172-A (a716da1) → S174
 (f0dda02). Lote 1 (S171 0184688 → S168-B2 5fa69ed → S172 cc60168 → S173
 88885eb → S168-C 9bfa568) fechado. `docs/loja/` versionado (S175).
 Deploys pendentes acumulados:
-`firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount,functions:onReportCreated`
-(rules-stamp S172-A engloba S172, S168-B2, S168-B e o S168-A ainda não
+`firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount,functions:onReportCreated`
+(`onListingChatMessageCreated` saiu da lista: confirmada deployada e
+disparando em 04/09/2026 via lista de functions + logs, S177; o resto da
+lista não foi verificado; rules-stamp S172-A engloba S172, S168-B2, S168-B e o S168-A ainda não
 confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
 `listingChats` participants+lastMessageAt e `listings` status+expiresAt;
 hosting = `site/privacidade.html` + `site/excluir-conta.html`;
@@ -20,13 +24,21 @@ hosting = `site/privacidade.html` + `site/excluir-conta.html`;
 `onSupportMessageCreated`/`onListingSubmitted` mudaram na S168-B2;
 `expireListings` é nova, S172; `deleteAccount` mudou na S173;
 `onReportCreated` é nova, S174). Lado client de S168-B2/S172/S172-A/S174
-entra no build versionCode 24 / 1.0.14 (bump 54c6533); o lado client da
-S176 só entra nesse build se ele ainda não tiver sido gerado — senão
-precisa de bump novo.
+entra no build versionCode 24 / 1.0.14 (bump 54c6533); S176 entrou no
+bump versionCode 25 / 1.0.15 / iOS build 5 (9892b2d); a Parte A da S177
+precisa de build novo (26) — testável antes em Expo Go.
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. Da S176 e dos lotes 1 e
-2 de 04/09 fica só teste em aparelho e deploy. S176 (build novo, sem
+S177 implementada e auditada (APROVADA), pendente só de commit/push pelo
+Raphael (GIT MANUAL). Da S176 e dos lotes 1 e 2 de 04/09 fica só teste em
+aparelho e deploy. S177 Parte A (Expo Go serve): com um listingChat com
+mensagem não lida, a aba Conversas mostra o badge somado aos matches não
+lidos; abrir a conversa zera e o badge some quando as duas contagens
+zeram; o dot do card "Classificados" continua igual. S177 Parte B (build
+26, DUAS contas em build com permissão de push concedida — conferir
+`users/{uid}/private/push` no console): destinatário em background/
+fechado → push "nickname + preview" chega e o toque abre a conversa; em
+primeiro plano nada aparece (S122). S176 (build novo, sem
 deploy): em Meus anúncios, toque longo no card ou ⋯ abre o sheet;
 "Marcar como vendido" só em anúncio Aprovado → confirmação → selo
 "Vendido", some do feed, "Editar" some; "Excluir anúncio" em qualquer
@@ -112,6 +124,9 @@ primeiro plano não mostra banner (S122).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
+- Push: permissão negada uma vez não é re-solicitada nem há atalho pra
+  Configurações do app; logout apaga `private/push` (achado da recon da
+  S177, vale pra todo tipo de push) — decisão de produto pendente.
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.

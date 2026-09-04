@@ -2,9 +2,10 @@
 //
 // S168-B — contagem agregada de conversas de classificados (dono OU
 // interessado) com mensagem nova não lida, mirror de
-// useUnreadMomentoAuthorMessages.ts. Alimenta SÓ o dot do card
-// "Classificados" na aba Conversas (MatchesScreen.tsx) — NÃO entra em
-// useUnreadCount nem no tabBarBadge (fora de escopo, seção 0 da spec).
+// useUnreadMomentoAuthorMessages.ts. Chamado UMA vez em MainTabs()
+// (navigation/index.tsx): soma ao badge da aba Conversas e desce por
+// prop pra MatchesScreen.tsx, que usa o valor pro dot do card
+// "Classificados" (S177).
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';

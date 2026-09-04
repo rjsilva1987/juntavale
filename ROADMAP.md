@@ -47,6 +47,55 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S177 — Chat de classificados: badge na aba Conversas + push só com app fechado
+**Status:** IMPLEMENTADA em 04/09/2026 (sprint avulsa, modo AUTOMATICO +
+GIT MANUAL, trilha completa), auditoria APROVADA na 1ª rodada (sem falhas;
+1 ressalva herdada da S168-B: `useUnreadListingChats` devolve 0 pra usuário
+não-verificado). Parte A client puro — NÃO exige deploy; entra no build 26
+(testável em Expo Go). Parte B ENCERRADA SEM ALTERAÇÃO de código — nada a
+deployar. SEM teste em aparelho.
+
+Parte A: `useUnreadListingChats()` sai de MatchesScreen e passa a ser
+chamado UMA vez em `MainTabs()` (navigation/index.tsx); `conversasBadge =
+unreadCount + listingChatsUnread` alimenta o `tabBarBadge` da aba Conversas
+(some quando as duas contagens zeram; sem `tabBarBadgeStyle`, igual ao
+badge de matches) e o valor desce por prop obrigatória `listingChatsUnread`
+pra MatchesScreen, que mantém o dot do card "Classificados" — mesma fonte,
+um listener só (diferente do precedente momento/grupo, que re-chama o hook
+dentro da tela). Zeragem continua a de ListingChatScreen (`lastReadAt.{uid}`
+no mount e a cada mensagem nova), sem mudança.
+
+Parte B (diagnóstico com dados vivos do Firebase, 04/09/2026): (1)
+`onListingChatMessageCreated` ESTÁ deployada em southamerica-east1 (lista
+de functions; CreateFunction às 12:23 UTC de 04/09, depois do último commit
+que tocou `functions/src/listings.ts`, cc60168) e disparou 7 vezes em 04/09
+entre 21:37 e 21:46 UTC, uma por mensagem, sem WARNING/ERROR — a function
+não loga sucesso (igual a `onMessageCreated`), então o log não prova envio
+do ticket; (2) a guarda de foreground da S122 (`handleNotification` em
+`src/services/notifications.ts`) é type-agnostic: lê só
+`AppState.currentState`, suprime TODO tipo em primeiro plano e exibe em
+background/fechado — `listing_message` já está coberto; (3)
+`useNotifications` já roteia `listing_message` → `ListingChat` com
+`{listingId, ownerId, interestedId, listingTitle}`, iguais aos params da
+tela. Causa real do "push não chega" no teste: a conta destinatária (dono
+do anúncio, criada 03/09) NÃO tem `users/{uid}/private/push` → a function
+retorna em `!token` (listings.ts ~100). Coerente com Expo Go (`isExpoGo`
+impede o registro) ou permissão negada em build (o app não re-pede nem
+manda pra Configurações; logout apaga o doc). A outra conta do teste tinha
+token atualizado às 21:17 UTC do mesmo dia — o registro em build funciona.
+Teste da Parte B no build 26: as DUAS contas em build com permissão
+concedida (conferir `private/push` no console), app do destinatário em
+background/fechado → push chega com nickname + preview e o toque abre a
+conversa; em primeiro plano nada aparece (S122).
+
+Decisões tomadas no automático: trilha completa (recon tocou function/
+logs); Parte B sem código e sem log novo na function (mantém simetria com
+`onMessageCreated`, não cria deploy pendente); Parte A por lift do hook +
+prop, não pelo precedente de listener duplicado; badge sem estilo novo.
+Pendência de produto aberta (fora da sprint, vale pra todo push):
+permissão negada uma vez não é re-solicitada nem há atalho pra
+Configurações; logout remove o token.
+
 ### S176 — Classificados: marcar como vendido e excluir anúncio (lado do dono)
 **Status:** IMPLEMENTADA em 04/09/2026 (sprint avulsa, modo AUTOMATICO +
 GIT AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada (sem

@@ -25,6 +25,7 @@ import { usePendingMomentoRequests } from '@/hooks/usePendingMomentoRequests';
 import { usePresenceHeartbeat } from '@/hooks/usePresenceHeartbeat';
 import { useUnreadCount } from '@/hooks/useUnreadCount';
 import { useUnreadGroupMessages } from '@/hooks/useUnreadGroupMessages';
+import { useUnreadListingChats } from '@/hooks/useUnreadListingChats';
 import { useUnreadMomentoAuthorMessages } from '@/hooks/useUnreadMomentoAuthorMessages';
 import { useUnseenAcceptedEvents } from '@/hooks/useUnseenAcceptedEvents';
 import { useUnseenAcceptedGroups } from '@/hooks/useUnseenAcceptedGroups';
@@ -203,6 +204,8 @@ function MainTabs() {
   const { user } = useAuth();
   const isAdmin = isAdminUid(user?.uid);
   const unreadCount = useUnreadCount();
+  const listingChatsUnread = useUnreadListingChats();
+  const conversasBadge = unreadCount + listingChatsUnread;
   // S78 — sem contagem (não é "quantas revisões", é "tem uma nova pra ver"),
   // então o badge não usa número: um espaço só deixa a bolinha visível, sem
   // texto dentro dela. Some quando showAlert vira false (markSeen na
@@ -372,7 +375,7 @@ function MainTabs() {
           </Tab.Screen>
           <Tab.Screen
             name="Conversas"
-            options={{ tabBarBadge: unreadCount > 0 ? unreadCount : undefined }}
+            options={{ tabBarBadge: conversasBadge > 0 ? conversasBadge : undefined }}
           >
             {({ navigation }) => (
               <ErrorBoundary>
@@ -380,6 +383,7 @@ function MainTabs() {
                   navigation={
                     navigation as NativeStackScreenProps<RootStackParamList, 'Main'>['navigation']
                   }
+                  listingChatsUnread={listingChatsUnread}
                 />
               </ErrorBoundary>
             )}
