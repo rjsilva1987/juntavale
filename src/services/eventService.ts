@@ -61,6 +61,11 @@ export interface Event {
   // leitura) — é o campo que a function expireEvents usa em
   // where('purgeAt','<=', now).
   purgeAt: Timestamp;
+  // S180-A — só gravado pelo Admin SDK (deleteAccount) e, na S180-B, pelo
+  // admin; ausente = ativo; o client NUNCA grava (allow create tem hasOnly
+  // sem status).
+  status?: 'cancelled';
+  cancelledAt?: Timestamp;
 }
 
 export interface EventParticipant {
@@ -179,7 +184,10 @@ export const listMyEvents = async (uid: string): Promise<Event[]> => {
 // "Descobrir": eventos ainda não passados (startsAt > agora) onde o uid
 // NÃO é participante aprovado — mirror de listDiscoverableGroups, incluindo
 // a mesma decisão de NÃO excluir evento com pedido pendente (o próprio
-// EventDetailScreen resolve o estado certo ao reabrir).
+// EventDetailScreen resolve o estado certo ao reabrir). S180-A — filtro
+// client-side extra (sem índice novo) pra tirar evento status:'cancelled':
+// listMyEvents NÃO filtra de propósito, quem já foi aprovado precisa
+// continuar vendo o próprio evento cancelado (banner "Evento cancelado").
 export const listDiscoverableEvents = async (uid: string): Promise<Event[]> => {
   const [allSnap, myEvents] = await Promise.all([
     getDocs(
@@ -194,7 +202,8 @@ export const listDiscoverableEvents = async (uid: string): Promise<Event[]> => {
   const myEventIds = new Set(myEvents.map((e) => e.id));
   return allSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<Event, 'id'>) }))
-    .filter((e) => !myEventIds.has(e.id));
+    .filter((e) => !myEventIds.has(e.id))
+    .filter((e) => e.status !== 'cancelled');
 };
 
 export const getMyParticipation = async (

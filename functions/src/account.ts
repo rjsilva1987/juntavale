@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase-admin/auth';
-import { type DocumentReference } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { bucket, db, REGION } from './shared';
@@ -20,6 +20,23 @@ async function deleteDocsInBatches(refs: DocumentReference[]): Promise<void> {
     const batch = db.batch();
     refs.slice(i, i + DELETE_ACCOUNT_BATCH_LIMIT).forEach((ref) => batch.delete(ref));
     await batch.commit();
+  }
+}
+
+// S180-A — apaga um grupo inteiro (recursiveDelete leva members/
+// joinRequests/messages) e as fotos dele no Storage. Mesmo molde de
+// expireGroups (grupos.ts): recursiveDelete primeiro, bucket.deleteFiles
+// depois num try/catch PRÓPRIO que só loga — falha ao limpar Storage não
+// deve travar o resto do fluxo de deleteAccount. Reusado tanto pro grupo do
+// próprio usuário que ficou sem outros membros (bloco GRUPOS CRIADOS)
+// quanto pro grupo de OUTRO dono que zerou depois que o usuário saiu
+// (bloco PARTICIPAÇÃO EM GRUPOS DE OUTROS).
+async function deleteGroupWithPhotos(ref: DocumentReference): Promise<void> {
+  await db.recursiveDelete(ref);
+  try {
+    await bucket.deleteFiles({ prefix: `images/groupChats/${ref.id}/` });
+  } catch (error) {
+    console.error('[deleteAccount] falha ao apagar fotos do grupo:', ref.id, error);
   }
 }
 
@@ -140,78 +157,234 @@ export const deleteAccount = onCall(
       console.error('[deleteAccount] falha ao apagar momento:', uid, error);
     }
 
-    // S124-A — grupos CRIADOS pelo usuário: recursiveDelete de cada um leva
-    // junto members/joinRequests/messages (mesmo padrão da etapa a) de
-    // matches, acima). Storage: images/groupChats/{groupId}/ por grupo —
-    // mesmo motivo de images/chats/{matchId} na etapa a), só que aqui o
-    // prefixo carrega o groupId, não o uid, daí o loop por doc em vez de um
-    // deleteFiles único.
+    // S180-A — grupos CRIADOS pelo usuário: NÃO morre mais junto com o
+    // criador quando tem outra gente dentro — grupo é sala de conversa
+    // ativa, sumir sem aviso pra quem ficou seria pior que herdar um novo
+    // criador. Transfere pro membro mais antigo (menor joinedAt) e só apaga
+    // de verdade (deleteGroupWithPhotos) quando não sobra ninguém.
+    // `role: 'creator'` no doc do novo criador E `creatorId` no grupo são
+    // gravados NO MESMO batch: a rule de "Sair do grupo" (firestore.rules
+    // ~1787, allow delete de members/{uid}) olha `role`, e o `isCreator` do
+    // client (GroupDetailScreen.tsx) olha `group.creatorId` — os dois
+    // precisam concordar, senão o novo criador continuaria conseguindo
+    // "sair" do próprio grupo pela UI. O doc de membro do ANTIGO criador é
+    // apagado AQUI, dentro deste mesmo batch — não no bloco de
+    // PARTICIPAÇÃO EM GRUPOS DE OUTROS logo abaixo, que só varre
+    // collectionGroup e não distingue "grupo próprio" de "grupo de outro".
+    // Try/catch POR GRUPO: uma falha num grupo não pode interromper a
+    // transferência/exclusão dos demais.
     try {
       const ownedGroupsSnap = await db.collection('groups').where('creatorId', '==', uid).get();
       console.log(`[deleteAccount] grupos criados encontrados: ${ownedGroupsSnap.size}`);
+      let transferred = 0;
+      let deletedEmpty = 0;
       for (const groupDoc of ownedGroupsSnap.docs) {
-        await db.recursiveDelete(groupDoc.ref);
-        await bucket.deleteFiles({ prefix: `images/groupChats/${groupDoc.id}/` });
+        const groupRef = groupDoc.ref;
+        try {
+          const membersSnap = await groupRef
+            .collection('members')
+            .orderBy('joinedAt', 'asc')
+            .get();
+          const others = membersSnap.docs.filter((d) => d.id !== uid && d.data().uid !== uid);
+          if (others.length === 0) {
+            await deleteGroupWithPhotos(groupRef);
+            deletedEmpty++;
+            console.log(`[deleteAccount] grupo sem outros membros apagado: ${groupRef.id}`);
+          } else {
+            const newCreator = others[0];
+            const batch = db.batch();
+            batch.update(groupRef, { creatorId: newCreator.id, memberCount: others.length });
+            batch.update(newCreator.ref, { role: 'creator' });
+            batch.delete(groupRef.collection('members').doc(uid));
+            await batch.commit();
+            transferred++;
+            console.log(`[deleteAccount] grupo transferido: ${groupRef.id} → ${newCreator.id}`);
+          }
+        } catch (error) {
+          console.error('[deleteAccount] falha ao processar grupo criado:', groupRef.id, error);
+        }
       }
-      console.log(`[deleteAccount] grupos criados apagados: ${ownedGroupsSnap.size}`);
+      console.log(
+        `[deleteAccount] grupos criados: transferidos ${transferred}, apagados vazios ${deletedEmpty}`,
+      );
     } catch (error) {
       console.error('[deleteAccount] falha ao apagar grupos criados:', uid, error);
     }
 
-    // S124-A — participação do usuário em grupos DE OUTROS: só o doc de
-    // participação (members/joinRequests), nunca o grupo inteiro — delete
-    // simples, não recursiveDelete. collectionGroup pra achar sem precisar
-    // saber de quais grupos o usuário participa (mesmo mecanismo de
-    // listMyGroups em groupService.ts, do lado do client).
+    // S180-A (correção rodada 1) — participação do usuário em grupos DE
+    // OUTROS: só o doc de participação é apagado aqui (nunca o grupo
+    // inteiro — ver bloco GRUPOS CRIADOS, acima, pro caso do grupo em si).
+    // Mesma busca por collectionGroup de sempre. memberCount desce por
+    // ITEM, dentro de uma runTransaction PRÓPRIA por membro — NUNCA um
+    // writeBatch compartilhado com `batch.update(parentRef, ...)`: o Admin
+    // SDK falha o `batch.commit()` INTEIRO se QUALQUER update mirar um doc
+    // que não existe mais (grupo apagado por `expireGroups`, corrida
+    // concorrente etc.) — a 1ª versão desta sprint tinha exatamente esse
+    // buraco: um único grupo já apagado no meio do lote abortava a
+    // exclusão de TODAS as participações daquele batch, pulava o
+    // deleteDocsInBatches(joinRequests) seguinte, e o restante do fluxo de
+    // deleteAccount seguia mesmo assim (exclusão incompleta e silenciosa).
+    // runTransaction por item é o mesmo padrão de contador denormalizado já
+    // usado do lado do client (approveJoinRequest/leaveGroup,
+    // groupService.ts — ver ROADMAP.md "Padrões de escrita no Firestore"):
+    // lê o grupo FRESCO dentro da própria transação, só decrementa se ele
+    // ainda existir, e sempre apaga o doc de membro (delete nunca falha em
+    // doc inexistente, diferente de update). Try/catch POR ITEM: uma falha
+    // não pode abortar as demais nem pular o resto do fluxo. Depois, checa
+    // cada grupo pai TOCADO (dedup por id, também em try/catch por item):
+    // se não sobrou nenhum membro, deleteGroupWithPhotos — cobre tanto o
+    // grupo que zerou por causa desta saída quanto o grupo órfão que já
+    // tinha ficado sem ninguém antes. joinRequests continuam só apagados
+    // (deleteDocsInBatches) — collectionGroup('joinRequests') já é varrido
+    // junto aqui, sem query duplicada.
     try {
       const [memberDocs, joinRequestDocs] = await Promise.all([
         db.collectionGroup('members').where('uid', '==', uid).get(),
         db.collectionGroup('joinRequests').where('uid', '==', uid).get(),
       ]);
-      const refs = [...memberDocs.docs, ...joinRequestDocs.docs].map((d) => d.ref);
-      console.log(`[deleteAccount] participações em grupos encontradas: ${refs.length}`);
-      await deleteDocsInBatches(refs);
-      console.log(`[deleteAccount] participações em grupos apagadas: ${refs.length}`);
+      console.log(
+        `[deleteAccount] participações em grupos encontradas: ${memberDocs.size + joinRequestDocs.size}`,
+      );
+
+      const touchedGroupRefs = new Map<string, DocumentReference>();
+      let removedMembers = 0;
+      for (const memberDoc of memberDocs.docs) {
+        const parentRef = memberDoc.ref.parent.parent;
+        try {
+          await db.runTransaction(async (tx) => {
+            if (parentRef) {
+              const parentSnap = await tx.get(parentRef);
+              if (parentSnap.exists) {
+                const current = (parentSnap.data() as { memberCount?: number }).memberCount ?? 1;
+                tx.update(parentRef, { memberCount: Math.max(0, current - 1) });
+                touchedGroupRefs.set(parentRef.id, parentRef);
+              }
+            }
+            tx.delete(memberDoc.ref);
+          });
+          removedMembers++;
+        } catch (error) {
+          console.error(
+            '[deleteAccount] falha ao sair do grupo:',
+            parentRef?.id ?? '?',
+            uid,
+            error,
+          );
+        }
+      }
+      await deleteDocsInBatches(joinRequestDocs.docs.map((d) => d.ref));
+
+      let deletedEmpty = 0;
+      for (const parentRef of touchedGroupRefs.values()) {
+        try {
+          const remaining = await parentRef.collection('members').limit(1).get();
+          if (remaining.empty) {
+            await deleteGroupWithPhotos(parentRef);
+            deletedEmpty++;
+          }
+        } catch (error) {
+          console.error('[deleteAccount] falha ao apagar grupo vazio:', parentRef.id, error);
+        }
+      }
+      console.log(
+        `[deleteAccount] participações em grupos apagadas: ${removedMembers}/${memberDocs.size} (+ ${joinRequestDocs.size} pedidos), grupos vazios apagados: ${deletedEmpty}`,
+      );
     } catch (error) {
       console.error('[deleteAccount] falha ao apagar participações em grupos:', uid, error);
     }
 
-    // S125 — eventos CRIADOS pelo usuário: recursiveDelete de cada um leva
-    // junto participants/joinRequests/private (mesmo padrão da etapa de
-    // grupos criados, acima). Evento não tem Storage próprio (sem
-    // chat/imagem nesta sprint — decisão 10), então, ao contrário do passo
-    // de grupos, não há bucket.deleteFiles aqui.
+    // S180-A — eventos CRIADOS pelo usuário: evento FUTURO vira
+    // status:'cancelled' (+ cancelledAt) em vez de recursiveDelete — quem já
+    // tinha sido aprovado (participants/{uid}) continua vendo o evento, só
+    // que com o banner "Evento cancelado" (EventDetailScreen.tsx/
+    // EventsScreen.tsx), em vez de o evento simplesmente sumir da lista sem
+    // explicação. Evento PASSADO não é tocado: já é histórico, não tem
+    // ninguém esperando confirmação/local pra um encontro que já aconteceu.
+    // NUNCA MAIS recursiveDelete de evento aqui — o fim de vida de verdade
+    // (30 dias após startsAt) continua só com a scheduled function
+    // expireEvents (eventos.ts), via purgeAt; marcar 'cancelled' não mexe em
+    // purgeAt nem em participants/joinRequests. SEM push (fora de escopo
+    // desta sprint).
     try {
       const ownedEventsSnap = await db.collection('events').where('creatorId', '==', uid).get();
       console.log(`[deleteAccount] eventos criados encontrados: ${ownedEventsSnap.size}`);
+      let cancelledCount = 0;
+      let keptCount = 0;
       for (const eventDoc of ownedEventsSnap.docs) {
-        await db.recursiveDelete(eventDoc.ref);
+        const data = eventDoc.data() as { startsAt?: Timestamp };
+        if (data.startsAt && data.startsAt.toMillis() > Date.now()) {
+          await eventDoc.ref.update({
+            status: 'cancelled',
+            cancelledAt: FieldValue.serverTimestamp(),
+          });
+          cancelledCount++;
+        } else {
+          keptCount++;
+        }
       }
-      console.log(`[deleteAccount] eventos criados apagados: ${ownedEventsSnap.size}`);
+      console.log(
+        `[deleteAccount] eventos futuros cancelados: ${cancelledCount}, passados mantidos: ${keptCount}`,
+      );
     } catch (error) {
-      console.error('[deleteAccount] falha ao apagar eventos criados:', uid, error);
+      console.error('[deleteAccount] falha ao cancelar eventos criados:', uid, error);
     }
 
-    // S125 — participação do usuário em eventos DE OUTROS: só o doc de
-    // participação (participants/{uid}), nunca o evento inteiro — delete
-    // simples, não recursiveDelete. SEM query própria de joinRequests
-    // aqui: collectionGroup('joinRequests') casa pelo NOME da subcoleção em
+    // S180-A (correção rodada 1) — participação do usuário em eventos DE
+    // OUTROS: apaga o doc de participação (participants/{uid} — inclui o
+    // doc do PRÓPRIO criador nos eventos que ele mesmo criou, já que o
+    // criador também nasce participante aprovado por construção, ver
+    // createEvent em eventService.ts) e decrementa participantCount do
+    // evento pai, um por um, dentro de uma runTransaction PRÓPRIA — NUNCA
+    // um writeBatch compartilhado: mesmo bug do bloco de grupos, acima
+    // (batch.update em doc que pode não existir mais derruba o
+    // batch.commit() INTEIRO), corrigido pelo mesmo desenho aqui. Corrige
+    // também o gap que o comentário antigo deste bloco documentava: a rule
+    // de events/{eventId} só tem ramo de INCREMENTO (firestore.rules,
+    // allow update) — por isso o client nunca decrementa (ver leaveEvent,
+    // eventService.ts) — mas essa restrição só vale pro CLIENT; o Admin
+    // SDK ignora rules e por isso PODE (e deve) manter o contador coerente
+    // aqui, lendo o valor FRESCO dentro da própria transação (mesmo padrão
+    // do bloco de grupos, acima). Try/catch POR ITEM: uma falha não pode
+    // abortar as demais. SEM query própria de joinRequests aqui:
+    // collectionGroup('joinRequests') casa pelo NOME da subcoleção em
     // QUALQUER ancestral — a varredura de joinRequests da etapa de grupos,
-    // logo acima, já cobre também events/*/joinRequests/{uid} (mesmo nome
-    // de subcoleção), sem precisar de query duplicada. NÃO decrementa
-    // participantCount do evento — confirmado que o equivalente de grupo
-    // (participação em grupos de outros, acima) também não decrementa
-    // memberCount nesse fluxo; mesmo padrão mirrorado (ver
-    // eventService.ts leaveEvent pro mesmo raciocínio do lado do client).
+    // acima, já cobre também events/*/joinRequests/{uid} (mesmo nome de
+    // subcoleção), sem precisar de query duplicada.
     try {
       const participantDocs = await db
         .collectionGroup('participants')
         .where('uid', '==', uid)
         .get();
-      const refs = participantDocs.docs.map((d) => d.ref);
-      console.log(`[deleteAccount] participações em eventos encontradas: ${refs.length}`);
-      await deleteDocsInBatches(refs);
-      console.log(`[deleteAccount] participações em eventos apagadas: ${refs.length}`);
+      console.log(`[deleteAccount] participações em eventos encontradas: ${participantDocs.size}`);
+
+      let removedParticipations = 0;
+      for (const participantDoc of participantDocs.docs) {
+        const eventRef = participantDoc.ref.parent.parent;
+        try {
+          await db.runTransaction(async (tx) => {
+            if (eventRef) {
+              const eventSnap = await tx.get(eventRef);
+              if (eventSnap.exists) {
+                const current =
+                  (eventSnap.data() as { participantCount?: number }).participantCount ?? 1;
+                tx.update(eventRef, { participantCount: Math.max(0, current - 1) });
+              }
+            }
+            tx.delete(participantDoc.ref);
+          });
+          removedParticipations++;
+        } catch (error) {
+          console.error(
+            '[deleteAccount] falha ao sair do evento:',
+            eventRef?.id ?? '?',
+            uid,
+            error,
+          );
+        }
+      }
+      console.log(
+        `[deleteAccount] participações em eventos apagadas: ${removedParticipations}/${participantDocs.size}`,
+      );
     } catch (error) {
       console.error('[deleteAccount] falha ao apagar participações em eventos:', uid, error);
     }

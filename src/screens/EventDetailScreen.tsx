@@ -101,6 +101,13 @@ export default function EventDetailScreen({ route, navigation }: EventDetailScre
 
   const isCreator = !!user && event?.creatorId === user.uid;
   const isApproved = !!participation;
+  // S180-A — evento cancelado pelo criador via exclusão de conta
+  // (deleteAccount, functions/src/account.ts): doc/participants/local
+  // continuam existindo, só o status muda. Banner no card avisa quem já
+  // tinha sido aprovado; renderActions() abaixo esconde as ações (nem
+  // "pedir pra participar" nem "sair do evento" fazem sentido pra um
+  // evento que não vai mais acontecer).
+  const isCancelled = event?.status === 'cancelled';
 
   // S146 — mirror EXATO do efeito de GroupDetailScreen.tsx — badge
   // "aceite→solicitante": marca o próprio doc de participação como visto
@@ -325,6 +332,12 @@ export default function EventDetailScreen({ route, navigation }: EventDetailScre
     if (!event || !participationLoaded) {
       return <ActivityIndicator color={theme.colors.primary} />;
     }
+    // S180-A — evento cancelado: nem "pedir pra participar" nem "sair do
+    // evento" fazem sentido. Botão de denúncia no header fica como está
+    // (fora de renderActions).
+    if (isCancelled) {
+      return null;
+    }
     if (isApproved) {
       if (isCreator) return null;
       return (
@@ -414,6 +427,12 @@ export default function EventDetailScreen({ route, navigation }: EventDetailScre
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.card}>
               <Text style={styles.eventTitle}>{event.title}</Text>
+              {isCancelled && (
+                <View style={styles.cancelledBanner}>
+                  <Ionicons name="close-circle-outline" size={16} color={theme.colors.error} />
+                  <Text style={styles.cancelledBannerText}>Evento cancelado</Text>
+                </View>
+              )}
               {!!event.description && (
                 <Text style={styles.eventDescription}>{event.description}</Text>
               )}
@@ -556,6 +575,24 @@ const styles = StyleSheet.create({
     ...theme.shadows.medium,
   },
   eventTitle: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
+  // S180-A — banner "Evento cancelado", só tokens do theme.ts (regra de
+  // ouro: nunca texto branco sobre amarelo — aqui nem entra amarelo).
+  cancelledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  cancelledBannerText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.error,
+  },
   eventDescription: { fontSize: theme.fontSize.md, color: theme.colors.textSecondary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metaText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },

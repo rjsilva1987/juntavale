@@ -86,10 +86,16 @@ export default function EventsScreen({ navigation }: EventsScreenProps) {
         <Text style={styles.cardTitle} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={styles.cardSubtitle} numberOfLines={1}>
-          {item.participantCount} {item.participantCount === 1 ? 'participante' : 'participantes'} ·{' '}
-          {dayjs(item.startsAt.toDate()).format('DD/MM [às] HH:mm')}
-        </Text>
+        {item.status === 'cancelled' ? (
+          <Text style={styles.cardSubtitleCancelled} numberOfLines={1}>
+            Evento cancelado · {dayjs(item.startsAt.toDate()).format('DD/MM [às] HH:mm')}
+          </Text>
+        ) : (
+          <Text style={styles.cardSubtitle} numberOfLines={1}>
+            {item.participantCount} {item.participantCount === 1 ? 'participante' : 'participantes'}{' '}
+            · {dayjs(item.startsAt.toDate()).format('DD/MM [às] HH:mm')}
+          </Text>
+        )}
       </View>
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
     </AnimatedPressable>
@@ -202,4 +208,7 @@ const styles = StyleSheet.create({
   cardTextWrap: { flex: 1, gap: 2 },
   cardTitle: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
   cardSubtitle: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
+  // S180-A — mesmo tamanho de cardSubtitle, só a cor muda (evento
+  // cancelado via deleteAccount do criador).
+  cardSubtitleCancelled: { fontSize: theme.fontSize.xs, color: theme.colors.error },
 });

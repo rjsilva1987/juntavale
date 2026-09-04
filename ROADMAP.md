@@ -56,6 +56,77 @@ um só; se o card "Classificados" da aba Conversas conta como conversa.
 
 ---
 
+### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
+**Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de
+04/09, modo AUTOMATICO + GIT AUTOMATICO, trilha completa), auditoria
+APROVADA na 2ª rodada (1ª BLOQUEOU: `batch.update` no grupo/evento pai
+sem checar existência derrubava o commit inteiro e um único try envolvia
+o laço todo — trocado por `runTransaction` por item com try/catch por
+item). EXIGE deploy de `functions:deleteAccount`; lado client (evento
+cancelado) entra no build 26. SEM teste em aparelho. Sem rules.
+**Status (S180-B, admin):** EM ANDAMENTO no mesmo lote — ver entrada
+S180-B abaixo quando fechar.
+
+Premissa CONTRADITA pela recon + logs (04/09/2026): o `deleteAccount` do
+repo já apagava TODO grupo do criador (recursiveDelete) desde 24/08 — não
+deixava órfão. "Grupo 02" e "Corridinha" (creatorId `CzC7c1yb…`)
+sobreviveram porque a exclusão dessa conta, em 03/09 19:33 UTC, rodou uma
+versão ANTIGA da function sem os blocos de momento/grupos/eventos (o log
+pula de "tickets" direto pra "verification"); a versão com os blocos só
+foi deployada em 04/09 12:21. Os dois grupos ficam pra limpeza pela área
+do admin (S180-B) — "Grupo 02" (1 membro, sem prazo) e "Corridinha" (2
+membros, expira 09/09).
+
+Parte A (`functions/src/account.ts`): helper `deleteGroupWithPhotos`
+(recursiveDelete + `images/groupChats/{id}/`, molde expireGroups).
+GRUPOS CRIADOS: por grupo (try/catch por grupo) lê `members` orderBy
+`joinedAt` asc; sem outro membro → apaga grupo + fotos; com outros →
+batch que grava `creatorId` = membro mais antigo, `role: 'creator'` no
+doc dele (rule de "sair" e `isCreator` do client olham campos diferentes),
+`memberCount` = membros que ficam, e apaga o doc de membro do antigo
+criador. PARTICIPAÇÃO EM GRUPOS DE OUTROS: `runTransaction` por doc de
+membro — lê o grupo pai, se existe decrementa `memberCount` (`max(0,
+n-1)`, valor fresco), apaga o doc; joinRequests só apagados; depois, cada
+grupo tocado que ficou com 0 membros é apagado com fotos (cobre órfãos de
+exclusões antigas). EVENTOS CRIADOS: futuro (`startsAt > now`) →
+`status: 'cancelled'` + `cancelledAt` (doc, participants e joinRequests
+ficam; sem push); passado → intocado; nunca mais recursiveDelete (o purge
+por `purgeAt` de `expireEvents` continua). PARTICIPAÇÃO EM EVENTOS DE
+OUTROS: transação por doc, decrementa `participantCount` se o evento
+existe (Admin SDK ignora a rule "só sobe"). Classificados (S173)
+confirmados cobertos: anúncios + `images/listings/{uid}/`, listingChats
+por `participants` (dono OU interessado) + messages + fotos.
+Client: `Event.status?: 'cancelled'`/`cancelledAt?` (client nunca grava —
+`allow create` tem hasOnly sem status); `listDiscoverableEvents` filtra
+cancelados; `listMyEvents` não; EventDetailScreen mostra o banner "Evento
+cancelado" e esconde todas as ações; EventsScreen mostra "Evento
+cancelado · data" em vermelho no card.
+
+Ressalvas (não bloqueantes): corrida entre `deleteAccount` de dois
+co-membros do mesmo grupo (transferência é batch simples) pode deixar
+`creatorId` apontando pra conta em exclusão; doc legado de `members` sem
+`joinedAt` ficaria fora do orderBy (rule exige `joinedAt` em todo create,
+risco só pra dados anteriores).
+
+Teste (depois do deploy de `functions:deleteAccount`, conta de teste):
+criar grupo A só com a conta e grupo B com mais um membro; entrar num
+grupo C de outra pessoa; criar evento futuro E1 e passado E2 (ou com
+`startsAt` já vencido no console); entrar num evento F de outra pessoa;
+excluir a conta → A some com fotos; B continua com `creatorId` = o outro
+membro, `members/{outro}.role = 'creator'`, `memberCount` = 1, e o outro
+vê os painéis de criador; C perde o membro e `memberCount` cai 1; E1 vira
+`status: 'cancelled'` e quem confirmou vê "Evento cancelado" sem botões e
+não vê E1 no Explorar; E2 fica igual; F perde a presença e
+`participantCount` cai 1; logs `[deleteAccount]` mostram cada passo.
+
+Decisões tomadas no automático: quebrar em S180-A (function) e S180-B
+(admin) com commits separados (régua estourada); "membro mais antigo" =
+menor `joinedAt` na subcoleção `members`; transferir `creatorId` + `role`
+juntos; contador recalculado (não increment cego) no bloco de
+transferência; transação por item nos blocos de participação (molde
+approveJoinRequest/leaveGroup); evento cancelado mantém doc e presenças;
+sem rules na Parte A.
+
 ### S181 — Permissão de push negada: estado no Perfil + re-registro no foreground
 **Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
 GIT AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada (sem

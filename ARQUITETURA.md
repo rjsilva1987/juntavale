@@ -65,7 +65,8 @@ reinstancia esses singletons.
   `members/{uid}`, `joinRequests/{uid}`, `messages/{messageId}`,
   `pollVotes/{voterUid}`.
 - `events/{eventId}` — evento presencial (S125). `title`, `creatorId`,
-  `purgeAt`. Subcoleções: `participants/{uid}`, `joinRequests/{uid}`,
+  `purgeAt`, `status?: 'cancelled'` (S180-A, só o Admin SDK grava).
+  Subcoleções: `participants/{uid}`, `joinRequests/{uid}`,
   `private/location`.
 - `listings/{listingId}` — anúncio de classificados (S168-A). `ownerId`,
   `ownerNickname` (nickname, S135), `title`, `description`, `priceType`
@@ -136,7 +137,7 @@ no ROADMAP (S170).
 | `expireMomentos` | `onSchedule` a cada hora | apaga momentos expirados (molde de expiração) |
 | `expireGroups` | `onSchedule` a cada hora | idem grupos |
 | `expireEvents` | `onSchedule` diário 3h | idem eventos |
-| `deleteAccount` | `onCall` | apaga em cascata todos os dados do usuário + listings do dono (+ images/listings/{uid}) + listingChats em que participa (+ messages + images/listingChats/{chatId}) (S173) + Auth |
+| `deleteAccount` | `onCall` | apaga em cascata todos os dados do usuário + listings do dono (+ images/listings/{uid}) + listingChats em que participa (+ messages + images/listingChats/{chatId}) (S173) + Auth (S180-A) grupos criados: transfere pro membro mais antigo (creatorId + role) ou apaga se vazio; sai dos grupos de outros com memberCount coerente e apaga grupo que ficou com 0 membros; evento futuro criado → status 'cancelled', passado fica; sai das participações em eventos de outros com participantCount coerente |
 | `unmatch` | `onCall` | apaga um match a pedido de um participante |
 | `onTesterSignupCreated` | `onDocumentCreated testerSignups/{id}` | email via Gmail pro contato |
 | `onPollVoteCreated` | `onDocumentCreated users/.../pollVotes/{voterUid}` | incrementa `pollCounts` + push (molde de contador agregado via `increment`) |
