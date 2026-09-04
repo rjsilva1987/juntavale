@@ -47,6 +47,52 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S179 — Chat de classificado: Alert "Conversa indisponível" indevido na 1ª mensagem
+**Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
+GIT AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada (sem
+falhas; 2 ressalvas: `handleSend`/`handleSendImage` mantêm o objeto `chat`
+nas deps do useCallback e agora são recriados 2x por escrita no doc pai —
+churn de referência, sem trabalho caro; o comentário de
+`handleListenerError` não cita o caso "usuário perdeu a verificação"/deep
+link do push, que também cai em permission-denied). Client puro — NÃO
+exige deploy; entra no build 26 (testável em Expo Go com 2 contas
+verificadas). SEM teste em aparelho.
+
+Premissa do pedido CONTRADITA pela recon: a rule de `get` de
+`listingChats/{chatId}` já tolera doc inexistente (`resource == null ||`)
+desde a S168-B, e as rules ATIVAS no projeto foram lidas em 04/09/2026 e
+são idênticas ao repo (stamp S172-A, diff vazio). Causa real: corrida na
+1ª mensagem — `ensureListingChat` faz `setDoc` do doc pai, o `onSnapshot`
+do pai dispara o snapshot LOCAL imediato (`hasPendingWrites: true`), a
+tela via `chatExists` assinava `messages` na hora, e a rule de `messages`
+(`get()` do pai no servidor) negava porque o create ainda não tinha sido
+commitado → Alert + goBack, com a conversa existindo e funcionando ao
+reabrir. O relato "ao tocar Tenho interesse" não é reproduzível pelo
+código: na abertura sem doc o listener de mensagens nem assina.
+
+Correção: `listenListingChat` passa `snap.metadata.hasPendingWrites` como
+2º argumento do callback (mirror de `listenListingChatMessages`) e assina
+com `includeMetadataChanges: true` (snapshot da confirmação garantido por
+contrato); a tela ganha o state `chatConfirmed` com latch (vira true no 1º
+snapshot com `hasPendingWrites: false`, só volta a false se o doc sumir —
+update pendente de `lastMessageAt`/`lastReadAt` a cada envio não derruba o
+listener) e o listener de `messages` só assina com `chatConfirmed`; os
+demais usos de `chatExists` (Leitura (a), composer, handleSend,
+handleSendImage) ficam iguais. `handleListenerError` mantém Alert + goBack
+pra `permission-denied` (caso legítimo S173) com o code no texto (regra
+S164): "Não foi possível abrir esta conversa (erro: permission-denied)."
+NÃO se criou o doc no "Tenho interesse" (desenho S168-B preservado).
+
+Teste (build 26 ou Expo Go, 2 contas verificadas): interessado toca
+"Tenho interesse" → tela vazia sem Alert → manda a 1ª mensagem (texto e,
+em outra conta/anúncio, foto como 1ª mensagem) → NENHUM Alert, a
+mensagem aparece e a conversa segue; conta apagada (S173) → o outro lado
+ainda vê "Conversa indisponível" com "(erro: permission-denied)".
+
+Decisões tomadas no automático: trilha completa; correção pelo lado do
+client (gate por confirmação do servidor) em vez de rules ou de criar o
+doc na abertura; Alert com code mantido pra erro real, sem banner novo.
+
 ### S177 — Chat de classificados: badge na aba Conversas + push só com app fechado
 **Status:** IMPLEMENTADA em 04/09/2026 (sprint avulsa, modo AUTOMATICO +
 GIT MANUAL, trilha completa), auditoria APROVADA na 1ª rodada (sem falhas;

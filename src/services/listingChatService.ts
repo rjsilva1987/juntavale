@@ -132,15 +132,28 @@ export function toListingChatPreview(text: string, hasImage: boolean): string {
 // permission-denied tratado pelo CALLER (onError) — ListingChatScreen decide
 // "conversa indisponível" a partir daqui e do listener de mensagens abaixo
 // (armadilha do ROADMAP: permission-denied nunca é erro genérico).
+// hasPendingWrites (2º argumento do callback) existe pra a TELA só assinar o
+// listener de `messages` depois de o SERVIDOR confirmar este doc pai — a
+// rule de messages faz get() dele, e o setDoc do create (ensureListingChat)
+// dispara um snapshot LOCAL imediato (hasPendingWrites: true) antes do
+// commit no servidor; assinar messages nesse instante causa
+// permission-denied na corrida da 1ª mensagem (causa da S179).
+// includeMetadataChanges: true garante, por contrato do SDK, que o snapshot
+// da CONFIRMAÇÃO (hasPendingWrites: false) chegue como evento próprio — sem
+// essa opção o listener só dispara de novo se algum CAMPO do doc mudar.
 export const listenListingChat = (
   chatId: string,
-  callback: (chat: ListingChat | null) => void,
+  callback: (chat: ListingChat | null, hasPendingWrites: boolean) => void,
   onError?: (error: unknown) => void,
 ) => {
   return onSnapshot(
     listingChatRef(chatId),
+    { includeMetadataChanges: true },
     (snap) => {
-      callback(snap.exists() ? { id: snap.id, ...(snap.data() as Omit<ListingChat, 'id'>) } : null);
+      const chat = snap.exists()
+        ? { id: snap.id, ...(snap.data() as Omit<ListingChat, 'id'>) }
+        : null;
+      callback(chat, snap.metadata.hasPendingWrites);
     },
     (error) => {
       if (onError) onError(error);

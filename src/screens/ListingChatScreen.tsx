@@ -196,6 +196,9 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
   const isParticipant = user?.uid === ownerId || user?.uid === interestedId;
 
   const [chat, setChat] = useState<ListingChat | null | undefined>(undefined);
+  // "Doc pai confirmado pelo SERVIDOR" (latch: nunca volta a false enquanto
+  // o doc existir) — ver useEffect do listener do chat abaixo (S179).
+  const [chatConfirmed, setChatConfirmed] = useState(false);
   const [messages, setMessages] = useState<ListingChatMessage[]>([]);
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
   const [otherProfile, setOtherProfile] = useState<UserProfile | null>(null);
@@ -214,17 +217,25 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
 
   const chatExists = chat != null;
 
-  // permission-denied em QUALQUER listener desta tela é "conversa
-  // indisponível" (armadilha do ROADMAP: nunca erro genérico) — Alert +
-  // goBack, mirror do princípio já usado em listenGroup/getGroup
-  // (groupService.ts), adaptado aqui pra sair da tela em vez de renderizar
-  // um estado "sumiu".
+  // permission-denied AQUI nunca é doc pai inexistente (a rule de get
+  // tolera resource == null) nem a corrida da 1ª mensagem (o listener de
+  // messages abaixo só assina depois de chatConfirmed) — é sempre um caso
+  // legítimo de acesso negado de verdade (S173: chat apagado por exclusão
+  // de conta). "Conversa indisponível" (armadilha do ROADMAP: nunca erro
+  // genérico) — Alert + goBack, mirror do princípio já usado em
+  // listenGroup/getGroup (groupService.ts), adaptado aqui pra sair da tela
+  // em vez de renderizar um estado "sumiu". Texto do Alert inclui o code
+  // (regra S164).
   const handleListenerError = useCallback(
     (error: unknown) => {
-      if ((error as { code?: string })?.code === 'permission-denied') {
+      const code = (error as { code?: string })?.code;
+      if (code === 'permission-denied') {
         if (permissionDeniedRef.current) return;
         permissionDeniedRef.current = true;
-        Alert.alert('Conversa indisponível', 'Não foi possível abrir esta conversa.');
+        Alert.alert(
+          'Conversa indisponível',
+          `Não foi possível abrir esta conversa (erro: ${code}).`,
+        );
         navigation.goBack();
         return;
       }
@@ -234,17 +245,31 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
   );
 
   useEffect(() => {
-    const unsub = listenListingChat(chatId, setChat, handleListenerError);
+    const unsub = listenListingChat(
+      chatId,
+      (next, hasPendingWrites) => {
+        setChat(next);
+        if (next == null) setChatConfirmed(false);
+        else if (!hasPendingWrites) setChatConfirmed(true);
+      },
+      handleListenerError,
+    );
     return unsub;
   }, [chatId, handleListenerError]);
 
-  // Mensagens só depois de o doc existir — antes disso a rule de messages
-  // negaria (pai inexistente). "chatExists" (booleano) em vez de "chat"
-  // (objeto) nas deps: o objeto muda de referência a CADA snapshot do chat
-  // (ex.: toda troca de lastMessage), o que reabriria este listener sem
+  // S179 — mensagens só depois de o doc pai estar CONFIRMADO PELO SERVIDOR
+  // (chatConfirmed), não apenas existir localmente (chatExists): a rule de
+  // messages faz get() do pai, e o setDoc do create (ensureListingChat)
+  // dispara um snapshot local imediato (hasPendingWrites: true) antes do
+  // commit no servidor — assinar messages nesse instante causava
+  // permission-denied na corrida da 1ª mensagem (texto ou foto), embora a
+  // conversa existisse e funcionasse ao reabrir. "chatConfirmed" é um latch
+  // (nunca volta a false enquanto o doc existir) nas deps em vez de "chat"
+  // (objeto): o objeto muda de referência a cada snapshot (ex.: toda troca
+  // de lastMessage/lastReadAt), o que reabriria este listener sem
   // necessidade.
   useEffect(() => {
-    if (!chatExists) {
+    if (!chatConfirmed) {
       setMessages([]);
       return;
     }
@@ -267,7 +292,7 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
       handleListenerError,
     );
     return unsub;
-  }, [chatExists, chatId, user, isParticipant, handleListenerError]);
+  }, [chatConfirmed, chatId, user, isParticipant, handleListenerError]);
 
   // Leitura (a) — no mount, sempre que o doc já existe (independente de quem
   // mandou a última mensagem), mirror de markGroupMessagesSeen
