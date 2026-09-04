@@ -47,6 +47,25 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S175 — docs de loja versionados + página de exclusão atualizada
+**Status:** IMPLEMENTADA em 04/09/2026 (lote S175/S172-A/S174, modo
+AUTOMATICO + GIT AUTOMATICO, trilha P sem recon), auditoria APROVADA na
+1ª rodada (ressalva: `!docs/loja/` libera o diretório inteiro, não só um
+arquivo — escopo pedido). EXIGE deploy de Hosting
+(`site/excluir-conta.html`). SEM teste.
+
+`.gitignore` ganha `!docs/loja/` (bloco "relatorios de sprint") e
+`docs/loja/data-safety-classificados.md` (S168-C) passa a ser versionado.
+`site/excluir-conta.html`: painel "Apagado de forma permanente" ganha
+momentos + grupos/eventos criados, anúncios nos Classificados (com fotos)
+e conversas nos Classificados (mensagens e imagens); "Mantido por
+segurança" passa a "denúncias sobre outras pessoas, anúncios ou
+conversas"; nota final avisa que as conversas somem também pra quem
+conversou nos Classificados. Tudo fiel ao `deleteAccount` (S173), mesmo
+texto da seção 5 de `site/privacidade.html`.
+
+---
+
 ### S173 — deleteAccount apaga os dados de Classificados
 **Status:** IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
 AUTOMATICO), auditoria APROVADA na 1ª rodada (sem falhas; ressalvas só de

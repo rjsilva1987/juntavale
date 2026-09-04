@@ -52,8 +52,10 @@ serviceAccountKey.json
 
 .firebase/
 
-# relatorios de sprint, nao versionados (exceto ESTADO.md, ver abaixo)
+# relatorios de sprint, nao versionados (exceto ESTADO.md e docs/loja/, ver abaixo)
 docs/*
 !docs/sprints/
 docs/sprints/*
 !docs/sprints/ESTADO.md
+# S175 — checklists de loja (Data Safety / App Privacy) sao versionados
+!docs/loja/
