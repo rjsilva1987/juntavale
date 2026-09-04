@@ -4,25 +4,25 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S173 (feat(functions), sucede cc60168 —
-S172, expiração com renovação). S173 (`deleteAccount` apaga anúncios do
-dono + `images/listings/{uid}` e `listingChats` em que participa +
-`messages` + `images/listingChats/{chatId}`; `reports` intacto)
-IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em 04/09 — ver ROADMAP §
-S173. Lote em andamento nesta sessão: só falta S168-C (privacidade.html +
-docs/loja, ver "Sprints em andamento"). Deploys pendentes acumulados:
-`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount`
+**Commit atual:** o commit da S168-C (docs(hosting), sucede 88885eb —
+S173, deleteAccount apaga Classificados). Lote de 04/09/2026 FECHADO:
+S171 (0184688) → S168-B2 (5fa69ed) → S172 (cc60168) → S173 (88885eb) →
+S168-C, todas auditadas e commitadas; ver ROADMAP § S171/S168/S172/S173.
+`docs/loja/data-safety-classificados.md` (S168-C) existe só no disco —
+`.gitignore` ignora `docs/*`. Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount`
 (rules-stamp S172 engloba S168-B2, S168-B e o S168-A ainda não
 confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
 `listingChats` participants+lastMessageAt e `listings` status+expiresAt;
-`onVerificationSubmitted`/`onSupportMessageCreated`/`onListingSubmitted`
-mudaram na S168-B2; `expireListings` é nova, S172; `deleteAccount` mudou
-na S173). Hosting (`site/privacidade.html`) entra na lista quando a
-S168-C fechar.
+hosting = `site/privacidade.html`; `onVerificationSubmitted`/
+`onSupportMessageCreated`/`onListingSubmitted` mudaram na S168-B2;
+`expireListings` é nova, S172; `deleteAccount` mudou na S173). Lado
+client de S168-B2/S172 só entra em build novo (versionCode 23 / 1.0.13
+ainda é o da S168-A+S169+S170).
 
 ## Sprints em andamento
-Lote S171 → S168-B2 → S172 → S173 → S168-C rodando em 04/09/2026 (S171,
-S168-B2, S172 e S173 já commitadas; S168-C em andamento). S173 (depois
+Nenhuma sprint em código pendente de fechamento. Do lote de 04/09 (S171,
+S168-B2, S172, S173, S168-C) fica só teste em aparelho e deploy. S173 (depois
 do deploy de `functions:deleteAccount`): com uma conta de teste que tem
 anúncio com foto e um chat de classificado nos dois papéis, excluir a
 conta → anúncio some do feed e de `listings`, `images/listings/{uid}`

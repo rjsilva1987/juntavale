@@ -259,7 +259,31 @@ denúncia nova — fica como pergunta de produto. EXIGE deploy de
 `firestore.rules` (stamp S168-B2) + `storage.rules` (stamp S168-B2) +
 `functions:onVerificationSubmitted,onSupportMessageCreated,onListingSubmitted`.
 SEM teste em aparelho.
-S168-C (privacidade.html + Data Safety) em andamento no mesmo lote.
+S168-C IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
+AUTOMATICO), auditoria APROVADA na 2ª rodada (1ª bloqueou por duas
+promessas absolutas que o código não sustenta — "nunca com o seu nome",
+já que `getDisplayName` cai pro nome em conta legada sem apelido, e "só
+acessa quando há denúncia", já que a rule deixa o admin ler qualquer
+`listingChats`; redação corrigida pra "nome de exibição, o mesmo do seu
+perfil" e "pode acessar essa conversa para apurar uma denúncia").
+`site/privacidade.html` (o Hosting serve `site/`, não `public/`): data
+04/09/2026; 2 linhas novas na tabela de dados (anúncios; chat de
+anúncio); linhas de denúncias e token de push ampliadas; item novo em
+"Como usamos"; frase de visibilidade só pra verificados em "Com quem
+compartilhamos"; seção de retenção passa a listar momentos, grupos/
+eventos criados e anúncios com fotos e conversas na exclusão (S173) e
+ganha parágrafo sobre expiração/vendido/excluído. Seções 1, 6-10
+intocadas. `docs/loja/data-safety-classificados.md` produzido (checklist
+Play Data Safety + Apple App Privacy: nada muda se "Fotos", "Outras
+mensagens no app"/"Emails or Text Messages" e "Outro conteúdo gerado
+pelo usuário"/"Other User Content" já estiverem marcados com finalidade
+de funcionalidade do app; sem localização, pagamento ou rastreamento
+novos) — NÃO versionado: `.gitignore` ignora `docs/*` salvo
+`docs/sprints/ESTADO.md`, decisão deliberada mantida; versionar é
+escolha do Raphael (`!docs/loja/`). `site/excluir-conta.html` também
+lista o que é apagado e NÃO foi tocado (fora do escopo pedido) — segue
+sem grupos/eventos/momentos/classificados. EXIGE deploy de Hosting
+(`firebase deploy --only hosting`). SEM teste.
 
 Ideia "Classificados / OLX de funcionários" (ver "Ideias sem número",
 levantada em 17/08) virou sprint numerada. A = anúncio básico (modelo
