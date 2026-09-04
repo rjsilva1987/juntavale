@@ -1,11 +1,11 @@
 // src/screens/ProfileScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteField } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Switch,
@@ -82,6 +84,11 @@ import {
   MAX_PROFILE_PHOTOS,
   Gender,
 } from '@/services/firestoreService';
+import {
+  getPushPermissionStatus,
+  registerForPushNotifications,
+  type PushPermissionStatus,
+} from '@/services/notifications';
 import { getDisplayAge } from '@/utils/birthDate';
 import { getDisplayName } from '@/utils/profile';
 import { countCodePoints } from '@/utils/text';
@@ -184,6 +191,34 @@ export default function ProfileScreen() {
         console.error('[ProfileScreen] getLegalName falhou:', err);
       });
   }, [user]);
+  // S181 — status de permissão de push, lido sem disparar o prompt nativo
+  // (getPushPermissionStatus nunca chama requestPermissionsAsync). null =
+  // ainda não lido nesta montagem; 'unavailable' (Expo Go/emulador) esconde
+  // o item "Notificações" — ver JSX abaixo.
+  const [pushStatus, setPushStatus] = useState<PushPermissionStatus | null>(null);
+  const refreshPushStatus = useCallback(() => {
+    getPushPermissionStatus()
+      .then(setPushStatus)
+      .catch(() => {});
+  }, []);
+  // Reganhar foco cobre o caminho comum (usuário mexeu em algo e voltou pra
+  // esta tela); o listener de AppState abaixo cobre especificamente "usuário
+  // foi nas Configurações do aparelho via Linking.openSettings, mudou a
+  // permissão e voltou" — cenário em que o app volta a 'active' mas esta
+  // tela pode já estar montada e em foco o tempo todo.
+  useFocusEffect(
+    useCallback(() => {
+      refreshPushStatus();
+    }, [refreshPushStatus]),
+  );
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') refreshPushStatus();
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshPushStatus]);
   // S76-B2 — a idade não é mais digitada: sai do birthDate via helper.
   const displayAge = getDisplayAge(profile);
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -1239,6 +1274,66 @@ export default function ProfileScreen() {
               {profile?.verified ? 'Perfil verificado' : 'Verificar perfil'}
             </Text>
             {showVerificationAlert && <View style={styles.verificationAlertDot} />}
+          </AnimatedPressable>
+        )}
+
+        {/* S181 — estado de permissão de push. pushStatus null (ainda não
+            lido) ou 'unavailable' (Expo Go/emulador, sem módulo nativo de
+            push) escondem o item por completo — não há nada acionável nesses
+            casos. 'granted'/'denied'/'undetermined' cobrem os 3 estados
+            reais do sistema operacional. */}
+        {pushStatus === 'granted' && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() =>
+              Alert.alert(
+                'Notificações',
+                'As notificações estão ativadas. Você pode ajustá-las nas configurações do aparelho.',
+                [
+                  { text: 'OK', style: 'cancel' },
+                  { text: 'Abrir configurações', onPress: () => Linking.openSettings() },
+                ],
+              )
+            }
+          >
+            <Ionicons name="notifications" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Notificações ativadas</Text>
+          </AnimatedPressable>
+        )}
+        {pushStatus === 'denied' && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() =>
+              Alert.alert(
+                'Notificações desativadas',
+                'Você não vai receber avisos de mensagens e matches. Ative as notificações do JuntaVale nas configurações do aparelho.',
+                [
+                  { text: 'Agora não', style: 'cancel' },
+                  { text: 'Ativar nas configurações', onPress: () => Linking.openSettings() },
+                ],
+              )
+            }
+          >
+            <Ionicons
+              name="notifications-off-outline"
+              size={20}
+              color={theme.colors.textSecondary}
+            />
+            <Text style={styles.blockedUsersText}>Notificações desativadas</Text>
+          </AnimatedPressable>
+        )}
+        {pushStatus === 'undetermined' && (
+          <AnimatedPressable
+            style={styles.blockedUsersBtn}
+            onPress={() => {
+              if (!user) return;
+              registerForPushNotifications(user.uid, { askIfUndetermined: true })
+                .catch(() => {})
+                .then(() => refreshPushStatus());
+            }}
+          >
+            <Ionicons name="notifications-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Ativar notificações</Text>
           </AnimatedPressable>
         )}
 

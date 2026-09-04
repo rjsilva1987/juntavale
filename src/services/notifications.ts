@@ -112,18 +112,57 @@ if (isExpoGo) {
   });
 }
 
+// S181 — guarda em memória do módulo: último {uid, token} já gravado em
+// private/push nesta sessão do app. Evita um setDoc por chamada quando o
+// gatilho de foreground (useNotifications.ts) roda com o token já salvo.
+let registeredPush: { uid: string; token: string } | null = null;
+
 export async function savePushToken(uid: string, token: string): Promise<void> {
   await setDoc(doc(db, 'users', uid, 'private', 'push'), {
     token,
     updatedAt: serverTimestamp(),
   });
+  registeredPush = { uid, token };
 }
 
 export async function removePushToken(uid: string): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'private', 'push'));
+  registeredPush = null;
 }
 
-export async function registerForPushNotifications(uid: string): Promise<string | null> {
+// S181 — status de permissão de push SEM disparar o prompt nativo (ao
+// contrário de registerForPushNotifications). Usado pelo item "Notificações"
+// do Perfil pra decidir o que mostrar sem reabrir o pedido do sistema.
+export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined' | 'unavailable';
+
+export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
+  if (isExpoGo) return 'unavailable';
+
+  const Notifications = await loadNotifications();
+  if (!Notifications) return 'unavailable';
+
+  if (!Device.isDevice) return 'unavailable';
+
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status === 'granted') return 'granted';
+  if (status === 'denied') return 'denied';
+  return 'undetermined';
+}
+
+// S181 — pedido nativo de permissão só acontece quando existingStatus é
+// 'undetermined' (primeira vez) E askIfUndetermined (default true, mantém o
+// comportamento do gatilho de login em useNotifications.ts). Se o usuário já
+// negou ('denied'), NUNCA mais reabre o prompt sozinho — reabrir a cada
+// gatilho (login, foreground) vira spam de permissão; o único caminho pra
+// reverter um 'denied' é o item "Notificações" do Perfil → Configurações do
+// aparelho (Linking.openSettings). askIfUndetermined=false é usado pelo
+// gatilho de foreground (voltar de Configurações não deve popar o prompt).
+export async function registerForPushNotifications(
+  uid: string,
+  opts?: { askIfUndetermined?: boolean },
+): Promise<string | null> {
+  const askIfUndetermined = opts?.askIfUndetermined ?? true;
+
   if (isExpoGo) return null;
 
   const Notifications = await loadNotifications();
@@ -136,7 +175,7 @@ export async function registerForPushNotifications(uid: string): Promise<string 
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
+  if (existingStatus === 'undetermined' && askIfUndetermined) {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
@@ -155,6 +194,9 @@ export async function registerForPushNotifications(uid: string): Promise<string 
 
   try {
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (registeredPush?.uid === uid && registeredPush.token === token) {
+      return token;
+    }
     await savePushToken(uid, token);
     return token;
   } catch (error) {

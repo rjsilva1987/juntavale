@@ -56,6 +56,52 @@ um só; se o card "Classificados" da aba Conversas conta como conversa.
 
 ---
 
+### S181 — Permissão de push negada: estado no Perfil + re-registro no foreground
+**Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
+GIT AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada (sem
+falhas; 3 ressalvas: `registeredPush` é zerado após o `removePushToken` do
+logout mesmo se o deleteDoc falhar em silêncio — comportamento
+pré-existente; foco + AppState podem disparar duas leituras idempotentes
+de status; `.catch().then()` no toque de "Ativar notificações" é
+estilisticamente incomum). Client puro — NÃO exige deploy; entra no build
+26 (Expo Go não tem push: o item nem aparece). SEM teste em aparelho.
+
+Fecha a pendência de produto aberta na S177 ("permissão negada uma vez não
+é re-solicitada nem há atalho pra Configurações; logout apaga o token").
+(1) `src/services/notifications.ts`: tipo `PushPermissionStatus`
+('granted'|'denied'|'undetermined'|'unavailable'), `getPushPermissionStatus()`
+(só lê, nunca pede), guarda de módulo `registeredPush` {uid, token}
+(setada em `savePushToken`, zerada em `removePushToken`) e
+`registerForPushNotifications(uid, { askIfUndetermined })`: o prompt
+nativo só sai com status 'undetermined' E askIfUndetermined — 'denied'
+nunca re-pede (o caminho é o Perfil → Configurações); token igual ao já
+gravado nesta sessão não gera write. (2) `useNotifications.ts`: o effect
+de login continua (askIfUndetermined default true = ÚNICO prompt
+automático, uma vez por instalação) e ganha um listener de `AppState`
+(background/inactive → active) que chama o registro com
+`askIfUndetermined: false` — cobre "foi nas Configurações, ativou e
+voltou". (3) ProfileScreen: item "Notificações" entre "Verificação" e
+"Usuários bloqueados" (molde dos vizinhos): "Notificações ativadas"
+(Alert com "Abrir configurações"), "Notificações desativadas" (Alert
+"Você não vai receber avisos de mensagens e matches…" com "Ativar nas
+configurações" → `Linking.openSettings()`), "Ativar notificações"
+(undetermined → pedido nativo iniciado pelo usuário); status relido no
+foco e ao voltar do background; oculto em Expo Go/simulador. Logout
+continua apagando `private/push` (login re-registra). Sem campo novo em
+`private/push`, sem AsyncStorage.
+
+Teste (build 26, aparelho real): negar a permissão no 1º prompt → Perfil
+mostra "Notificações desativadas" → toque → "Ativar nas configurações"
+abre as Configurações do app → ativar → voltar → Perfil muda pra
+"Notificações ativadas" e `users/{uid}/private/push` ganha `token` sem
+nenhum prompt novo; logout + login com a permissão já concedida grava o
+token sem prompt; nenhuma tela reabre o diálogo nativo em 'denied'.
+
+Decisões tomadas no automático: trilha completa; prompt nativo só em
+'undetermined' (1 vez) + toque explícito no Perfil; guarda em memória em
+vez de ler `private/push` a cada foreground; item oculto quando
+indisponível; item visível também pro admin (recebe push de denúncia).
+
 ### S178 — Fixar conversas no topo (matches 1:1, aba Conversas)
 **Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
 GIT AUTOMATICO, trilha completa), auditoria APROVADA na 2ª rodada (1ª

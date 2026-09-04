@@ -4,9 +4,9 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** 4c2f136 (S179) + S178 commitada neste commit (lote 3
+**Commit atual:** ab64539 (S178) + S181 commitada neste commit (lote 3
 de 04/09/2026, AUTOMATICO + GIT AUTOMATICO, em andamento: S179 4c2f136 →
-S178 → S181 → S180). Lote 2 (S175 672b102 → S172-A
+S178 ab64539 → S181 → S180-A → S180-B). Lote 2 (S175 672b102 → S172-A
 a716da1 → S174 f0dda02) e lote 1 (S171 0184688 → S168-B2 5fa69ed → S172
 cc60168 → S173 88885eb → S168-C 9bfa568) fechados; S176 (4bc25fa) e
 S177 (190867c) avulsas fechadas.
@@ -18,18 +18,30 @@ deleteAccount/onReportCreated/onListingChatMessageCreated) foi deployado
 em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Deploys
 pendentes DESTA rodada (lote 3): S179 nenhum (client puro); S178
 `firebase deploy --only firestore:rules` (stamp S178, auditoria externa
-das rules antes). As sprints seguintes do lote acrescentam aqui.
+das rules antes); S181 nenhum (client puro). As sprints seguintes do lote
+acrescentam aqui.
 
 **Build 26 (pendente):** acumula o lado client de S177 Parte A (badge),
-S179 (chat de classificado sem Alert falso na 1ª mensagem) e S178 (fixar
-até 3 conversas no topo); as sprints seguintes do lote acrescentam aqui.
+S179 (chat de classificado sem Alert falso na 1ª mensagem), S178 (fixar
+até 3 conversas no topo) e S181 (item "Notificações" no Perfil +
+re-registro do token no foreground); as sprints seguintes acrescentam.
 
 ## Sprints em andamento
-Lote 3 de 04/09/2026: S179 e S178 commitadas; S181 (permissão de push) e
-S180 (órfãos de deleteAccount + admin encerra/exclui) em sequência. Das
-sprints anteriores fica só teste em aparelho:
+Lote 3 de 04/09/2026: S179, S178 e S181 commitadas; S180-A (function
+deleteAccount: grupos/eventos) e S180-B (admin encerra/exclui) em
+sequência. Causa dos grupos órfãos ("Grupo 02"/"Corridinha",
+creatorId CzC7c1yb…): a exclusão dessa conta em 03/09 19:33 UTC rodou uma
+versão ANTIGA do deleteAccount, sem os blocos de momento/grupos/eventos
+(logs); o código com esses blocos só foi deployado em 04/09 12:21. Os
+dois grupos ficam pra limpeza pela área do admin (S180-B). Das sprints
+anteriores fica só teste em aparelho:
 
-S178 (Expo Go, depois do deploy das rules): toque longo num card de
+S181 (build 26, aparelho real): negar a permissão no 1º prompt → Perfil
+mostra "Notificações desativadas" → toque → "Ativar nas configurações"
+abre as Configurações → ativar → voltar → "Notificações ativadas" e
+`users/{uid}/private/push` ganha `token` sem prompt novo; logout + login
+com permissão concedida grava o token sem prompt; nada reabre o diálogo
+em 'denied'. S178 (Expo Go, depois do deploy das rules): toque longo num card de
 "Mensagens" → sheet → "Fixar conversa" → card sobe pro topo com alfinete;
 fixar 3 e tentar a 4ª → Alert "Você pode fixar até 3 conversas";
 "Desafixar" volta pra ordem por última mensagem; desfazer match fixado →

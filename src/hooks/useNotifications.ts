@@ -1,6 +1,7 @@
 // src/hooks/useNotifications.ts
 import type * as NotificationsType from 'expo-notifications';
 import { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 
 import { isAdminUid } from '@/config/admin';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,33 @@ export function useNotifications() {
   useEffect(() => {
     if (isExpoGo || !user) return;
     registerForPushNotifications(user.uid).catch(() => {});
+  }, [user]);
+
+  // S181 — cobre "usuário foi nas Configurações, ativou a permissão e voltou
+  // pro app": ao voltar pro foreground, tenta re-registrar o token SEM
+  // reabrir o prompt nativo (askIfUndetermined: false) — o único pedido
+  // automático de permissão continua sendo o effect de login acima. Se a
+  // permissão ainda estiver 'denied', registerForPushNotifications só loga e
+  // retorna null (sem custo real).
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    if (isExpoGo) return;
+
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      if (
+        (previousState === 'background' || previousState === 'inactive') &&
+        nextState === 'active' &&
+        user
+      ) {
+        registerForPushNotifications(user.uid, { askIfUndetermined: false }).catch(() => {});
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [user]);
 
   useEffect(() => {
