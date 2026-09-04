@@ -71,19 +71,26 @@ reinstancia esses singletons.
   `ownerNickname` (nickname, S135), `title`, `description`, `priceType`
   (fixed/negotiable/donation), `price?` (só quando fixed), `category`
   (catálogo fixo de 7 chaves), `uf` (sem cidade, imutável após create),
-  `photos[]` (0-3), `status` (pending/approved/rejected/sold/removed),
+  `photos[]` (0-3), `status`
+  (pending/approved/rejected/sold/removed/expired — `expired` desde S172),
   `rejectionReason?`/`reviewedAt?`/`reviewedBy?` (só admin, mesmo molde de
   verifications), `createdAt`, `expiresAt` (+30 dias, computado no client).
   Moderação por APROVAÇÃO PRÉVIA: nasce sempre `pending`; editar conteúdo
   (dono) sempre volta pra `pending`; só `approved`/`rejected` são setados
   pelo admin (`AdminListingsScreen`/`AdminListingDetailScreen`, mirror da
-  fila de verificações). Expiração é filtro 100% CLIENT
-  (`listApprovedListings`, `listingService.ts`) — sem Cloud Function de
-  expiração (decisão fechada da S168-A); S170 adiciona `onListingSubmitted`
-  (push pro admin ao entrar em `pending`), sem `where('expiresAt', ...)`
-  nas rules (armadilha S139/S125-A do ROADMAP). Lê: dono, admin, e qualquer
-  verificado (só docs `approved`/`sold`). Escreve: dono cria/edita conteúdo
-  (sempre verificado), admin revisa.
+  fila de verificações). S172 — a expiração de verdade é a scheduled
+  function `expireListings` (diária, 09:00 São Paulo, approved→expired +
+  push `listing_expired` pro dono); o filtro client em
+  `listApprovedListings` continua como cinto de segurança pro intervalo
+  entre uma rodada e outra. Renovação em 1 toque (`renewListing`,
+  expired→approved, +30 dias, SEM voltar pra fila de moderação) tem ramo
+  próprio no `allow update` do dono. S170 adiciona `onListingSubmitted`
+  (push pro admin ao entrar em `pending`). get/list seguem SEM
+  `where('expiresAt', ...)` nas rules (armadilha S139/S125-A do ROADMAP).
+  Lê: dono, admin, e qualquer verificado (só docs `approved`/`sold` —
+  `expired` fica invisível pra quem não é dono/admin). Escreve: dono
+  cria/edita conteúdo/renova (sempre verificado), admin revisa,
+  `expireListings` expira.
 - `listingChats/{chatId}` — chat 1:1 SEM match entre o interessado e o dono
   de um anúncio (S168-B), `chatId = ${listingId}_${interestedId}`. `ownerId`,
   `interestedId`, `participants[]` (`[ownerId, interestedId]`, nessa ordem),
@@ -99,9 +106,9 @@ reinstancia esses singletons.
 
 ## Cloud Functions (`functions/src/index.ts`, região `southamerica-east1`)
 
-Hoje são 39 functions exportadas (contagem pelos exports de
-`functions/src/index.ts` em 03/09/2026, já com `onListingChatMessageCreated`
-da S168-B — o "31/32" anterior já estava
+Hoje são 40 functions exportadas (contagem pelos exports de
+`functions/src/index.ts` em 04/09/2026, já com `expireListings` da S172 —
+o "31/32" anterior já estava
 defasado). A tabela abaixo ainda NÃO lista 6 delas, todas triggers reais:
 `onMomentoLikeCreated`, `onMomentoLikeDeleted`, `onMomentoRequestCreated`,
 `onMomentoRequestUpdated`, `onMomentoRequestMessageCreated` (`momentos.ts`)
@@ -143,6 +150,7 @@ no ROADMAP (S170).
 | `getGroupActiveNowCount` | `onCall` | conta membros online agora, sob demanda |
 | `onListingSubmitted` | `onDocumentWritten listings/{listingId}` | avisa admin de anúncio novo/re-submetido na fila de moderação (S170) |
 | `onListingChatMessageCreated` | `onDocumentCreated listingChats/.../messages/{messageId}` | push pro outro participante do chat interessado↔anunciante (S168-B) |
+| `expireListings` | `onSchedule` diário 09h | expira anúncios approved vencidos (approved→expired) + push de renovação pro dono (S172) |
 
 ## Moldes reusáveis
 

@@ -1,4 +1,7 @@
+import { ExpoPushMessage } from 'expo-server-sdk';
+import { Timestamp } from 'firebase-admin/firestore';
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import {
   db,
@@ -115,5 +118,73 @@ export const onListingChatMessageCreated = onDocumentCreated(
         },
       },
     ]);
+  },
+);
+
+// S172 — expira anúncios approved com expiresAt vencido: approved → expired
+// (nunca delete) + 1 push pro dono. 1 rodada/dia às 09:00 de São Paulo
+// (molde de staleMatchReminder). Query composta status+expiresAt exige o
+// índice (status ASC, expiresAt ASC) de firestore.indexes.json. Releitura
+// em transação por doc (molde de expireMomentos): entre a query e o write o
+// dono pode ter marcado sold/removed ou editado (pending) — só expira o que
+// AINDA está approved e vencido no instante do write. Texto sem o título do
+// anúncio (privacidade na tela de bloqueio, mesma regra de listing_new).
+export const expireListings = onSchedule(
+  { schedule: '0 9 * * *', timeZone: 'America/Sao_Paulo', region: REGION },
+  async () => {
+    const now = Timestamp.now();
+    const snap = await db
+      .collection('listings')
+      .where('status', '==', 'approved')
+      .where('expiresAt', '<=', now)
+      .get();
+
+    let expiredCount = 0;
+    const messages: ExpoPushMessage[] = [];
+
+    for (const listingDoc of snap.docs) {
+      const ref = listingDoc.ref;
+      let expired = false;
+      let ownerId: string | undefined;
+      try {
+        await db.runTransaction(async (transaction) => {
+          expired = false;
+          ownerId = undefined;
+          const fresh = await transaction.get(ref);
+          if (!fresh.exists) return;
+          const data = fresh.data() as { status?: string; expiresAt?: Timestamp; ownerId?: string };
+          if (
+            data.status === 'approved' &&
+            data.expiresAt &&
+            data.expiresAt.toMillis() <= Timestamp.now().toMillis()
+          ) {
+            transaction.update(ref, { status: 'expired' });
+            expired = true;
+            ownerId = data.ownerId;
+          }
+        });
+      } catch (error) {
+        console.error('[expireListings] falha na transação:', ref.id, error);
+        continue;
+      }
+      if (!expired) continue;
+      expiredCount++;
+      if (!ownerId) continue;
+
+      const token = await getPushToken(ownerId);
+      if (!token) continue;
+      messages.push({
+        to: token,
+        sound: 'default',
+        title: 'Anúncio expirado',
+        body: 'Um anúncio seu expirou. Toque para renovar.',
+        data: { type: 'listing_expired', listingId: ref.id },
+      });
+    }
+
+    await sendExpoNotifications(messages);
+    console.log(
+      `[expireListings] varridos: ${snap.size}, expirados: ${expiredCount}, pushes: ${messages.length}`,
+    );
   },
 );

@@ -4,23 +4,32 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S168-B2 (feat(listings), sucede 0184688 —
-S171, Classificados abrem em "Todos os estados"). S168-B2 (denúncia de
-anúncio e de pessoa no chat de classificados com dedup nas rules por id
-determinístico; admin lê `listingChats` pra apurar; push de admin pra os
-2 uids via `getAdminPushTokens`) IMPLEMENTADA e auditada (APROVADA na 2ª
-rodada) em 04/09 — ver ROADMAP § S168. Lote em andamento nesta sessão:
-S172 → S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados:
-`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated`
-(rules-stamp S168-B2 engloba S168-B e o S168-A ainda não confirmado;
-storage stamp S168-B2; indexes ganha 1 índice novo de `listingChats`;
+**Commit atual:** o commit da S172 (feat(listings), sucede 5fa69ed —
+S168-B2, denúncia + push pra todos os admins). S172 (scheduled
+`expireListings` approved→expired + push `listing_expired`; botão
+"Renovar" em Meus anúncios devolve pra approved com +30d sem fila; ramo
+próprio nas rules) IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em
+04/09 — ver ROADMAP § S172. Lote em andamento nesta sessão: S173 (purge
+de Classificados no deleteAccount, decisão do Raphael em 04/09) →
+S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings`
+(rules-stamp S172 engloba S168-B2, S168-B e o S168-A ainda não
+confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
+`listingChats` participants+lastMessageAt e `listings` status+expiresAt;
 `onVerificationSubmitted`/`onSupportMessageCreated`/`onListingSubmitted`
-mudaram na S168-B2 — push pra todos os admins).
+mudaram na S168-B2; `expireListings` é nova, S172).
 
 ## Sprints em andamento
-Lote S171 → S168-B2 → S172 → S168-C rodando em 04/09/2026 (S171 e
-S168-B2 já commitadas; as duas seguintes em sequência, cada uma com
-commit próprio após auditoria). S171: testar em aparelho que
+Lote S171 → S168-B2 → S172 → S173 → S168-C rodando em 04/09/2026 (S171,
+S168-B2 e S172 já commitadas; S173 e S168-C em sequência, cada uma com
+commit próprio após auditoria). S172 (depois do deploy de rules + indexes
++ function, em build com push): anúncio approved com `expiresAt` no
+passado → na rodada das 09:00 vira "Expirado" em Meus anúncios, some do
+feed, dono recebe "Um anúncio seu expirou. Toque para renovar." e o toque
+abre Meus anúncios; "Renovar" (1 toque, sem confirmação) volta pra
+"Aprovado" com +30 dias SEM passar pela fila do admin; editar um expirado
+volta pra "Em análise"; interessado que abre o chat de um expirado vê
+"Anúncio encerrado". S171: testar em aparelho que
 Classificados abre em "Todos os estados", que o campo abre o seletor de
 UF e o feed corta pela UF escolhida, e que ao sair e voltar o filtro
 reseta. S168-B2 (depois do deploy de rules + storage + functions; push

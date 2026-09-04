@@ -24,7 +24,9 @@ export type PushNotificationData = {
     // S170 — admin: anúncio de classificados entrou na fila
     | 'listing_new'
     // S168-B — mensagem nova no chat interessado↔anunciante (listingChats)
-    | 'listing_message';
+    | 'listing_message'
+    // S172 — dono: anúncio expirou, toque abre Meus anúncios
+    | 'listing_expired';
   matchId?: string;
   otherUid?: string;
   otherName?: string;

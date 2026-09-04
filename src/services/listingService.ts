@@ -27,8 +27,16 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { ListingRejectionReason } from '@/constants/listingRejectionReasons';
 import { db, storage } from '@/services/firebase';
 
-export type ListingStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'removed';
+// S172 — 'expired' é setado SÓ pela scheduled function `expireListings`
+// (functions/src/listings.ts), nunca pelo client; o dono volta pra
+// 'approved' via `renewListing` abaixo (nunca por updateListingContent).
+export type ListingStatus = 'pending' | 'approved' | 'rejected' | 'sold' | 'removed' | 'expired';
 export type ListingPriceType = 'fixed' | 'negotiable' | 'donation';
+
+// S172 — 30 dias, mesmo teto de +31d usado nas rules (folga de 1 dia pro
+// relógio do client). Único literal de prazo do módulo: createListing e
+// renewListing usam esta constante.
+export const LISTING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface Listing {
   id: string;
@@ -54,9 +62,13 @@ export interface Listing {
   reviewedAt?: Timestamp;
   reviewedBy?: string;
   createdAt: Timestamp;
-  // +30 dias a partir da criação, computado no client (Timestamp.fromMillis)
-  // — expiração é filtro CLIENT, nunca condição de rules (armadilha S139/
-  // S125-A do ROADMAP: `request.time` numa regra de list derruba o list
+  // +30 dias a partir da criação, computado no client (Timestamp.fromMillis).
+  // S172 — a expiração de verdade agora é a scheduled function diária
+  // `expireListings` (functions/src/listings.ts, approved→expired quando
+  // expiresAt vence); o filtro client em listApprovedListings continua
+  // existindo como cinto de segurança pro intervalo entre uma rodada e
+  // outra da function. Rules de get/list continuam SEM `request.time`
+  // (armadilha S139/S125-A do ROADMAP: numa regra de list derruba o list
   // inteiro, não filtra doc a doc).
   expiresAt: Timestamp;
 }
@@ -136,7 +148,7 @@ export const createListing = async (input: CreateListingInput): Promise<string> 
     photos: input.photos,
     status: 'pending' as const,
     createdAt: serverTimestamp(),
-    expiresAt: Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    expiresAt: Timestamp.fromMillis(Date.now() + LISTING_TTL_MS),
   });
   return ref.id;
 };
@@ -180,6 +192,16 @@ export const markListingSold = async (id: string): Promise<void> => {
 // usado no projeto, ex.: blocks/verifications nunca são apagados).
 export const removeListing = async (id: string): Promise<void> => {
   await updateDoc(doc(db, 'listings', id), { status: 'removed' as const });
+};
+
+// S172 — renovação em 1 toque: expired → approved com +30 dias, SEM voltar
+// pra fila (conteúdo não mudou). Rules só aceitam esse par de campos e só a
+// partir de 'expired' (ramo próprio do allow update do dono).
+export const renewListing = async (id: string): Promise<void> => {
+  await updateDoc(doc(db, 'listings', id), {
+    status: 'approved' as const,
+    expiresAt: Timestamp.fromMillis(Date.now() + LISTING_TTL_MS),
+  });
 };
 
 // permission-denied aqui significa "anúncio removido/inacessível pro uid

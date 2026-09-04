@@ -38,6 +38,7 @@ import {
   listMyListings,
   markListingSold,
   removeListing,
+  renewListing,
 } from '@/services/listingService';
 
 type MyListingsScreenProps = NativeStackScreenProps<RootStackParamList, 'MyListings'>;
@@ -48,6 +49,7 @@ const STATUS_LABEL: Record<Listing['status'], string> = {
   rejected: 'Recusado',
   sold: 'Vendido',
   removed: 'Removido',
+  expired: 'Expirado',
 };
 
 export default function MyListingsScreen({ navigation }: MyListingsScreenProps) {
@@ -58,6 +60,8 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
   // DONO — um dono nunca aparece como interessado no próprio anúncio, mas o
   // filtro aqui é defensivo, mesmo raciocínio do filtro em ListingChatsScreen).
   const [chatCounts, setChatCounts] = useState<Record<string, number>>({});
+  // S172 — evita duplo toque em "Renovar" enquanto a chamada está em voo.
+  const [renewingId, setRenewingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || profile?.verified !== true) {
@@ -105,6 +109,21 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
     ]);
   };
 
+  // S172 — renovação em 1 toque: sem Alert de confirmação (é "1 toque" por
+  // definição da spec).
+  const handleRenew = async (listing: Listing) => {
+    setRenewingId(listing.id);
+    try {
+      await renewListing(listing.id);
+      load();
+    } catch (err) {
+      console.error('[MyListingsScreen] falha ao renovar anúncio:', err);
+      Alert.alert('Erro', 'Não foi possível renovar o anúncio.');
+    } finally {
+      setRenewingId(null);
+    }
+  };
+
   const handleRemove = (listing: Listing) => {
     Alert.alert('Excluir anúncio?', 'Essa ação não pode ser desfeita.', [
       { text: 'Cancelar', style: 'cancel' },
@@ -127,6 +146,8 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
         return { box: styles.badgeApproved, text: styles.badgeTextApproved };
       case 'rejected':
         return { box: styles.badgeRejected, text: styles.badgeTextRejected };
+      case 'expired':
+        return { box: styles.badgeExpired, text: styles.badgeTextExpired };
       default:
         return { box: styles.badgeNeutral, text: styles.badgeTextNeutral };
     }
@@ -211,6 +232,15 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                     </Text>
                   )}
 
+                  {/* S172 — expirado: dica de quando venceu + convite pra
+                      renovar (o botão "Renovar" fica na actionsRow abaixo). */}
+                  {item.status === 'expired' && (
+                    <Text style={styles.expiredHint}>
+                      Expirou em {dayjs(item.expiresAt.toDate()).format('DD/MM')}. Renove para
+                      voltar ao feed.
+                    </Text>
+                  )}
+
                   {/* S168-B — "N conversas": Pressable PRÓPRIO (não
                       AnimatedPressable, mesmo componente do card) pra não
                       propagar o toque pro onPress do card; só navega quando
@@ -243,6 +273,17 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                         onPress={() => handleMarkSold(item)}
                       >
                         <Text style={styles.actionBtnText}>Marcar vendido</Text>
+                      </AnimatedPressable>
+                    )}
+                    {item.status === 'expired' && (
+                      <AnimatedPressable
+                        style={[styles.actionBtn, styles.actionBtnPrimary]}
+                        onPress={() => handleRenew(item)}
+                        disabled={renewingId === item.id}
+                      >
+                        <Text style={[styles.actionBtnText, styles.actionBtnTextPrimary]}>
+                          Renovar
+                        </Text>
                       </AnimatedPressable>
                     )}
                     <AnimatedPressable
@@ -327,8 +368,17 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   badgeTextNeutral: { color: theme.colors.textSecondary },
+  // S172 — badge de 'expired', mesmo formato dos badges vizinhos.
+  badgeExpired: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  badgeTextExpired: { color: theme.colors.textSecondary },
 
   rejectionReason: { fontSize: theme.fontSize.xs, color: theme.colors.error },
+  // S172 — dica de expiração, mesmo tom do rejectionReason mas neutro.
+  expiredHint: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
 
   // S168-B — linha "N conversas", entre o motivo de rejeição e as ações.
   chatRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -348,4 +398,8 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   actionBtnTextDestructive: { color: theme.colors.error },
+  // S172 — "Renovar" (1 toque, expired → approved), estilo cheio pra se
+  // destacar dos demais botões de contorno neutro.
+  actionBtnPrimary: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  actionBtnTextPrimary: { color: theme.colors.onPrimary },
 });

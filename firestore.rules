@@ -1,4 +1,8 @@
-// rules-stamp: S168-B2 (04/09/2026 — denúncia de anúncio/chat de
+// rules-stamp: S172 (04/09/2026 — expiração de anúncio com renovação em 1
+// toque: allow update do dono ganha ramo 'expired'→'approved'
+// [status+expiresAt, prazo novo no futuro, teto +31d] + affectedKeys()
+// externo ganha 'expiresAt' + ramo 'pending' nega explicitamente tocar
+// expiresAt) + S168-B2 (04/09/2026 — denúncia de anúncio/chat de
 // classificado com dedup por id determinístico [reason condicional por
 // listingId/listingChatId, campos listingId/listingTitle/listingChatId/
 // listingOwnerId/listingInterestedId em reports/{reportId}] + admin passa a
@@ -2115,14 +2119,16 @@ service cloud.firestore {
     // ───────────────────────── listings (S168-A — classificados) ─────────────────────────
     //
     // Anúncio moderado por aprovação prévia (status pending/approved/
-    // rejected/sold/removed). Sem subcoleção nesta sprint (contato/chat é
-    // S168-B, fora de escopo). Sem cidade — só UF (decisão fechada da spec).
+    // rejected/sold/removed/expired — 'expired' desde S172). Sem subcoleção
+    // nesta sprint (contato/chat é S168-B, fora de escopo). Sem cidade — só
+    // UF (decisão fechada da spec).
     // allow get/list SEPARADOS de propósito: mesma lição da S139/S125-A
     // (momentos/{uid}, events/{eventId}) registrada no ROADMAP — uma
     // condição dependente de request.time/expiresAt dentro da regra de
-    // list derruba o list INTEIRO, não filtra doc a doc; aqui nem chega a
-    // ser necessário porque a expiração é filtro 100% client
-    // (listApprovedListings, listingService.ts). `verified()` inline, mesmo
+    // list derruba o list INTEIRO, não filtra doc a doc; por isso a
+    // expiração de verdade (S172) é a scheduled function `expireListings`
+    // (approved→expired), NUNCA uma condição de request.time aqui — get/list
+    // seguem só filtrando por `status`. `verified()` inline, mesmo
     // padrão já usado em events/{eventId} allow create (linha ~1965).
     match /listings/{listingId} {
       allow get: if isSignedIn()
@@ -2175,15 +2181,17 @@ service cloud.firestore {
 
       // Dono edita conteúdo: SEMPRE volta pra 'pending' (fila de novo) —
       // exceto os dois ramos de status "terminal" (marcar vendido, excluir
-      // soft), que só tocam o campo `status` isolado. ownerId/ownerNickname/
-      // uf/createdAt/expiresAt IMUTÁVEIS pelo dono — garantido pelo
-      // affectedKeys().hasOnly nunca incluir esses campos; dono nunca seta
-      // 'approved'/'rejected' (fora da lista de status finais aceitos).
+      // soft), que só tocam o campo `status` isolado, e o ramo de renovação
+      // (S172), que só toca `status`+`expiresAt`. ownerId/ownerNickname/
+      // uf/createdAt IMUTÁVEIS pelo dono — garantido pelo affectedKeys()
+      // .hasOnly nunca incluir esses campos; dono nunca seta
+      // 'approved'/'rejected' fora do ramo de renovação (fora da lista de
+      // status finais aceitos).
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['title', 'description', 'priceType', 'price', 'category', 'photos', 'status'])
-        && request.resource.data.status in ['pending', 'sold', 'removed']
+             .hasOnly(['title', 'description', 'priceType', 'price', 'category', 'photos', 'status', 'expiresAt'])
+        && request.resource.data.status in ['pending', 'sold', 'removed', 'approved']
         && (
           (request.resource.data.status == 'sold'
             && resource.data.status == 'approved'
@@ -2193,7 +2201,8 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
           ||
           (request.resource.data.status == 'pending'
-            && resource.data.status in ['pending', 'approved', 'rejected']
+            && resource.data.status in ['pending', 'approved', 'rejected', 'expired']
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['expiresAt'])
             && request.resource.data.title is string
             && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 80
             && request.resource.data.description is string
@@ -2206,6 +2215,17 @@ service cloud.firestore {
             && request.resource.data.category in
                  ['eletronicos', 'moveis', 'veiculos', 'roupas', 'imoveis', 'servicos', 'outros']
             && request.resource.data.photos is list && request.resource.data.photos.size() <= 3)
+          ||
+          // S172 — renovação em 1 toque: só de 'expired' (setado pela
+          // function expireListings), só status+expiresAt, prazo novo no
+          // futuro e no máximo +31d (mesma folga do create). Conteúdo não
+          // muda, então NÃO volta pra 'pending'. Sem limite de renovações.
+          (request.resource.data.status == 'approved'
+            && resource.data.status == 'expired'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'expiresAt'])
+            && request.resource.data.expiresAt is timestamp
+            && request.resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt <= request.time + duration.value(31, 'd'))
         );
 
       // Admin revisa: só mexe em status/reviewedAt/reviewedBy/

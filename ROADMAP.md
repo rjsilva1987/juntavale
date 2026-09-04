@@ -47,6 +47,36 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S172 — Expiração de anúncio com renovação em 1 toque
+**Status:** IMPLEMENTADA em 04/09/2026 (lote, modo AUTOMATICO + GIT
+AUTOMATICO), auditoria APROVADA na 1ª rodada (12 cenários de rules
+simulados, nenhuma falha; ressalva residual: duplo toque no mesmo tick em
+"Renovar" — `disabled` só vale no próximo render). EXIGE deploy de
+`firestore.rules` (stamp S172) + `firestore.indexes.json` (índice novo
+`listings (status ASC, expiresAt ASC)`) + `functions:expireListings`
+(nova, scheduled). Lado client (`'expired'`, botão Renovar, roteamento de
+`listing_expired`) só entra em build novo. SEM teste em aparelho.
+
+Reverte a decisão "sem Cloud Function de expiração" da S168-A: scheduled
+function `expireListings` (`functions/src/listings.ts`, `0 9 * * *`
+America/Sao_Paulo, molde de `staleMatchReminder` + releitura em
+`runTransaction` por doc como `expireMomentos`) faz `approved → expired`
+(update, nunca delete) em anúncio com `expiresAt` vencido e manda 1 push
+ao dono (tipo `listing_expired`, "Um anúncio seu expirou. Toque para
+renovar.", sem título, abre `MyListingsScreen`). `ListingStatus` ganha
+`'expired'`; `LISTING_TTL_MS` (30 dias) substitui o literal do create;
+`renewListing` escreve só `{status:'approved', expiresAt: agora+30d}`.
+Rules: ramo novo do dono `expired → approved` só com `status+expiresAt`,
+`expiresAt` no futuro e ≤ +31d, sem limite de vezes; ramo `pending`
+aceita origem `expired` (edição volta pra fila) e nega tocar `expiresAt`;
+`get`/`list` seguem sem `request.time` e sem `'expired'` pra terceiros
+(interessado vê o banner "Anúncio encerrado" via `getListing → null`). O
+filtro client de `listApprovedListings` continua como cinto de segurança
+entre rodadas. Fila do admin e telas de detalhe/chat intocadas (já cobrem
+`status !== 'approved'`).
+
+---
+
 ### S171 — Classificados abrem sem filtro de estado ("Todos os estados")
 **Status:** IMPLEMENTADA em 04/09/2026 (lote S171/S168-B2/S172/S168-C, modo
 AUTOMATICO + GIT AUTOMATICO), auditoria APROVADA na 1ª rodada (sem falhas;
