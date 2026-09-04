@@ -22,7 +22,9 @@ export type PushNotificationData = {
     | 'verification_reviewed'
     | 'verification_new'
     // S170 — admin: anúncio de classificados entrou na fila
-    | 'listing_new';
+    | 'listing_new'
+    // S168-B — mensagem nova no chat interessado↔anunciante (listingChats)
+    | 'listing_message';
   matchId?: string;
   otherUid?: string;
   otherName?: string;
@@ -30,6 +32,14 @@ export type PushNotificationData = {
   ticketId?: string;
   reportId?: string;
   listingId?: string;
+  // S168-B — campos do push de listing_message (ver onListingChatMessageCreated,
+  // functions/src/listings.ts). chatId vem pronto no payload; o roteamento
+  // (useNotifications.ts) navega com listingId/ownerId/interestedId e a tela
+  // remonta o mesmo id via listingChatId.
+  chatId?: string;
+  ownerId?: string;
+  interestedId?: string;
+  listingTitle?: string;
 };
 
 // expo-notifications não tem módulo nativo no Expo Go (SDK 53+); qualquer

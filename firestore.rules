@@ -1,4 +1,15 @@
-// rules-stamp: S168-A (03/09/2026 — classificados: novo bloco top-level
+// rules-stamp: S168-B (03/09/2026 — classificados: contato
+// interessado↔anunciante via chat 1:1 SEM match — novo bloco top-level
+// listingChats/{chatId} [+ subcoleção messages], inserido logo ANTES de
+// momentoRequests/{requestId}; allow get permite doc inexistente [mesmo
+// padrão S143-C de momentoRequests — o interessado escuta o doc ANTES da 1ª
+// mensagem]; allow create só do INTERESSADO (interestedId==auth.uid,
+// ownerId!=auth.uid), exige listings/{listingId}.status=='approved' e
+// ownerId/title batendo com o anúncio, ambos os lados verificados; allow
+// update restrito a lastMessage+lastMessageAt (envio) e à PRÓPRIA chave de
+// lastReadAt (leitura), mirror do guard de lastReadAt de matches/{matchId};
+// allow delete sempre false; messages mirror de groups/{groupId}/messages
+// [S149-E] SEM o ramo de editar, só "apagar pra todos".) + S168-A (03/09/2026 — classificados: novo bloco top-level
 // listings/{listingId} (moderação por aprovação prévia — status pending/
 // approved/rejected/sold/removed; sem cidade, só UF; allow get/list
 // separados como get/list de events/momentos [armadilha S139/S125-A do
@@ -2734,6 +2745,129 @@ service cloud.firestore {
 
         allow update: if false;
         allow delete: if isSignedIn() && resource.data.likerUid == request.auth.uid;
+      }
+    }
+
+    // ───────────── listingChats/{chatId} (S168-B — contato interessado↔anunciante) ─────────────
+    //
+    // Chat 1:1 SEM match entre o INTERESSADO num anúncio de classificados
+    // (listings/{listingId}, S168-A) e o ANUNCIANTE. chatId determinístico
+    // `${listingId}_${interestedId}` — no máximo 1 chat por par
+    // anúncio/interessado, mesma semântica nativa de create-vs-update do
+    // Firestore já usada em momentoRequests/{requestId} abaixo. Doc criado
+    // pelo INTERESSADO na PRIMEIRA mensagem (nunca ao abrir a tela) — ver
+    // createListingChatWithFirstMessage, listingChatService.ts. Nenhum
+    // helper `isVerified` novo — não existe hoje (ver rules-stamp), inline
+    // `get(.../users/$(uid)).data.get('verified', false) == true`, mesmo
+    // padrão já usado em listings/{listingId} (linha ~2119/2143) e
+    // events/{eventId} (linha ~1974).
+    match /listingChats/{chatId} {
+      // get: doc inexistente é PERMITIDO (padrão S143-C de momentoRequests —
+      // o interessado escuta o doc ANTES da 1ª mensagem; exists:false não
+      // vaza nenhum dado real).
+      allow get: if isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && (resource == null || request.auth.uid in resource.data.participants);
+
+      allow list: if isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && request.auth.uid in resource.data.participants;
+
+      // Só o INTERESSADO cria (interestedId==auth.uid, ownerId!=auth.uid);
+      // anúncio precisa existir, estar 'approved' e o ownerId/título
+      // declarados têm que bater com o doc real do anúncio — participants
+      // SEMPRE [ownerId, interestedId], nessa ordem (mirror do array
+      // `users` de matches/{matchId}, mas ORDENADO por papel, não por uid).
+      allow create: if isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && request.resource.data.keys().hasOnly(['listingId','ownerId','interestedId','participants','listingTitle','lastMessage','lastMessageAt','createdAt','lastReadAt'])
+        && request.resource.data.keys().hasAll(['listingId','ownerId','interestedId','participants','listingTitle','lastMessage','lastMessageAt','createdAt','lastReadAt'])
+        && request.resource.data.listingId is string
+        && chatId == request.resource.data.listingId + '_' + request.auth.uid
+        && request.resource.data.interestedId == request.auth.uid
+        && request.resource.data.ownerId is string
+        && request.resource.data.ownerId != request.auth.uid
+        // anúncio precisa existir, estar 'approved' e pertencer ao ownerId declarado
+        && get(/databases/$(database)/documents/listings/$(request.resource.data.listingId)).data.status == 'approved'
+        && get(/databases/$(database)/documents/listings/$(request.resource.data.listingId)).data.ownerId == request.resource.data.ownerId
+        && request.resource.data.listingTitle == get(/databases/$(database)/documents/listings/$(request.resource.data.listingId)).data.title
+        // dono também verificado
+        && get(/databases/$(database)/documents/users/$(request.resource.data.ownerId)).data.get('verified', false) == true
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants[0] == request.resource.data.ownerId
+        && request.resource.data.participants[1] == request.auth.uid
+        && request.resource.data.lastMessage is map
+        && request.resource.data.lastMessage.keys().hasOnly(['text','senderId'])
+        && request.resource.data.lastMessage.senderId == request.auth.uid
+        && request.resource.data.lastMessage.text is string
+        && request.resource.data.lastMessage.text.size() <= 130
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastReadAt is map
+        && request.resource.data.lastReadAt.keys().hasOnly([request.auth.uid])
+        && request.resource.data.lastReadAt[request.auth.uid] == request.time;
+
+      // update: só participante; só lastMessage/lastMessageAt (envio) e a
+      // PRÓPRIA chave de lastReadAt (leitura) — mirror do guard de
+      // lastReadAt de matches/{matchId} (linha ~1417-1421).
+      allow update: if isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage','lastMessageAt','lastReadAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessage','lastMessageAt'])
+            || (request.resource.data.lastMessage is map
+                && request.resource.data.lastMessage.keys().hasOnly(['text','senderId'])
+                && request.resource.data.lastMessage.senderId == request.auth.uid
+                && request.resource.data.lastMessage.text is string
+                && request.resource.data.lastMessage.text.size() <= 130
+                && request.resource.data.lastMessageAt == request.time))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastReadAt'])
+            || (resource.data.get('lastReadAt', {}).diff(request.resource.data.get('lastReadAt', {})).affectedKeys().hasOnly([request.auth.uid])
+                && request.resource.data.lastReadAt[request.auth.uid] == request.time));
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        // participante do chat pai + verificado (mirror groups/{groupId}/messages, linha ~1799-1803)
+        allow read: if isSignedIn()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+          && request.auth.uid in get(/databases/$(database)/documents/listingChats/$(chatId)).data.participants;
+
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
+          && request.auth.uid in get(/databases/$(database)/documents/listingChats/$(chatId)).data.participants
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && (!('imageUrl' in request.resource.data) || request.resource.data.imageUrl is string)
+          && (request.resource.data.text.size() > 0 || 'imageUrl' in request.resource.data)
+          && (!('replyTo' in request.resource.data) ||
+              (request.resource.data.replyTo is map
+               && request.resource.data.replyTo.messageId is string
+               && request.resource.data.replyTo.messageId.size() > 0
+               && request.resource.data.replyTo.senderId is string
+               && request.resource.data.replyTo.text is string
+               && request.resource.data.replyTo.text.size() <= 400))
+          && request.resource.data.keys().hasOnly(['text','senderId','createdAt','imageUrl','replyTo']);
+
+        // "apagar pra todos" = lápide, mirror EXATO do ramo S149-E de
+        // groups/{groupId}/messages (linha ~1844-1869): só o autor, dentro
+        // de 1h, sem deletedAt prévio, resultado
+        // hasOnly(['senderId','createdAt','deletedAt']), senderId/createdAt
+        // preservados, deletedAt == request.time. SEM o ramo de editar —
+        // edição não existe neste chat.
+        allow update: if isSignedIn()
+          && request.auth.uid == resource.data.senderId
+          && request.time < resource.data.createdAt + duration.value(1, 'h')
+          && !('deletedAt' in resource.data)
+          && request.resource.data.keys().hasOnly(['senderId','createdAt','deletedAt'])
+          && request.resource.data.senderId == resource.data.senderId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.deletedAt == request.time;
+
+        allow delete: if false;
       }
     }
 

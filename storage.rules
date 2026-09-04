@@ -1,4 +1,8 @@
-// rules-stamp: S168-A 2026-09-03 — classificados: novo bloco
+// rules-stamp: S168-B 2026-09-03 — contato interessado↔anunciante: novo
+// bloco images/listingChats/{chatId}/{fileName}, mirror exato de
+// images/chats/{matchId} (linha ~98), trocando firestore.get(matches/
+// $(matchId)).data.users por firestore.get(listingChats/$(chatId))
+// .data.participants. + S168-A 2026-09-03 — classificados: novo bloco
 // images/listings/{uid}/{fileName}, molde exato de images/momentos/{uid}
 // (linha ~52).
 // storage.rules
@@ -132,6 +136,24 @@ service firebase.storage {
       allow read: if isGroupMember();
       allow create, update: if isGroupMember() && isValidImage();
       allow delete: if isGroupMember();
+    }
+
+    // ───────────────────────── listing chat images (S168-B) ─────────────────────────
+    //
+    // Foto do chat interessado↔anunciante (listingChats/{chatId}), path
+    // images/listingChats/{chatId}/{ts}.jpg — mirror EXATO de
+    // images/chats/{matchId} acima, trocando "participante do match"
+    // (m.data.users) por "participante do listingChat" (m.data.participants).
+    match /images/listingChats/{chatId}/{fileName} {
+      function isParticipant() {
+        return isSignedIn()
+          && request.auth.uid in
+             firestore.get(/databases/(default)/documents/listingChats/$(chatId)).data.participants;
+      }
+
+      allow read: if isParticipant();
+      allow create, update: if isParticipant() && isValidImage();
+      allow delete: if isParticipant();
     }
 
     // ───────────────────────── report images (S113) ─────────────────────────

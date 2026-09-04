@@ -90,6 +90,22 @@ export function useNotifications() {
             // S170 — só o admin recebe; a fila de classificados é a aba
             // 'Classificados' dentro de Main desde a S169 (navigation/index.tsx).
             navigationRef.navigate('Main', { screen: 'Classificados' });
+          } else if (
+            data.type === 'listing_message' &&
+            data.listingId &&
+            data.ownerId &&
+            data.interestedId
+          ) {
+            // S168-B — mensagem nova no chat interessado↔anunciante; NÃO
+            // entra no bloco isAdmin acima (o admin também pode ser
+            // interessado/dono de um anúncio, então este tipo não é
+            // ignorado pra ele).
+            navigationRef.navigate('ListingChat', {
+              listingId: data.listingId,
+              ownerId: data.ownerId,
+              interestedId: data.interestedId,
+              listingTitle: data.listingTitle ?? 'Anúncio',
+            });
           }
         },
       );

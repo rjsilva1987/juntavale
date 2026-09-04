@@ -3,15 +3,16 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 03/09/2026
-**Commit atual:** o commit da S170 (feat(functions), sucede e839c81 —
-S169). S170 (push pro admin quando um classificado entra em `pending`:
-function nova `onListingSubmitted` + tipo `listing_new` e roteamento pra
-aba Classificados no client) IMPLEMENTADA e auditada (APROVADA na 1ª
-rodada) em 03/09 — ver ROADMAP § S170. EXIGE deploy pendente:
-`firebase deploy --only functions:onListingSubmitted`. Também pendente
-da S168-A: confirmar deploy de `firestore.rules` + `storage.rules`
-(rules-stamp S168-A); `firestore.indexes.json` já deployado em 03/09.
+**Atualizado:** 04/09/2026
+**Commit atual:** o commit da S168-B (feat(listings), sucede 0075084 —
+bump 1.0.13 com S168-A + S169 + S170). S168-B (chat interessado↔
+anunciante em `listingChats/{listingId}_{uid}`, botão "Tenho interesse",
+"N conversas", card "Classificados" na aba Conversas, push
+`onListingChatMessageCreated`) IMPLEMENTADA e auditada (APROVADA na 1ª
+rodada) em 04/09 — ver ROADMAP § S168. Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated`
+(rules-stamp S168-B engloba o S168-A ainda não confirmado; indexes ganha
+1 índice novo de `listingChats`; `onListingSubmitted` é da S170).
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
@@ -36,13 +37,23 @@ push, não Expo Go): criar anúncio como verificado → admin recebe "Novo
 anúncio para aprovar" sem o título do anúncio; toque abre a aba
 Classificados; editar anúncio aprovado → push "editou um anúncio";
 editar anúncio ainda pendente → nenhum push; aprovar/recusar → nenhum
-push.
+push. S168-B (depois do deploy de rules + storage + indexes; push só em
+build): com 2 contas verificadas, abrir um anúncio aprovado de outra
+pessoa → "Tenho interesse" aparece (some no próprio anúncio, em anúncio
+vendido/expirado e pra não verificado) → tela de chat vazia SEM doc
+criado → 1ª mensagem cria `listingChats/{listingId}_{uid}` e aparece nos
+dois lados; dono vê "1 conversa" em Meus anúncios e toca pra listar; os
+dois veem o card "Classificados" na aba Conversas com dot até abrir a
+conversa; foto, responder, copiar, "ler mais" e apagar pra todos (1h)
+funcionam; marcar vendido/excluir o anúncio → banner "Anúncio encerrado"
+no topo e a conversa continua aceitando mensagem; push da mensagem chega
+pro outro lado (nickname + preview) e o toque abre a conversa; app em
+primeiro plano não mostra banner (S122).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
-- S168-B — contato interessado↔anunciante nos classificados — sem
-  decisão de desenho (match existente? subcoleção nova?); S168-C sem
-  escopo. Ver ROADMAP.md § S168.
+- S168-B2 (denúncia dentro do chat de classificados) e S168-C — sem
+  escopo, sem recon. Ver ROADMAP.md § S168.
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.

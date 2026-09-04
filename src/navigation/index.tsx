@@ -51,6 +51,8 @@ import GroupChatScreen from '@/screens/GroupChatScreen';
 import GroupDetailScreen from '@/screens/GroupDetailScreen';
 import GroupsScreen from '@/screens/GroupsScreen';
 import LikesScreen from '@/screens/LikesScreen';
+import ListingChatScreen from '@/screens/ListingChatScreen';
+import ListingChatsScreen from '@/screens/ListingChatsScreen';
 import ListingDetailScreen from '@/screens/ListingDetailScreen';
 import ListingsScreen from '@/screens/ListingsScreen';
 import LoginScreen from '@/screens/LoginScreen';
@@ -138,6 +140,14 @@ export type RootStackParamList = {
   ListingDetail: { listingId: string };
   CreateListing: { listingId?: string } | undefined;
   MyListings: undefined;
+  // S168-B — contato interessado↔anunciante via chat 1:1 SEM match, mesmo
+  // bloco de classificados acima. Sem param: TODAS as conversas do uid
+  // (dono e interessado); com {listingId, listingTitle}: só as conversas
+  // DAQUELE anúncio em que o uid é dono (entrada por MyListingsScreen, "N
+  // conversas"). ListingChat = a thread em si; chatId = listingChatId
+  // (listingId, interestedId) é montado dentro da própria tela.
+  ListingChats: { listingId: string; listingTitle: string } | undefined;
+  ListingChat: { listingId: string; ownerId: string; interestedId: string; listingTitle: string };
   AdminListingDetail: { listingId: string };
   Support: undefined;
   MyTickets: undefined;
@@ -480,6 +490,10 @@ export default function Navigation() {
             <Stack.Screen name="ListingDetail" component={ListingDetailScreen} />
             <Stack.Screen name="CreateListing" component={CreateListingScreen} />
             <Stack.Screen name="MyListings" component={MyListingsScreen} />
+            {/* S168-B — contato interessado↔anunciante via chat 1:1 sem
+                match, mesmo bloco de classificados acima. */}
+            <Stack.Screen name="ListingChats" component={ListingChatsScreen} />
+            <Stack.Screen name="ListingChat" component={ListingChatScreen} />
             <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen name="MyTickets" component={MyTicketsScreen} />
             <Stack.Screen name="SupportThread" component={SupportThreadScreen} />

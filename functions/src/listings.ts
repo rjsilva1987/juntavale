@@ -1,6 +1,14 @@
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 
-import { ADMIN_UID, getPushToken, isAdminUid, REGION, sendExpoNotifications } from './shared';
+import {
+  ADMIN_UID,
+  db,
+  getPushToken,
+  getUserBasicInfo,
+  isAdminUid,
+  REGION,
+  sendExpoNotifications,
+} from './shared';
 
 // S170 — avisa o admin quando um anúncio de classificados entra na fila de
 // moderação. onDocumentWritten de propósito, NÃO onDocumentCreated: além
@@ -45,6 +53,65 @@ export const onListingSubmitted = onDocumentWritten(
         title: 'Novo anúncio para aprovar',
         body,
         data: { type: 'listing_new', listingId },
+      },
+    ]);
+  },
+);
+
+// S168-B — push pro OUTRO participante do chat interessado↔anunciante
+// (listingChats/{chatId}) quando uma mensagem nova é criada. Mirror de
+// onMessageCreated (chat.ts:135-203) SEM o update de lastMessage: aqui é o
+// CLIENT quem escreve lastMessage/lastMessageAt em listingChats/{chatId}
+// (decisão desta sprint, ver listingChatService.ts), então a function só
+// notifica — nunca reescreve o preview. Lápide ("apagar pra todos") nunca
+// dispara onDocumentCreated (é um update da própria mensagem, não um
+// create), mas a guarda abaixo cobre também o caso degenerado de uma
+// mensagem sem texto e sem imagem chegar aqui por qualquer outro motivo.
+export const onListingChatMessageCreated = onDocumentCreated(
+  { document: 'listingChats/{chatId}/messages/{messageId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const { chatId } = event.params;
+    const message = snap.data() as { senderId: string; text?: string; imageUrl?: string };
+    if (!message.text && !message.imageUrl) return;
+
+    const chatSnap = await db.doc(`listingChats/${chatId}`).get();
+    const chat = chatSnap.data() as
+      | {
+          participants: string[];
+          listingId: string;
+          ownerId: string;
+          interestedId: string;
+          listingTitle: string;
+        }
+      | undefined;
+    if (!chat) return;
+
+    const recipientUid = chat.participants.find((u) => u !== message.senderId);
+    if (!recipientUid) return;
+
+    const token = await getPushToken(recipientUid);
+    if (!token) return;
+
+    const sender = await getUserBasicInfo(message.senderId);
+    const preview = message.text ? message.text : '📷 Foto';
+
+    await sendExpoNotifications([
+      {
+        to: token,
+        sound: 'default',
+        title: sender?.name ?? 'Alguém',
+        body: preview,
+        data: {
+          type: 'listing_message',
+          chatId,
+          listingId: chat.listingId,
+          ownerId: chat.ownerId,
+          interestedId: chat.interestedId,
+          listingTitle: chat.listingTitle,
+        },
       },
     ]);
   },

@@ -44,5 +44,5 @@ export {
   onGroupMessageCreated,
 } from './grupos';
 export { expireEvents, onEventJoinRequestCreated, onEventParticipantCreated } from './eventos';
-export { onListingSubmitted } from './listings';
+export { onListingSubmitted, onListingChatMessageCreated } from './listings';
 export { staleMatchReminder, reengagementPush, weeklyPromptPush } from './agendadas';

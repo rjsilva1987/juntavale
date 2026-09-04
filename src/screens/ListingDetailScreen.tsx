@@ -1,7 +1,9 @@
 // src/screens/ListingDetailScreen.tsx
 //
-// S168-A — detalhe de um anúncio de classificados. Sem botão de contato/chat
-// nesta sprint (decisão fechada — fica pra S168-B). Dono vê botão "Editar".
+// S168-A — detalhe de um anúncio de classificados. Dono vê botão "Editar".
+// S168-B — quem NÃO é dono, está verificado e o anúncio segue aprovado e não
+// expirado vê "Tenho interesse" no mesmo lugar (mutuamente exclusivo com
+// "Editar anúncio" — ver ownerId no ternário abaixo).
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -30,7 +32,7 @@ const PHOTO_WIDTH = Dimensions.get('window').width;
 
 export default function ListingDetailScreen({ route, navigation }: ListingDetailScreenProps) {
   const { listingId } = route.params;
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [listing, setListing] = useState<Listing | null | undefined>(undefined);
 
   useEffect(() => {
@@ -113,6 +115,35 @@ export default function ListingDetailScreen({ route, navigation }: ListingDetail
                   <Text style={styles.editBtnText}>Editar anúncio</Text>
                 </AnimatedPressable>
               )}
+
+              {/* S168-B — "Tenho interesse": só pra quem não é dono, já está
+                  verificado e o anúncio segue aprovado e dentro do prazo.
+                  Nenhum getDoc/exists antes de navegar — a tela de chat
+                  resolve "existe ou não" (chatId é determinístico). */}
+              {!!user &&
+                listing.ownerId !== user.uid &&
+                profile?.verified === true &&
+                listing.status === 'approved' &&
+                listing.expiresAt.toMillis() > Date.now() && (
+                  <AnimatedPressable
+                    style={styles.interestBtn}
+                    onPress={() =>
+                      navigation.navigate('ListingChat', {
+                        listingId,
+                        ownerId: listing.ownerId,
+                        interestedId: user.uid,
+                        listingTitle: listing.title,
+                      })
+                    }
+                  >
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={18}
+                      color={theme.colors.onPrimary}
+                    />
+                    <Text style={styles.interestBtnText}>Tenho interesse</Text>
+                  </AnimatedPressable>
+                )}
             </View>
           </ScrollView>
         )}
@@ -186,4 +217,23 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   editBtnText: { color: theme.colors.primary, fontSize: theme.fontSize.md, fontWeight: '700' },
+
+  // S168-B — mesmo raio/padding de editBtn acima, preenchido (primary) em
+  // vez de contorno — REGRA DE OURO: onPrimary, nunca texto branco sobre
+  // secondary.
+  interestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 14,
+    marginTop: theme.spacing.lg,
+  },
+  interestBtnText: {
+    color: theme.colors.onPrimary,
+    fontSize: theme.fontSize.md,
+    fontWeight: '700',
+  },
 });

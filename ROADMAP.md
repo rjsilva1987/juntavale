@@ -118,22 +118,38 @@ o mesmo padrão de listener sem callback de erro.
 ### S168 — Classificados no Explorar (sub-sprints A a C)
 **Status:** S168-A IMPLEMENTADA em 03/09/2026, auditoria APROVADA (2ª
 rodada — 1ª bloqueou por guarda de `rejectionReason` nas rules e
-header/FAB fora do gate de verificado, corrigidos). EXIGE deploy de
-`firestore.rules` + `storage.rules` (rules-stamp S168-A) +
-`firestore.indexes.json` (2 índices compostos novos de `listings`); sem
-Cloud Function nova (expiração = filtro client + rules). SEM teste em
-aparelho. Localização do anúncio: só UF (perfil não tem cidade — decisão
-do Raphael em 03/09). S168-B/S168-C sem decisão/sem recon.
+header/FAB fora do gate de verificado, corrigidos). Localização do
+anúncio: só UF (perfil não tem cidade — decisão do Raphael em 03/09).
+S168-B IMPLEMENTADA em 04/09/2026 (modo AUTOMATICO + GIT AUTOMATICO),
+auditoria APROVADA na 1ª rodada (2 ajustes pós-auditoria: `chatId?` no
+tipo de push e `hasAny` no lugar de `in` na rule de `lastReadAt`). Chat
+1:1 SEM match em collection nova `listingChats/{listingId}_{uidInteressado}`
+(+ `messages`), doc criado na 1ª mensagem; botão "Tenho interesse" no
+detalhe (só verificado, nunca no próprio anúncio, só anúncio approved e
+não expirado); "N conversas" em Meus anúncios; card "Classificados" na
+aba Conversas (só verificado) com dot de não-lida; banner "Anúncio
+encerrado" no chat (sold/removed/expirado/inacessível) sem bloquear
+envio; paridade mínima do chat de grupo (texto, foto, responder, copiar,
+ler mais, apagar pra todos — sem reações/edição/áudio/swipe). Push
+`onListingChatMessageCreated` (mirror de `onMessageCreated`, sem escrever
+`lastMessage` — o client escreve `lastMessage`/`lastMessageAt`). Badge da
+TAB Conversas NÃO inclui esses chats (só o dot do card). EXIGE deploy de
+`firestore.rules` + `storage.rules` (rules-stamp S168-B, que engloba o
+S168-A ainda não confirmado) + `firestore.indexes.json` (1 índice novo
+`listingChats`: participants CONTAINS + lastMessageAt DESC) +
+`functions:onListingChatMessageCreated`. SEM teste em aparelho (A e B).
+S168-B2 (denúncia dentro desse chat) e S168-C sem escopo/sem recon.
 
 Ideia "Classificados / OLX de funcionários" (ver "Ideias sem número",
 levantada em 17/08) virou sprint numerada. A = anúncio básico (modelo
 `listings/{listingId}`, feed/detalhe/criação/edição/"meus anúncios",
 moderação por aprovação prévia mirror da fila de verificações, card
 "Classificados" na aba Explorar — exclusivo pra membro verificado). B =
-contato/chat entre interessado e anunciante (sem decisão de desenho ainda —
-via match existente? via subcoleção nova tipo `momentoRequests`? PARAR e
-perguntar ao Raphael antes de implementar). C = a definir (sem escopo
-levantado ainda).
+contato/chat entre interessado e anunciante (decisão do Raphael em
+03/09/2026: collection própria `listingChats`, NUNCA em `matches/`; molde
+do chat de grupo; conversa segue aberta com banner quando o anúncio
+encerra; sem denúncia/bloqueio/contador público nesta sprint — denúncia
+fica pra S168-B2). C = a definir (sem escopo levantado ainda).
 
 ---
 
@@ -289,6 +305,12 @@ push no SDK 54):
   2 tiques verdes (lido) só depois que o outro lado abrir a conversa de
   fato. Conferir que match bloqueado (por qualquer lado) NUNCA marca
   entregue.
+- S168-B — depois do deploy de `onListingChatMessageCreated`: mensagem
+  nova no chat de classificados chega como push pro OUTRO participante
+  (título = nickname de quem mandou, corpo = texto ou "📷 Foto", igual ao
+  1:1); toque abre a conversa certa (`ListingChat`); app em primeiro plano
+  não mostra banner (S122); apagar pra todos NUNCA dispara push. Roteiro
+  completo (sem push, só rules/indexes) em `docs/sprints/ESTADO.md`.
 
 ---
 

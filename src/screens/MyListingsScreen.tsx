@@ -4,13 +4,23 @@
 // filtrados por listMyListings), com ações de marcar vendido/excluir/editar.
 // Mirror de MyTicketsScreen.tsx (header, FlatList com card + badge de
 // status).
+// S168-B — cada card ganha a contagem de conversas de contato daquele
+// anúncio ("N conversas"), toque leva pra ListingChatsScreen filtrada.
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
 import { Image } from 'expo-image';
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,6 +31,7 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { RootStackParamList } from '@/navigation';
+import { listenMyListingChats } from '@/services/listingChatService';
 import {
   formatListingPrice,
   Listing,
@@ -40,9 +51,30 @@ const STATUS_LABEL: Record<Listing['status'], string> = {
 };
 
 export default function MyListingsScreen({ navigation }: MyListingsScreenProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  // S168-B — contagem de conversas por anúncio (só as em que o uid logado é
+  // DONO — um dono nunca aparece como interessado no próprio anúncio, mas o
+  // filtro aqui é defensivo, mesmo raciocínio do filtro em ListingChatsScreen).
+  const [chatCounts, setChatCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!user || profile?.verified !== true) {
+      setChatCounts({});
+      return;
+    }
+    const uid = user.uid;
+    const unsub = listenMyListingChats(uid, (chats) => {
+      const counts: Record<string, number> = {};
+      chats.forEach((chat) => {
+        if (chat.ownerId !== uid) return;
+        counts[chat.listingId] = (counts[chat.listingId] ?? 0) + 1;
+      });
+      setChatCounts(counts);
+    });
+    return unsub;
+  }, [user, profile?.verified]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -179,6 +211,31 @@ export default function MyListingsScreen({ navigation }: MyListingsScreenProps) 
                     </Text>
                   )}
 
+                  {/* S168-B — "N conversas": Pressable PRÓPRIO (não
+                      AnimatedPressable, mesmo componente do card) pra não
+                      propagar o toque pro onPress do card; só navega quando
+                      N > 0. */}
+                  <Pressable
+                    style={styles.chatRow}
+                    disabled={!chatCounts[item.id]}
+                    onPress={() =>
+                      navigation.navigate('ListingChats', {
+                        listingId: item.id,
+                        listingTitle: item.title,
+                      })
+                    }
+                  >
+                    <Ionicons
+                      name="chatbubbles-outline"
+                      size={16}
+                      color={theme.colors.textSecondary}
+                    />
+                    <Text style={styles.chatRowText}>
+                      {chatCounts[item.id] ?? 0}{' '}
+                      {(chatCounts[item.id] ?? 0) === 1 ? 'conversa' : 'conversas'}
+                    </Text>
+                  </Pressable>
+
                   <View style={styles.actionsRow}>
                     {item.status === 'approved' && (
                       <AnimatedPressable
@@ -272,6 +329,10 @@ const styles = StyleSheet.create({
   badgeTextNeutral: { color: theme.colors.textSecondary },
 
   rejectionReason: { fontSize: theme.fontSize.xs, color: theme.colors.error },
+
+  // S168-B — linha "N conversas", entre o motivo de rejeição e as ações.
+  chatRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chatRowText: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
 
   actionsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   actionBtn: {

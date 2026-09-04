@@ -14,6 +14,7 @@ import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { MatchWithProfile, useActiveMatches } from '@/hooks/useActiveMatches';
+import { useUnreadListingChats } from '@/hooks/useUnreadListingChats';
 import { RootStackParamList } from '@/navigation';
 import { LastMessage, UserProfile } from '@/services/firestoreService';
 import { hasValidLastMessage, isMatchUnread } from '@/utils/matches';
@@ -37,6 +38,10 @@ interface ConversationRow {
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const { user, profile } = useAuth();
   const { matches: activeMatches, loading } = useActiveMatches();
+  // S168-B — card "Classificados", mirror visual do exploreCard de
+  // MomentosScreen.tsx, full-width com chevron. Renderizado SÓ pra
+  // verificado, SEMPRE (mesmo com 0 conversas) — ver listingsCard abaixo.
+  const listingChatsUnread = useUnreadListingChats();
 
   // Novos matches (sem mensagem válida ainda) x conversas com preview —
   // padrão Tinder. Legado com lastMessage string antiga cai em newMatches
@@ -197,8 +202,25 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     );
   };
 
+  // S168-B — onPress SEMPRE abre a lista completa ('ListingChats' sem
+  // param) — a lista filtrada por anúncio (com param) é entrada exclusiva
+  // de MyListingsScreen.
+  const listingsCard =
+    profile?.verified === true ? (
+      <AnimatedPressable
+        style={styles.listingsCard}
+        onPress={() => navigation.navigate('ListingChats')}
+      >
+        <Ionicons name="pricetags-outline" size={20} color={theme.colors.textSecondary} />
+        <Text style={styles.listingsCardText}>Classificados</Text>
+        {listingChatsUnread > 0 && <View style={styles.listingsCardDot} />}
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
+      </AnimatedPressable>
+    ) : null;
+
   const listHeader = (
     <>
+      {listingsCard}
       {newMatches.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Novos matches</Text>
@@ -225,11 +247,19 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       </View>
 
       {hasNothing ? (
-        <EmptyState
-          icon="heart-outline"
-          title="Nenhum match ainda"
-          subtitle="Continue deslizando para encontrar alguém!"
-        />
+        <>
+          {/* FlatList's contentContainerStyle já dá padding ao mesmo card
+              dentro de listHeader (ramo abaixo) — aqui, fora de qualquer
+              FlatList, o padding precisa vir de um wrapper próprio. */}
+          {listingsCard && <View style={styles.emptyCardWrap}>{listingsCard}</View>}
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon="heart-outline"
+              title="Nenhum match ainda"
+              subtitle="Continue deslizando para encontrar alguém!"
+            />
+          </View>
+        </>
       ) : (
         <FlatList
           data={rows}
@@ -308,6 +338,36 @@ const styles = StyleSheet.create({
   },
 
   lightEmptyState: { flex: 0, paddingVertical: theme.spacing.xl },
+
+  // S168-B — card "Classificados", mirror visual do exploreCard de
+  // MomentosScreen.tsx (surface/border/lg), full-width com chevron em vez de
+  // ícone-sobre-texto.
+  listingsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  listingsCardText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  // Mesmo valor exato do pendingDot de MomentosScreen.tsx (não compartilham
+  // StyleSheet neste projeto).
+  listingsCardDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.error },
+
+  // S168-B — ramo hasNothing: EmptyState precisa continuar centrado no
+  // espaço restante mesmo com o card acima ocupando uma faixa fixa no topo.
+  emptyWrap: { flex: 1 },
+  emptyCardWrap: { paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.md },
 
   matchCard: {
     flexDirection: 'row',
