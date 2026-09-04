@@ -3,7 +3,7 @@
     "name": "JuntaVale",
     "slug": "juntavale",
     "scheme": "juntavale",
-    "version": "1.0.13",
+    "version": "1.0.14",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.juntavale.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Para enviar fotos no chat e tirar sua selfie de verificação de perfil.",
@@ -31,7 +31,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.juntavale.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 23,
+      "versionCode": 24,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
