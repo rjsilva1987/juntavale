@@ -86,6 +86,10 @@ export function useNotifications() {
             // virou a aba 'Verificacoes' dentro de Main (ver item 1/2 desta
             // sprint em navigation/index.tsx).
             navigationRef.navigate('Main', { screen: 'Verificacoes' });
+          } else if (data.type === 'listing_new') {
+            // S170 — só o admin recebe; a fila de classificados é a aba
+            // 'Classificados' dentro de Main desde a S169 (navigation/index.tsx).
+            navigationRef.navigate('Main', { screen: 'Classificados' });
           }
         },
       );

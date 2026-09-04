@@ -47,6 +47,41 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S170 — Push pro admin quando um classificado entra na fila
+**Status:** IMPLEMENTADA em 03/09/2026, auditoria APROVADA (1ª rodada, sem
+falhas). EXIGE deploy de functions: `onListingSubmitted` (nova, domínio
+novo `functions/src/listings.ts`) — `firebase deploy --only
+functions:onListingSubmitted`, fica com o Raphael. Lado client (tipo
+`listing_new` na union + roteamento pra aba Classificados) só entra em
+build novo (Expo Go não entrega push no SDK 54). SEM teste em aparelho.
+
+Function `onListingSubmitted`: `onDocumentWritten listings/{listingId}`,
+molde exato de `onVerificationSubmitted` (S94). Dispara 1 push pro
+`ADMIN_UID` quando o doc ENTRA em `pending` — create (`createListing`),
+`approved→pending` e `rejected→pending` (`updateListingContent` faz
+`updateDoc` no mesmo doc, por isso `onDocumentWritten` e não
+`onDocumentCreated`). Guarda `before?.status === 'pending'` é a dedup:
+edição de anúncio ainda na fila não repete push; aprovação/recusa/vendido/
+removido não disparam. Texto sem o título do anúncio (privacidade na tela
+de bloqueio, regra do comentário S58 em `admin.ts`): "Novo anúncio para
+aprovar" / "<nickname> enviou um anúncio para revisão" ou "<nickname>
+editou um anúncio, que voltou para a fila". `data: { type: 'listing_new',
+listingId }`; toque leva a `Main > Classificados`. Nenhum push pro
+anunciante. Rules intocadas (Admin SDK).
+
+Decisões tomadas no automático: nome `onListingSubmitted` (não
+`onListingCreated` — cobre create e update); trigger único
+`onDocumentWritten`; destinatário só `ADMIN_UID` (uid[0]), como TODAS as
+functions de admin hoje — dívida pré-existente: o 2º admin (S115) nunca
+recebe push de admin, decidir se vira loop em `ADMIN_UIDS`; `data` leva
+`listingId` pra deep-link futuro ao detalhe.
+
+Dívida de documentação corrigida de passagem: `ARQUITETURA.md` dizia "31
+functions" e a contagem real pelos exports de `index.ts` é 38; a tabela
+ainda não lista 6 (5 de `momentos.ts` + `onGroupMessageCreated`).
+
+---
+
 ### S169 — Classificados, lado admin (fila sem loading infinito + aba com badge)
 **Status:** IMPLEMENTADA em 03/09/2026, auditoria APROVADA (1ª rodada, sem
 falhas). Client puro: NÃO exige deploy de rules, functions nem indexes.

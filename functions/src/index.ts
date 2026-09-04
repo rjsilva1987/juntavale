@@ -1,4 +1,4 @@
-// S144-C — index.ts vira só reexport nomeado; a lógica das 31 Cloud
+// S144-C — index.ts vira só reexport nomeado; a lógica das 38 Cloud
 // Functions do projeto mora nos arquivos de domínio abaixo. Não adicione
 // lógica aqui: qualquer function nova entra no arquivo de domínio
 // correspondente (ou cria um domínio novo), nunca direto neste arquivo.
@@ -44,4 +44,5 @@ export {
   onGroupMessageCreated,
 } from './grupos';
 export { expireEvents, onEventJoinRequestCreated, onEventParticipantCreated } from './eventos';
+export { onListingSubmitted } from './listings';
 export { staleMatchReminder, reengagementPush, weeklyPromptPush } from './agendadas';

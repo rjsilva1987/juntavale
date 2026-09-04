@@ -20,13 +20,16 @@ export type PushNotificationData = {
     | 'match_reminder'
     | 'weekly_prompt'
     | 'verification_reviewed'
-    | 'verification_new';
+    | 'verification_new'
+    // S170 — admin: anúncio de classificados entrou na fila
+    | 'listing_new';
   matchId?: string;
   otherUid?: string;
   otherName?: string;
   otherPhoto?: string;
   ticketId?: string;
   reportId?: string;
+  listingId?: string;
 };
 
 // expo-notifications não tem módulo nativo no Expo Go (SDK 53+); qualquer

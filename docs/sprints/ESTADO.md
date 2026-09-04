@@ -4,14 +4,14 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 03/09/2026
-**Commit atual:** o commit da S169 (fix(listings), sucede cb70c88 —
-S168-A). S169 (lado admin dos classificados: fila sem loading infinito,
-código do Firestore no EmptyState da fila e da lista pública, 5ª aba
-`Classificados` do admin com badge de pendentes) IMPLEMENTADA e auditada
-(APROVADA na 1ª rodada) em 03/09 — ver ROADMAP § S169. Client puro, sem
-deploy. Da S168-A: `firestore.indexes.json` já deployado em 03/09
-(informado pelo Raphael na S169); `firestore.rules` + `storage.rules`
-(rules-stamp S168-A) — confirmar se o deploy já foi feito.
+**Commit atual:** o commit da S170 (feat(functions), sucede e839c81 —
+S169). S170 (push pro admin quando um classificado entra em `pending`:
+function nova `onListingSubmitted` + tipo `listing_new` e roteamento pra
+aba Classificados no client) IMPLEMENTADA e auditada (APROVADA na 1ª
+rodada) em 03/09 — ver ROADMAP § S170. EXIGE deploy pendente:
+`firebase deploy --only functions:onListingSubmitted`. Também pendente
+da S168-A: confirmar deploy de `firestore.rules` + `storage.rules`
+(rules-stamp S168-A); `firestore.indexes.json` já deployado em 03/09.
 
 ## Sprints em andamento
 Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
@@ -31,7 +31,12 @@ o anúncio cadastrado (sem loading infinito) e abre o detalhe, que o badge
 cai ao aprovar/recusar, e que o botão "Classificados pendentes" sumiu do
 Perfil. Se a fila ainda falhar, o EmptyState mostra `erro: <code>` — esse
 código é o diagnóstico (`failed-precondition` = índice; `permission-
-denied` = rules).
+denied` = rules). S170 (depois do deploy da function e em build com
+push, não Expo Go): criar anúncio como verificado → admin recebe "Novo
+anúncio para aprovar" sem o título do anúncio; toque abre a aba
+Classificados; editar anúncio aprovado → push "editou um anúncio";
+editar anúncio ainda pendente → nenhum push; aprovar/recusar → nenhum
+push.
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
