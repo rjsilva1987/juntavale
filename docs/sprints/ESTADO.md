@@ -4,20 +4,24 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S168-B1 (fix(listings), sucede 2bf2949 —
-S168-B, chat interessado↔anunciante em `listingChats/{listingId}_{uid}`).
-S168-B1 (foto como 1ª mensagem do chat de classificados: `ensureListingChat`
-cria o doc pai antes do upload em `images/listingChats`, depois
-`sendListingChatMessage`; `deleteListingChatImage` apaga o órfão no
-Storage se a mensagem falhar) IMPLEMENTADA e auditada (APROVADA na 1ª
-rodada) em 04/09 — client puro, sem deploy; ver ROADMAP § S168. Deploys
-pendentes acumulados (inalterados pela S168-B1):
+**Commit atual:** o commit da S171 (feat(listings), sucede 20cb741 —
+S168-B1, foto como 1ª mensagem do chat de classificados). S171
+(Classificados abrem em "Todos os estados": `ListingsScreen` nasce com
+`uf = 'all'` e o chip binário virou `UfPicker includeAll`, só em memória)
+IMPLEMENTADA e auditada (APROVADA na 1ª rodada) em 04/09 — client puro,
+sem deploy; ver ROADMAP § S171. Lote em andamento nesta sessão: S168-B2 →
+S172 → S168-C (ver "Sprints em andamento"). Deploys pendentes acumulados
+(inalterados pela S171):
 `firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated`
 (rules-stamp S168-B engloba o S168-A ainda não confirmado; indexes ganha
 1 índice novo de `listingChats`; `onListingSubmitted` é da S170).
 
 ## Sprints em andamento
-Nenhuma sprint em código pendente de fechamento. S158, S159 e S160
+Lote S171 → S168-B2 → S172 → S168-C rodando em 04/09/2026 (S171 já
+commitada; as três seguintes em sequência, cada uma com commit próprio
+após auditoria). S171: testar em aparelho que Classificados abre em
+"Todos os estados", que o campo abre o seletor de UF e o feed corta pela
+UF escolhida, e que ao sair e voltar o filtro reseta. S158, S159 e S160
 seguem só com teste em aparelho pendente — a S160 em especial precisa
 reproduzir os 3 sintomas de novo e, se o sumiço de mensagem persistir,
 rodar o triage do Firestore (ver ROADMAP.md § S160). S167: testar em

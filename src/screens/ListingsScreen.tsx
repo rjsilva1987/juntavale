@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { EmptyState } from '@/components/EmptyState';
+import { UfPicker } from '@/components/UfPicker';
 import { BLURHASH_PLACEHOLDER } from '@/constants/media';
 import { theme } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -45,8 +46,8 @@ export default function ListingsScreen() {
   const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>(ALL_CATEGORIES);
-  // Padrão: UF do próprio perfil; perfil sem UF cai em "Todo o Brasil".
-  const [uf, setUf] = useState<string>(profile?.uf ?? ALL_UF);
+  // S171: padrão é todo o Brasil; UF é filtro opcional, só em memória da sessão (sem persistir).
+  const [uf, setUf] = useState<string>(ALL_UF);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,19 +169,9 @@ export default function ListingsScreen() {
                   );
                 }}
               />
-              <AnimatedPressable
-                style={[styles.chip, uf === ALL_UF && styles.chipActive, styles.ufChip]}
-                onPress={() => setUf(uf === ALL_UF ? (profile?.uf ?? ALL_UF) : ALL_UF)}
-              >
-                <Ionicons
-                  name="location-outline"
-                  size={14}
-                  color={uf === ALL_UF ? theme.colors.onSecondary : theme.colors.textSecondary}
-                />
-                <Text style={[styles.chipText, uf === ALL_UF && styles.chipTextActive]}>
-                  {uf === ALL_UF ? 'Todo o Brasil' : `Só ${uf}`}
-                </Text>
-              </AnimatedPressable>
+              <View style={styles.ufField}>
+                <UfPicker value={uf} includeAll placeholder="Todos os estados" onChange={setUf} />
+              </View>
             </View>
 
             {loading ? (
@@ -301,7 +292,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: theme.colors.secondary, borderColor: theme.colors.secondary },
   chipText: { fontSize: theme.fontSize.xs, fontWeight: '600', color: theme.colors.textSecondary },
   chipTextActive: { color: theme.colors.onSecondary },
-  ufChip: { alignSelf: 'flex-start', marginBottom: theme.spacing.sm },
+  ufField: { marginTop: theme.spacing.sm },
 
   listContent: { padding: theme.spacing.md, gap: 12 },
   columnWrapper: { gap: 12 },

@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 03/09/2026
+**Última atualização:** 04/09/2026
 
 ---
 
@@ -44,6 +44,25 @@ tab bar, a primeira impressão do app, a ficha das duas lojas e
 possivelmente a categoria na App Store — e colide com a defesa do nicho
 enviada à Apple no 4.3(b), que descreve o app pela comunidade credenciada.
 Nada de recon ou implementação antes dessa decisão.
+
+---
+
+### S171 — Classificados abrem sem filtro de estado ("Todos os estados")
+**Status:** IMPLEMENTADA em 04/09/2026 (lote S171/S168-B2/S172/S168-C, modo
+AUTOMATICO + GIT AUTOMATICO), auditoria APROVADA na 1ª rodada (sem falhas;
+2 ressalvas não bloqueantes: acoplamento com o ramo `sigla === 'all'` do
+`UfPicker`, e o filtro volta a "Todos os estados" a cada abertura da tela —
+comportamento pedido). Client puro, NÃO exige deploy. SEM teste em aparelho.
+
+Só `src/screens/ListingsScreen.tsx`: o state `uf` nasce em `ALL_UF` ('all')
+em vez de `profile?.uf`, e o chip binário "Todo o Brasil"/"Só {UF}" virou o
+`UfPicker` com `includeAll` (placeholder "Todos os estados", molde do
+`FilterModal` do Descobrir), dentro de `styles.filters` abaixo das
+categorias. Escolha só em memória (useState), sem persistir. A recon
+corrigiu a premissa do pedido: a query `listApprovedListings` NUNCA teve
+`where('uf')` — o corte por UF sempre foi em memória (`filtered`), então o
+índice `(status, createdAt)` já cobre e nada muda em rules/índices/service/
+telas de admin/gate de verificado.
 
 ---
 
