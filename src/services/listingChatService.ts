@@ -54,7 +54,7 @@ export interface ListingChat {
   ownerId: string;
   interestedId: string;
   // Exatamente 2 uids, sempre [ownerId, interestedId] nessa ordem (ver
-  // createListingChatWithFirstMessage abaixo e firestore.rules).
+  // ensureListingChat abaixo e firestore.rules).
   participants: string[];
   // Snapshot do título do anúncio no momento da criação do chat — sobrevive
   // a uma edição posterior do título (mesmo raciocínio de momentoSnapshot em
@@ -207,18 +207,18 @@ const buildMessagePayload = (text: string, senderId: string, opts?: ListingChatS
   ...(opts?.replyTo ? { replyTo: opts.replyTo } : {}),
 });
 
-// Dois writes sequenciais de propósito: a rule de messages faz get() do pai
-// (listingChats/{chatId}), que precisa já existir — mesmo raciocínio de
-// answerMomentoRequest (momentoRequestService.ts:286-293).
-export const createListingChatWithFirstMessage = async (
+// Garante listingChats/{chatId} (create-only) SEM enviar mensagem — extraído
+// de createListingChatWithFirstMessage (S168-B1) pra poder ser chamado
+// sozinho antes do upload de foto (storage.rules images/listingChats exige o
+// doc pai já existir, ver ListingChatScreen.handleSendImage). Retorna true se
+// o doc foi criado agora, false se já existia (corrida).
+export const ensureListingChat = async (
   listing: { listingId: string; ownerId: string; listingTitle: string },
   interestedId: string,
-  text: string,
-  opts?: ListingChatSendOpts,
-): Promise<void> => {
+  preview: string,
+): Promise<boolean> => {
   const chatId = listingChatId(listing.listingId, interestedId);
   const chatRef = listingChatRef(chatId);
-  const preview = toListingChatPreview(text, !!opts?.imageUrl);
 
   try {
     await setDoc(chatRef, {
@@ -232,20 +232,46 @@ export const createListingChatWithFirstMessage = async (
       createdAt: serverTimestamp(),
       lastReadAt: { [interestedId]: serverTimestamp() },
     });
+    return true;
+  } catch (error) {
+    if ((error as { code?: string })?.code !== 'permission-denied') throw error;
+    // create-only na corrida (dois toques) — padrão do ROADMAP ("Padrões de
+    // escrita no Firestore"): se o doc já existe, não é erro, o chamador
+    // segue com addDoc/sendListingChatMessage (mesmo efeito de duas escritas
+    // sequenciais).
+    const existing = await getDoc(chatRef);
+    if (!existing.exists()) throw error;
+    return false;
+  }
+};
+
+// Dois writes sequenciais de propósito: a rule de messages faz get() do pai
+// (listingChats/{chatId}), que precisa já existir — mesmo raciocínio de
+// answerMomentoRequest (momentoRequestService.ts:286-293).
+export const createListingChatWithFirstMessage = async (
+  listing: { listingId: string; ownerId: string; listingTitle: string },
+  interestedId: string,
+  text: string,
+  opts?: ListingChatSendOpts,
+): Promise<void> => {
+  const chatId = listingChatId(listing.listingId, interestedId);
+  const preview = toListingChatPreview(text, !!opts?.imageUrl);
+  const created = await ensureListingChat(listing, interestedId, preview);
+  if (created) {
     await addDoc(
       listingChatMessagesCollection(chatId),
       buildMessagePayload(text, interestedId, opts),
     );
     return;
-  } catch (error) {
-    if ((error as { code?: string })?.code !== 'permission-denied') throw error;
-    // create-only na corrida (dois toques) — padrão do ROADMAP ("Padrões de
-    // escrita no Firestore"): se o doc já existe, segue só com addDoc +
-    // update (mesmo efeito de sendListingChatMessage abaixo).
-    const existing = await getDoc(chatRef);
-    if (!existing.exists()) throw error;
   }
   await sendListingChatMessage(chatId, interestedId, text, opts);
+};
+
+// Limpeza de orfão no Storage quando o upload passa mas a mensagem falha
+// (ListingChatScreen.handleSendImage) — mesmo estilo .catch(() => {}) de
+// deleteListingChatMessageForEveryone abaixo.
+export const deleteListingChatImage = async (imageUrl: string): Promise<void> => {
+  await deleteObject(ref(storage, imageUrl)).catch(() => {});
 };
 
 export const sendListingChatMessage = async (

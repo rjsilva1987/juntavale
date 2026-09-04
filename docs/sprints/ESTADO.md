@@ -4,12 +4,14 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S168-B (feat(listings), sucede 0075084 —
-bump 1.0.13 com S168-A + S169 + S170). S168-B (chat interessado↔
-anunciante em `listingChats/{listingId}_{uid}`, botão "Tenho interesse",
-"N conversas", card "Classificados" na aba Conversas, push
-`onListingChatMessageCreated`) IMPLEMENTADA e auditada (APROVADA na 1ª
-rodada) em 04/09 — ver ROADMAP § S168. Deploys pendentes acumulados:
+**Commit atual:** o commit da S168-B1 (fix(listings), sucede 2bf2949 —
+S168-B, chat interessado↔anunciante em `listingChats/{listingId}_{uid}`).
+S168-B1 (foto como 1ª mensagem do chat de classificados: `ensureListingChat`
+cria o doc pai antes do upload em `images/listingChats`, depois
+`sendListingChatMessage`; `deleteListingChatImage` apaga o órfão no
+Storage se a mensagem falhar) IMPLEMENTADA e auditada (APROVADA na 1ª
+rodada) em 04/09 — client puro, sem deploy; ver ROADMAP § S168. Deploys
+pendentes acumulados (inalterados pela S168-B1):
 `firebase deploy --only firestore:rules,storage,firestore:indexes,functions:onListingSubmitted,functions:onListingChatMessageCreated`
 (rules-stamp S168-B engloba o S168-A ainda não confirmado; indexes ganha
 1 índice novo de `listingChats`; `onListingSubmitted` é da S170).
@@ -44,7 +46,8 @@ vendido/expirado e pra não verificado) → tela de chat vazia SEM doc
 criado → 1ª mensagem cria `listingChats/{listingId}_{uid}` e aparece nos
 dois lados; dono vê "1 conversa" em Meus anúncios e toca pra listar; os
 dois veem o card "Classificados" na aba Conversas com dot até abrir a
-conversa; foto, responder, copiar, "ler mais" e apagar pra todos (1h)
+conversa; foto — inclusive como 1ª mensagem, com o chat ainda sem doc
+(S168-B1) —, responder, copiar, "ler mais" e apagar pra todos (1h)
 funcionam; marcar vendido/excluir o anúncio → banner "Anúncio encerrado"
 no topo e a conversa continua aceitando mensagem; push da mensagem chega
 pro outro lado (nickname + preview) e o toque abre a conversa; app em

@@ -7,7 +7,8 @@
 // nem swipe-to-reply (fora de escopo). chatId = listingChatId(listingId,
 // interestedId); o doc listingChats/{chatId} só é criado pelo INTERESSADO na
 // PRIMEIRA mensagem (nunca ao abrir a tela) — ver
-// createListingChatWithFirstMessage.
+// createListingChatWithFirstMessage (texto) e ensureListingChat (foto,
+// S168-B1).
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import dayjs from 'dayjs';
@@ -40,7 +41,9 @@ import { RootStackParamList } from '@/navigation';
 import { getUserProfile, UserProfile } from '@/services/firestoreService';
 import {
   createListingChatWithFirstMessage,
+  deleteListingChatImage,
   deleteListingChatMessageForEveryone,
+  ensureListingChat,
   LISTING_CHAT_DELETE_FOR_EVERYONE_WINDOW_MS,
   listenListingChat,
   listenListingChatMessages,
@@ -51,6 +54,7 @@ import {
   markListingChatRead,
   MAX_LISTING_CHAT_MESSAGE_LENGTH,
   sendListingChatMessage,
+  toListingChatPreview,
   uploadListingChatImage,
 } from '@/services/listingChatService';
 import { getListing, Listing } from '@/services/listingService';
@@ -345,20 +349,23 @@ export default function ListingChatScreen({ route, navigation }: ListingChatScre
       if (!user || sendingRef.current) return;
       sendingRef.current = true;
       setUploadProgress(0);
+      let uploadedUrl: string | undefined;
       try {
-        const imageUrl = await uploadListingChatImage(chatId, localUri, setUploadProgress);
+        // Doc pai antes do upload: storage.rules (images/listingChats) exige
+        // que listingChats/{chatId} já exista pra autorizar o upload.
         if (!chatExists) {
-          await createListingChatWithFirstMessage(
+          await ensureListingChat(
             { listingId, ownerId, listingTitle: chat?.listingTitle ?? listingTitle },
             user.uid,
-            '',
-            { imageUrl },
+            toListingChatPreview('', true),
           );
-        } else {
-          await sendListingChatMessage(chatId, user.uid, '', { imageUrl });
         }
+        const imageUrl = await uploadListingChatImage(chatId, localUri, setUploadProgress);
+        uploadedUrl = imageUrl;
+        await sendListingChatMessage(chatId, user.uid, '', { imageUrl });
         flatListRef.current?.scrollToEnd({ animated: true });
       } catch (err) {
+        if (uploadedUrl) await deleteListingChatImage(uploadedUrl);
         console.error('[ListingChatScreen] falha ao enviar foto:', err);
         Alert.alert('Erro', 'Não foi possível enviar a foto.');
       } finally {

@@ -138,6 +138,19 @@ TAB Conversas NÃO inclui esses chats (só o dot do card). EXIGE deploy de
 S168-A ainda não confirmado) + `firestore.indexes.json` (1 índice novo
 `listingChats`: participants CONTAINS + lastMessageAt DESC) +
 `functions:onListingChatMessageCreated`. SEM teste em aparelho (A e B).
+S168-B1 IMPLEMENTADA em 04/09/2026 (modo AUTOMATICO + GIT AUTOMATICO),
+auditoria APROVADA na 1ª rodada (2 ressalvas, nenhuma bloqueante: a tela
+passa `user.uid` como interessado, igual ao HEAD; e se o upload falhar
+depois do `ensureListingChat` fica um chat com preview "📷 Foto" e zero
+mensagens — residual aceito, sem crash). Fix client puro, NÃO exige
+deploy: foto como 1ª mensagem falhava porque o upload em
+`images/listingChats/{chatId}` vinha antes do doc pai e `storage.rules`
+faz `firestore.get` de `listingChats/{chatId}`; agora a ordem é
+`ensureListingChat` (setDoc extraído de `createListingChatWithFirstMessage`,
+preview "📷 Foto", mesmo catch de corrida permission-denied → getDoc) →
+upload → `sendListingChatMessage`, e `deleteListingChatImage` apaga o
+órfão no Storage se a mensagem falhar depois do upload. Caminho de texto
+(`handleSend`) intocado. SEM teste em aparelho.
 S168-B2 (denúncia dentro desse chat) e S168-C sem escopo/sem recon.
 
 Ideia "Classificados / OLX de funcionários" (ver "Ideias sem número",
