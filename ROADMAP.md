@@ -47,6 +47,30 @@ Nada de recon ou implementação antes dessa decisão.
 
 ---
 
+### S174 — Push pros admins quando entra uma denúncia nova
+**Status:** IMPLEMENTADA em 04/09/2026 (lote S175/S172-A/S174, modo
+AUTOMATICO + GIT AUTOMATICO), auditoria APROVADA na 1ª rodada (sem
+falhas). EXIGE deploy de `functions:onReportCreated` (nova). Lado client
+(tipo `report_new` na union + roteamento pra aba Denúncias) só entra em
+build novo. SEM teste em aparelho.
+
+Fecha a pergunta de produto deixada pela S168-B2. Function
+`onReportCreated` em `functions/src/admin.ts` (mesmo domínio de
+`onReportMessageCreated`, trigger distinto: `onDocumentCreated
+reports/{reportId}`), molde de `onListingSubmitted`: ignora denúncia
+feita por admin (`isAdminUid(reporterId)` → ninguém é notificado, mesma
+guarda "admin modera o próprio"), `getAdminPushTokens()` → 1 push por
+admin, título "Nova denúncia para revisar", corpo fixo sem nenhum dado
+da denúncia, `data: { type: 'report_new', reportId }`. Sem risco de push
+duplicado: denúncia comum é `addDoc`; a de classificado (S168-B2) tem id
+determinístico e a 2ª vira update negado, nunca create. Client:
+`'report_new'` na union e `navigate('Main', { screen: 'Denuncias' })`
+fora do bloco `isAdmin` de ignorados; ramo `report` (ReportThread do
+denunciante) intocado. Rules de `reports` e fluxo de resolver intocados.
+ARQUITETURA.md: 41 functions.
+
+---
+
 ### S175 — docs de loja versionados + página de exclusão atualizada
 **Status:** IMPLEMENTADA em 04/09/2026 (lote S175/S172-A/S174, modo
 AUTOMATICO + GIT AUTOMATICO, trilha P sem recon), auditoria APROVADA na

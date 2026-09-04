@@ -90,6 +90,9 @@ export function useNotifications() {
             // S170 — só o admin recebe; a fila de classificados é a aba
             // 'Classificados' dentro de Main desde a S169 (navigation/index.tsx).
             navigationRef.navigate('Main', { screen: 'Classificados' });
+          } else if (data.type === 'report_new') {
+            // S174 — só o admin recebe; a fila é a aba 'Denuncias' dentro de Main.
+            navigationRef.navigate('Main', { screen: 'Denuncias' });
           } else if (data.type === 'listing_expired') {
             // S172 — dono do anúncio expirado; admin também pode ter
             // anúncio, então este tipo fica FORA do bloco isAdmin acima.

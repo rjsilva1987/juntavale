@@ -4,28 +4,32 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** o commit da S172-A (fix(listings), sucede 672b102 —
-S175, docs de loja + página de exclusão). Lote 2 de 04/09/2026 em
-andamento: S175 (672b102) → S172-A commitada → S174 (ver "Sprints em
-andamento"). Lote 1 (S171 0184688 → S168-B2 5fa69ed → S172 cc60168 →
-S173 88885eb → S168-C 9bfa568) fechado. `docs/loja/` agora versionado
-(`!docs/loja/` no `.gitignore`, S175). Deploys pendentes acumulados:
-`firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount`
+**Commit atual:** o commit da S174 (feat(functions), sucede a716da1 —
+S172-A, aprovação renova expiresAt). Lote 2 de 04/09/2026 FECHADO: S175
+(672b102) → S172-A (a716da1) → S174. Lote 1 (S171 0184688 → S168-B2
+5fa69ed → S172 cc60168 → S173 88885eb → S168-C 9bfa568) fechado.
+`docs/loja/` versionado (S175). Deploys pendentes acumulados:
+`firebase deploy --only firestore:rules,storage,firestore:indexes,hosting,functions:onListingSubmitted,functions:onListingChatMessageCreated,functions:onVerificationSubmitted,functions:onSupportMessageCreated,functions:expireListings,functions:deleteAccount,functions:onReportCreated`
 (rules-stamp S172-A engloba S172, S168-B2, S168-B e o S168-A ainda não
 confirmado; storage stamp S168-B2; indexes ganha 2 índices novos —
 `listingChats` participants+lastMessageAt e `listings` status+expiresAt;
 hosting = `site/privacidade.html` + `site/excluir-conta.html`;
 `onVerificationSubmitted`/
 `onSupportMessageCreated`/`onListingSubmitted` mudaram na S168-B2;
-`expireListings` é nova, S172; `deleteAccount` mudou na S173). Lado
-client de S168-B2/S172 só entra em build novo (versionCode 23 / 1.0.13
-ainda é o da S168-A+S169+S170).
+`expireListings` é nova, S172; `deleteAccount` mudou na S173;
+`onReportCreated` é nova, S174). Lado client de S168-B2/S172/S172-A/S174
+só entra em build novo (versionCode 23 / 1.0.13 ainda é o da
+S168-A+S169+S170).
 
 ## Sprints em andamento
-Lote 2 de 04/09 (S175 → S172-A → S174) rodando: S175 e S172-A
-commitadas; S174 (`onReportCreated`, push pros admins em denúncia nova)
-em auditoria, com commit próprio. Do lote 1 (S171, S168-B2, S172, S173,
-S168-C) fica só teste em aparelho e deploy. S175: abrir `/excluir-conta`
+Nenhuma sprint em código pendente de fechamento. Dos lotes 1 e 2 de
+04/09 fica só teste em aparelho e deploy. S174 (depois do deploy da
+function, em build novo, push só em build): usuário comum denuncia
+(perfil, mensagem, anúncio ou chat de classificado) → os 2 admins
+recebem "Nova denúncia para revisar" sem nenhum dado da denúncia e o
+toque abre a aba Denúncias; denúncia feita por um admin → nenhum push;
+2ª denúncia do mesmo anúncio pelo mesmo usuário → nenhum push (é update
+negado, não create). S175: abrir `/excluir-conta`
 depois do deploy e conferir os 3 itens novos. S172-A (depois do deploy
 de rules, em build novo): editar um anúncio "Expirado" → volta pra "Em
 análise" → admin aprova → fica "Aprovado" e NÃO expira na rodada das
@@ -93,9 +97,6 @@ primeiro plano não mostra banner (S122).
 
 ## Fila aberta sem decisão e/ou sem recon
 - S102-A — mensagem de áudio no chat — sem decisões, sem recon.
-- Push pro admin quando uma DENÚNCIA nova entra (não existe function
-  pra isso — a S168-B2 só fez as existentes irem pros 2 admins); decidir
-  se vale criar `onReportCreated`. Ver ROADMAP.md § S168.
 - S136 — JuntaVale como rede social pra funcionários — BLOQUEADA até o
   fim do teste fechado (~30/08/2026); decisão que destrava tudo: qual
   tela vira a inicial (Descobrir vs. feed). Ver ROADMAP.md § S136.

@@ -107,7 +107,7 @@ reinstancia esses singletons.
 
 ## Cloud Functions (`functions/src/index.ts`, região `southamerica-east1`)
 
-Hoje são 40 functions exportadas (contagem pelos exports de
+Hoje são 41 functions exportadas (contagem pelos exports de
 `functions/src/index.ts` em 04/09/2026, já com `expireListings` da S172 —
 o "31/32" anterior já estava
 defasado). A tabela abaixo ainda NÃO lista 6 delas, todas triggers reais:
@@ -128,6 +128,7 @@ no ROADMAP (S170).
 | `onVerificationSubmitted` | `onDocumentWritten verifications/{uid}` | avisa admin de novo pedido |
 | `onSupportMessageCreated` | `onDocumentCreated support/.../messages/{messageId}` | atualiza ticket + push |
 | `onReportMessageCreated` | `onDocumentCreated reports/.../messages/{messageId}` | idem, fila de denúncias |
+| `onReportCreated` | `onCreate reports/{reportId}` | push "Nova denúncia para revisar" pra todos os admins (S174); ignora denúncia feita por admin |
 | `staleMatchReminder` | `onSchedule` diário 19h | cutuca matches de 48-72h sem mensagem |
 | `reengagementPush` | `onSchedule` diário 20h | cutuca usuários inativos 3+ dias |
 | `weeklyPromptPush` | `onSchedule` seg 12h | prompt semanal pra todos (exceto opt-out) |

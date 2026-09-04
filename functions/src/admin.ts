@@ -288,6 +288,40 @@ export const onReportMessageCreated = onDocumentCreated(
   },
 );
 
+// S174 — avisa TODOS os admins (getAdminPushTokens, S168-B2) quando uma
+// denúncia nova entra em reports/{reportId}. Molde de onListingSubmitted
+// (listings.ts). onDocumentCreated basta: denúncia comum é addDoc (sempre
+// create) e a de classificado (S168-B2) tem id determinístico — a 2ª do
+// mesmo par vira UPDATE, negado nas rules, nunca um create novo. Um push
+// por denúncia por admin. Texto FIXO, sem nenhum dado da denúncia
+// (privacidade na tela de bloqueio, mesma regra de listing_new/
+// verification_new). Denúncia feita por um admin não notifica ninguém —
+// mesma guarda isAdminUid de onListingSubmitted ("admin modera o próprio").
+export const onReportCreated = onDocumentCreated(
+  { document: 'reports/{reportId}', region: REGION },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const reportId = event.params.reportId;
+    const report = snap.data() as { reporterId?: string };
+    if (isAdminUid(report.reporterId)) return;
+
+    const tokens = await getAdminPushTokens();
+    if (tokens.length === 0) return;
+
+    await sendExpoNotifications(
+      tokens.map((to) => ({
+        to,
+        sound: 'default',
+        title: 'Nova denúncia para revisar',
+        body: 'Abra a fila de denúncias para analisar.',
+        data: { type: 'report_new', reportId },
+      })),
+    );
+  },
+);
+
 // S117 — notifica por e-mail (via Gmail) toda vez que a landing (site/index.html)
 // grava um novo cadastro em testerSignups. Mesmo padrão estrutural do
 // onReportMessageCreated acima: event.data/snap.data() com cast de tipo

@@ -16,6 +16,7 @@ export {
   onVerificationSubmitted,
   onSupportMessageCreated,
   onReportMessageCreated,
+  onReportCreated,
   onTesterSignupCreated,
 } from './admin';
 export { deleteAccount } from './account';

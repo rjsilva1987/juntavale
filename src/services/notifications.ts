@@ -26,7 +26,9 @@ export type PushNotificationData = {
     // S168-B — mensagem nova no chat interessado↔anunciante (listingChats)
     | 'listing_message'
     // S172 — dono: anúncio expirou, toque abre Meus anúncios
-    | 'listing_expired';
+    | 'listing_expired'
+    // S174 — admin: denúncia nova entrou na fila
+    | 'report_new';
   matchId?: string;
   otherUid?: string;
   otherName?: string;
