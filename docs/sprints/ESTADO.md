@@ -3,10 +3,11 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 04/09/2026
-**Commit atual:** 573d140 (S180-A) + S180-B commitada neste commit —
+**Atualizado:** 05/09/2026
+**Commit atual:** cea536b (S180-B) + bump do build 26 (app.json) feito
+em 05/09/2026 e aguardando commit do Raphael (GIT MANUAL) —
 lote 3 de 04/09/2026 (AUTOMATICO + GIT AUTOMATICO) FECHADO: S179 4c2f136
-→ S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B (este commit).
+→ S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B cea536b.
 Lote 2 (S175 672b102 → S172-A
 a716da1 → S174 f0dda02) e lote 1 (S171 0184688 → S168-B2 5fa69ed → S172
 cc60168 → S173 88885eb → S168-C 9bfa568) fechados; S176 (4bc25fa) e
@@ -26,13 +27,15 @@ da auditoria externa das rules:
 `firebase deploy --only firestore:rules,functions:deleteAccount,functions:adminDeleteContent`.
 Sem índice novo, sem storage, sem hosting.
 
-**Build 26 (pendente):** acumula o lado client de S177 Parte A (badge),
+**Build 26 (bump feito, build NÃO gerado):** acumula o lado client de S177 Parte A (badge),
 S179 (chat de classificado sem Alert falso na 1ª mensagem), S178 (fixar
 até 3 conversas no topo), S181 (item "Notificações" no Perfil +
 re-registro do token no foreground), S180-A (evento cancelado some do
 Explorar e mostra "Evento cancelado") e S180-B (aba "Comunidade" do
 admin, "Todos" em Classificados com Remover/Excluir, grupo encerrado em
-modo leitura). Bump de versionCode/iOS build ainda NÃO feito.
+modo leitura). Bump em `app.json` feito em 05/09/2026: versionCode 25→26,
+iOS buildNumber 5→6, version 1.0.15 sem mudança (auditado, sem commit
+ainda). Falta `eas build` Android + iOS depois do commit.
 
 ## Sprints em andamento
 Nenhuma. Lote 3 de 04/09/2026 fechado; fica só deploy (acima) e teste em
