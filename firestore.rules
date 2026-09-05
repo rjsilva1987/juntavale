@@ -1,4 +1,4 @@
-// rules-stamp: S178 (04/09/2026 — pinnedMatchIds no hasOnly do update do dono + validação list ≤3 em isValidProfile) + S172-A (04/09/2026 — aprovação do admin renova expiresAt
+// rules-stamp: S180-B (04/09/2026 — admin encerra grupo [status removed] e evento [status cancelled] por ramo próprio de update; groupIsOpen nega post/pedido em grupo encerrado; evento cancelado nega presença/pedido) + S178 (04/09/2026 — pinnedMatchIds no hasOnly do update do dono + validação list ≤3 em isValidProfile) + S172-A (04/09/2026 — aprovação do admin renova expiresAt
 // [+30d, teto +31d]; recusa/removed não tocam expiresAt) + S172 (04/09/2026 — expiração de anúncio com renovação em 1
 // toque: allow update do dono ganha ramo 'expired'→'approved'
 // [status+expiresAt, prazo novo no futuro, teto +31d] + affectedKeys()
@@ -525,6 +525,22 @@ service cloud.firestore {
     // mecanismo adaptado ao desenho de dados diferente.
     function groupAllowsPost(groupId, uid) {
       return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(uid));
+    }
+
+    // S180-B (correção pós-auditoria, rodada 1) — groupIsOpen fica SEPARADA
+    // de groupAllowsPost de propósito: groupAllowsPost também guarda `allow
+    // read` de groups/{groupId}/messages (~1851) e de .../reactions (~1940),
+    // e a leitura TEM que continuar funcionando pra quem já é membro mesmo
+    // com o grupo encerrado — senão o chat trava no spinner infinito e o
+    // banner "só leitura" (GroupChatScreen) vira mentira. groupIsOpen entra
+    // só nos pontos de ESCRITA que fazem sentido negar num grupo encerrado:
+    // allow create de mensagem/reação (abaixo) e allow create de
+    // joinRequests (~1831) — get() do próprio doc do grupo; 'active' é o
+    // default de doc sem o campo `status`, mesmo padrão do
+    // `.get('status', 'active')` usado no ramo novo do allow update de
+    // events/{eventId} abaixo.
+    function groupIsOpen(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data.get('status', 'active') != 'removed';
     }
 
     // Um item de users/{uid}.prompts[] — { id: string, answer: string }.
@@ -1721,6 +1737,17 @@ service cloud.firestore {
               )
             )
           )
+          ||
+          (
+            // S180-B — admin encerra o grupo: só status/removedAt/removedBy,
+            // "removed" fixo, timestamp/uid do próprio request (mesmo molde
+            // do ramo admin de listings/{listingId}, ~linha 2260).
+            isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'removedAt', 'removedBy'])
+            && request.resource.data.status == 'removed'
+            && request.resource.data.removedAt == request.time
+            && request.resource.data.removedBy == request.auth.uid
+          )
         );
 
       // Sem exclusão antecipada do grupo pelo criador nesta sprint (decisão
@@ -1799,12 +1826,15 @@ service cloud.firestore {
         // que o client trata como "pedido já enviado", nunca erro genérico
         // (mesmo padrão já usado no projeto pra escrita create-only, ver
         // ROADMAP.md "Padrões de escrita no Firestore").
+        // S180-B — grupo encerrado (status 'removed') nega pedido novo, mesmo
+        // raciocínio de groupAllowsPost acima.
         allow create: if isSignedIn()
           && request.auth.uid == uid
           && request.resource.data.uid == uid
           && request.resource.data.requestedAt == request.time
           && request.resource.data.keys().hasOnly(['uid', 'requestedAt'])
-          && !exists(/databases/$(database)/documents/groups/$(groupId)/members/$(uid));
+          && !exists(/databases/$(database)/documents/groups/$(groupId)/members/$(uid))
+          && groupIsOpen(groupId);
 
         allow update: if false;
 
@@ -1826,8 +1856,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
 
+        // S180-B — grupo encerrado é só leitura: read continua, create nega.
         allow create: if isSignedIn()
           && groupAllowsPost(groupId, request.auth.uid)
+          && groupIsOpen(groupId)
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('verified', false) == true
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.text is string
@@ -1915,14 +1947,32 @@ service cloud.firestore {
       match /reactions/{messageId} {
         allow read: if isSignedIn() && groupAllowsPost(groupId, request.auth.uid);
 
-        allow create, update: if isSignedIn()
+        // S180-B (correção pós-auditoria, rodada 1) — create/update SEPARADOS
+        // (eram uma rule só, `allow create, update`): grupo encerrado é só
+        // leitura, então só o CREATE ganha `groupIsOpen` — update (reagir/
+        // trocar/remover reação numa mensagem já existente) fica exatamente
+        // como estava, sem essa guarda nova (mesmo texto de condição
+        // duplicado nas duas rules, molde já usado noutros pontos do arquivo
+        // pra ramos com guardas diferentes por operação).
+        allow create: if isSignedIn()
           && groupAllowsPost(groupId, request.auth.uid)
+          && groupIsOpen(groupId)
           && (resource == null ? {} : resource.data)
                .diff(request.resource.data).affectedKeys().hasOnly([request.auth.uid])
           // Três ramos, mesmo padrão do guard de `typing` (S79-C1): (1) nada
           // mudou na chave do próprio uid; (2) ela está AUSENTE no
           // resultado — deleteField(), remoção de reação, é o que o S80-B
           // vai usar; (3) está presente e o valor é um dos 6 emoji fixos.
+          && ((resource == null ? {} : resource.data)
+                .diff(request.resource.data).affectedKeys().size() == 0
+              || !(request.auth.uid in request.resource.data)
+              || request.resource.data[request.auth.uid]
+                   in ['👍', '❤️', '😂', '😮', '😢', '🙏']);
+
+        allow update: if isSignedIn()
+          && groupAllowsPost(groupId, request.auth.uid)
+          && (resource == null ? {} : resource.data)
+               .diff(request.resource.data).affectedKeys().hasOnly([request.auth.uid])
           && ((resource == null ? {} : resource.data)
                 .diff(request.resource.data).affectedKeys().size() == 0
               || !(request.auth.uid in request.resource.data)
@@ -2021,10 +2071,22 @@ service cloud.firestore {
       // client (ver ROADMAP.md "Padrões de escrita no Firestore"), nunca
       // FieldValue.increment(). SEM ramo de decremento: sair do evento
       // (participants/{uid} delete abaixo) não mexe neste campo.
+      // S180-B — ramo do criador ganha guarda extra (evento já cancelado não
+      // aceita mais aprovação) + ramo novo do admin (cancelar evento), mesmo
+      // molde do ramo admin de groups/{groupId} acima.
       allow update: if isSignedIn()
-        && request.auth.uid == resource.data.creatorId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
-        && request.resource.data.participantCount == resource.data.participantCount + 1;
+        && (
+          (request.auth.uid == resource.data.creatorId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+            && request.resource.data.participantCount == resource.data.participantCount + 1
+            && resource.data.get('status', 'active') != 'cancelled')
+          ||
+          (isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'cancelledBy'])
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.cancelledAt == request.time
+            && request.resource.data.cancelledBy == request.auth.uid)
+        );
 
       // Sem exclusão antecipada pelo criador nesta sprint — evento só
       // termina pelo purge (~30 dias após startsAt, function expireEvents)
@@ -2056,7 +2118,10 @@ service cloud.firestore {
             ||
             (request.resource.data.role == 'participant'
               && get(/databases/$(database)/documents/events/$(eventId)).data.creatorId == request.auth.uid
-              && exists(/databases/$(database)/documents/events/$(eventId)/joinRequests/$(uid)))
+              && exists(/databases/$(database)/documents/events/$(eventId)/joinRequests/$(uid))
+              // S180-B — evento cancelado nega aprovação de participante,
+              // mesmo raciocínio de groupIsOpen em groups/{groupId}/members.
+              && get(/databases/$(database)/documents/events/$(eventId)).data.get('status', 'active') != 'cancelled')
           );
 
         // S146 — mirror EXATO do ramo novo de groups/{groupId}/members/{uid}
@@ -2079,12 +2144,15 @@ service cloud.firestore {
           && (request.auth.uid == uid
               || request.auth.uid == get(/databases/$(database)/documents/events/$(eventId)).data.creatorId);
 
+        // S180-B — evento cancelado nega pedido novo, mesmo raciocínio do
+        // ramo de groups/{groupId}/joinRequests acima.
         allow create: if isSignedIn()
           && request.auth.uid == uid
           && request.resource.data.uid == uid
           && request.resource.data.requestedAt == request.time
           && request.resource.data.keys().hasOnly(['uid', 'requestedAt'])
-          && !exists(/databases/$(database)/documents/events/$(eventId)/participants/$(uid));
+          && !exists(/databases/$(database)/documents/events/$(eventId)/participants/$(uid))
+          && get(/databases/$(database)/documents/events/$(eventId)).data.get('status', 'active') != 'cancelled';
 
         allow update: if false;
 

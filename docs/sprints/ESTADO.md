@@ -4,9 +4,10 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 04/09/2026
-**Commit atual:** fef8e23 (S181) + S180-A commitada neste commit (lote
-3 de 04/09/2026, AUTOMATICO + GIT AUTOMATICO, em andamento: S179 4c2f136
-→ S178 ab64539 → S181 fef8e23 → S180-A → S180-B). Lote 2 (S175 672b102 → S172-A
+**Commit atual:** 573d140 (S180-A) + S180-B commitada neste commit —
+lote 3 de 04/09/2026 (AUTOMATICO + GIT AUTOMATICO) FECHADO: S179 4c2f136
+→ S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B (este commit).
+Lote 2 (S175 672b102 → S172-A
 a716da1 → S174 f0dda02) e lote 1 (S171 0184688 → S168-B2 5fa69ed → S172
 cc60168 → S173 88885eb → S168-C 9bfa568) fechados; S176 (4bc25fa) e
 S177 (190867c) avulsas fechadas.
@@ -18,18 +19,35 @@ deleteAccount/onReportCreated/onListingChatMessageCreated) foi deployado
 em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Deploys
 pendentes DESTA rodada (lote 3): S179 nenhum (client puro); S178
 `firebase deploy --only firestore:rules` (stamp S178, auditoria externa
-das rules antes); S181 nenhum (client puro); S180-A `firebase deploy
---only functions:deleteAccount`. A S180-B acrescenta aqui.
+das rules antes); S181 nenhum (client puro); S180-A
+`functions:deleteAccount`; S180-B `firestore:rules` (stamp S180-B, que
+engloba o S178) + `functions:adminDeleteContent`. Comando único, depois
+da auditoria externa das rules:
+`firebase deploy --only firestore:rules,functions:deleteAccount,functions:adminDeleteContent`.
+Sem índice novo, sem storage, sem hosting.
 
 **Build 26 (pendente):** acumula o lado client de S177 Parte A (badge),
 S179 (chat de classificado sem Alert falso na 1ª mensagem), S178 (fixar
 até 3 conversas no topo), S181 (item "Notificações" no Perfil +
-re-registro do token no foreground) e S180-A (evento cancelado some do
-Explorar e mostra "Evento cancelado"); a S180-B acrescenta.
+re-registro do token no foreground), S180-A (evento cancelado some do
+Explorar e mostra "Evento cancelado") e S180-B (aba "Comunidade" do
+admin, "Todos" em Classificados com Remover/Excluir, grupo encerrado em
+modo leitura). Bump de versionCode/iOS build ainda NÃO feito.
 
 ## Sprints em andamento
-Lote 3 de 04/09/2026: S179, S178, S181 e S180-A commitadas; S180-B
-(admin encerra/exclui grupos, eventos e anúncios) em andamento. S180-A
+Nenhuma. Lote 3 de 04/09/2026 fechado; fica só deploy (acima) e teste em
+aparelho. S180-B (depois do deploy de rules + function, conta admin):
+aba "Comunidade" (6ª, sem badge) só pro admin; Grupos → "⋯" → "Encerrar
+grupo" → some do Explorar de outra conta, "Encerrado" em Meus grupos do
+membro, chat com banner e sem composer, mensagens antigas continuam
+legíveis, mandar mensagem por fora nega no servidor; "Excluir grupo" →
+doc + messages + fotos somem; Eventos → "Cancelar evento" (só futuro) →
+"Evento cancelado" pra quem confirmou e some do Explorar; "Excluir
+evento" apaga; Classificados → "Todos" → pill de status, "Remover" tira
+do feed sem apagar foto, "Excluir" apaga anúncio + fotos e a conversa
+antiga mostra "Anúncio encerrado"; toque em pendente abre
+AdminListingDetail, nos demais ListingDetail; limpar "Grupo 02" e
+"Corridinha" (órfãos) por aqui. S180-A
 (depois do deploy de `functions:deleteAccount`, conta de teste): grupo só
 com a conta some com fotos; grupo com outro membro passa `creatorId` e
 `role: 'creator'` pro membro mais antigo com `memberCount` coerente;

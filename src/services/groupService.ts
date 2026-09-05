@@ -83,6 +83,15 @@ export interface Group {
   // Fundação do badge "mensagem nova em grupo que participo"
   // (useUnreadGroupMessages.ts).
   lastMessage?: GroupMessagePreview;
+  // S180-B — só o ADMIN grava, via ramo próprio do allow update
+  // (firestore.rules) — ver adminCloseGroup (adminService.ts). Ausente =
+  // grupo ativo. Grupo 'removed' some de listDiscoverableGroups (abaixo),
+  // continua em "Meus grupos" (GroupsScreen) marcado "Encerrado", e vira só
+  // leitura no chat (GroupChatScreen: sem composer; groupAllowsPost nega
+  // post no servidor).
+  status?: 'removed';
+  removedAt?: Timestamp;
+  removedBy?: string;
 }
 
 // S150 — mesmo shape de LastMessage (matches, firestoreService.ts), schema
@@ -260,9 +269,14 @@ export const listDiscoverableGroups = async (uid: string): Promise<Group[]> => {
   ]);
   const myGroupIds = new Set(myGroups.map((g) => g.id));
   const nowMillis = Timestamp.now().toMillis();
+  // S180-B — grupo encerrado pelo admin (status 'removed') some do Explorar;
+  // listMyGroups NÃO filtra de propósito (quem já é membro precisa
+  // continuar vendo o próprio grupo encerrado, com a marca "Encerrado" em
+  // GroupsScreen).
   return allSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<Group, 'id'>) }))
-    .filter((g) => (!g.expiresAt || g.expiresAt.toMillis() > nowMillis) && !myGroupIds.has(g.id));
+    .filter((g) => (!g.expiresAt || g.expiresAt.toMillis() > nowMillis) && !myGroupIds.has(g.id))
+    .filter((g) => g.status !== 'removed');
 };
 
 export const getMyMembership = async (

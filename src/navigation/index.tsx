@@ -33,6 +33,7 @@ import { useUnseenAnsweredMomentoRequests } from '@/hooks/useUnseenAnsweredMomen
 import { linking } from '@/linking';
 import { navigationRef } from '@/navigation/navigationRef';
 import { useChatDeepLink } from '@/navigation/useChatDeepLink';
+import AdminCommunityScreen from '@/screens/AdminCommunityScreen';
 import AdminListingDetailScreen from '@/screens/AdminListingDetailScreen';
 import AdminListingsScreen from '@/screens/AdminListingsScreen';
 import AdminReportDetailScreen from '@/screens/AdminReportDetailScreen';
@@ -93,7 +94,8 @@ export type RootStackParamList = {
           | 'Verificacoes'
           | 'Chamados'
           | 'Denuncias'
-          | 'Classificados';
+          | 'Classificados'
+          | 'Comunidade';
       };
   Chat: {
     matchId: string;
@@ -197,6 +199,8 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
   Denuncias: { label: 'Denúncias', icon: 'flag' },
   // S169 — 5ª aba do admin, fila de moderação de classificados (S168-A).
   Classificados: { label: 'Classificados', icon: 'pricetags' },
+  // S180-B — 6ª aba do admin, encerrar/excluir grupos e eventos.
+  Comunidade: { label: 'Comunidade', icon: 'people' },
 };
 
 function MainTabs() {
@@ -339,6 +343,14 @@ function MainTabs() {
             {() => (
               <ErrorBoundary>
                 <AdminListingsScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          {/* S180-B — 6ª aba do admin, sem badge (decisão fechada). */}
+          <Tab.Screen name="Comunidade">
+            {() => (
+              <ErrorBoundary>
+                <AdminCommunityScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>

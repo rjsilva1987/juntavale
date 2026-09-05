@@ -96,6 +96,9 @@ export default function GroupsScreen({ navigation }: GroupsScreenProps) {
           {item.expiresAt
             ? `encerra em ${dayjs(item.expiresAt.toDate()).format('DD/MM')}`
             : 'sem prazo'}
+          {/* S180-B — "Meus grupos" só (Descobrir já vem filtrado sem
+              'removed', ver listDiscoverableGroups). */}
+          {item.status === 'removed' && <Text style={styles.cardClosedTag}> · Encerrado</Text>}
         </Text>
         {hasValidLastMessage(item) && (
           <Text style={styles.cardPreview} numberOfLines={1}>
@@ -215,6 +218,8 @@ const styles = StyleSheet.create({
   cardTextWrap: { flex: 1, gap: 2 },
   cardTitle: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
   cardSubtitle: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary },
+  // S180-B — "Encerrado" (grupo status 'removed'), só token de cor.
+  cardClosedTag: { color: theme.colors.error, fontWeight: '700' },
   // S149-B — prévia da última mensagem, mesmo padrão de cardSubtitle.
   cardPreview: {
     fontSize: theme.fontSize.xs,

@@ -20,10 +20,11 @@ aparentes hoje são só de tipo/utilitário, sem leitura/escrita:
 `deleteField`.
 
 `functions/src/` — quebrado por domínio desde S144-C. `index.ts` é só
-reexport nomeado das 38 Cloud Functions do projeto (nenhuma lógica).
-Arquivos de domínio: `chat.ts` (matches/mensagens/bloqueios/unmatch),
-`admin.ts` (verificação, suporte, denúncias, cadastro de testador),
-`account.ts` (`deleteAccount`), `perfil.ts` (fundador, enquete de perfil,
+reexport nomeado das 42 Cloud Functions do projeto (nenhuma lógica, já com
+`adminDeleteContent` da S180-B). Arquivos de domínio: `chat.ts` (matches/
+mensagens/bloqueios/unmatch), `admin.ts` (verificação, suporte, denúncias,
+cadastro de testador, `adminDeleteContent` — admin exclui grupo/evento/
+anúncio, S180-B), `account.ts` (`deleteAccount`), `perfil.ts` (fundador, enquete de perfil,
 marcos/selos), `momentos.ts` (`expireMomentos`), `grupos.ts` (expiração e
 fluxo de grupos), `eventos.ts` (expiração e fluxo de eventos),
 `listings.ts` (`onListingSubmitted` e `onListingChatMessageCreated`, push pro
@@ -61,12 +62,16 @@ reinstancia esses singletons.
 - `momentos/{uid}` — doc id == uid, story 24h (S121). `authorId`, `type`
   (text/photo), `text`, `photoUrl`, `createdAt`, `expiresAt`.
 - `groups/{groupId}` — sala de grupo (S124-A). `name`, `creatorId`,
-  `expiresAt`, `pollCounts`, `poll`, `memberCount`. Subcoleções:
-  `members/{uid}`, `joinRequests/{uid}`, `messages/{messageId}`,
-  `pollVotes/{voterUid}`.
+  `expiresAt`, `pollCounts`, `poll`, `memberCount`, `status?: 'removed'` +
+  `removedAt?`/`removedBy?` (S180-B, só admin grava, via ramo próprio do
+  `allow update` — grupo encerrado some do Explorar, fica em "Meus grupos"
+  marcado "Encerrado", chat vira só leitura). Subcoleções: `members/{uid}`,
+  `joinRequests/{uid}`, `messages/{messageId}`, `pollVotes/{voterUid}`.
 - `events/{eventId}` — evento presencial (S125). `title`, `creatorId`,
-  `purgeAt`, `status?: 'cancelled'` (S180-A, só o Admin SDK grava).
-  Subcoleções: `participants/{uid}`, `joinRequests/{uid}`,
+  `purgeAt`, `status?: 'cancelled'` + `cancelledAt?`/`cancelledBy?` — S180-A
+  gravado pelo Admin SDK (`deleteAccount`, sem `cancelledBy`), S180-B
+  também pelo admin via ramo próprio do `allow update` (client, com
+  `cancelledBy`). Subcoleções: `participants/{uid}`, `joinRequests/{uid}`,
   `private/location`.
 - `listings/{listingId}` — anúncio de classificados (S168-A). `ownerId`,
   `ownerNickname` (nickname, S135), `title`, `description`, `priceType`
@@ -108,9 +113,9 @@ reinstancia esses singletons.
 
 ## Cloud Functions (`functions/src/index.ts`, região `southamerica-east1`)
 
-Hoje são 41 functions exportadas (contagem pelos exports de
-`functions/src/index.ts` em 04/09/2026, já com `expireListings` da S172 —
-o "31/32" anterior já estava
+Hoje são 42 functions exportadas (contagem pelos exports de
+`functions/src/index.ts` em 04/09/2026, já com `adminDeleteContent` da
+S180-B — o "41" anterior já estava
 defasado). A tabela abaixo ainda NÃO lista 6 delas, todas triggers reais:
 `onMomentoLikeCreated`, `onMomentoLikeDeleted`, `onMomentoRequestCreated`,
 `onMomentoRequestUpdated`, `onMomentoRequestMessageCreated` (`momentos.ts`)
@@ -130,6 +135,7 @@ no ROADMAP (S170).
 | `onSupportMessageCreated` | `onDocumentCreated support/.../messages/{messageId}` | atualiza ticket + push |
 | `onReportMessageCreated` | `onDocumentCreated reports/.../messages/{messageId}` | idem, fila de denúncias |
 | `onReportCreated` | `onCreate reports/{reportId}` | push "Nova denúncia para revisar" pra todos os admins (S174); ignora denúncia feita por admin |
+| `adminDeleteContent` | `onCall` | admin apaga grupo (+ subcoleções + `images/groupChats/{id}`), evento (+ subcoleções) ou anúncio (doc + fotos por URL; `listingChats`/`reports` ficam) — S180-B |
 | `staleMatchReminder` | `onSchedule` diário 19h | cutuca matches de 48-72h sem mensagem |
 | `reengagementPush` | `onSchedule` diário 20h | cutuca usuários inativos 3+ dias |
 | `weeklyPromptPush` | `onSchedule` seg 12h | prompt semanal pra todos (exceto opt-out) |

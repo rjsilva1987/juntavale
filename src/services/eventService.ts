@@ -66,6 +66,10 @@ export interface Event {
   // sem status).
   status?: 'cancelled';
   cancelledAt?: Timestamp;
+  // S180-B — uid do admin que cancelou, via ramo próprio do allow update
+  // (firestore.rules) — ver adminCancelEvent (adminService.ts). Ausente
+  // quando o cancelamento veio do deleteAccount (Admin SDK, S180-A).
+  cancelledBy?: string;
 }
 
 export interface EventParticipant {

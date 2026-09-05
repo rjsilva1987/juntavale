@@ -4,6 +4,7 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import nodemailer from 'nodemailer';
 
 import {
@@ -355,3 +356,134 @@ export const onTesterSignupCreated = onDocumentCreated(
     }
   },
 );
+
+// S180-B — admin apaga de vez um grupo, evento ou anúncio (Admin SDK: doc +
+// subcoleções via recursiveDelete + fotos no Storage). Molde onCall de
+// deleteAccount (account.ts): auth-check + uid SEMPRE de request.auth,
+// nunca de request.data. "Encerrar"/"Cancelar" (status removed/cancelled)
+// são update DIRETO do client, sob o ramo admin novo do firestore.rules
+// (ver adminService.ts) — esta callable é só pro botão "Excluir", que o
+// client não consegue fazer sozinho (rules não liberam apagar em cascata).
+// listingChats e reports NUNCA são tocados aqui (mesmo raciocínio do S176 —
+// a conversa fica, só o anúncio em si some).
+export const adminDeleteContent = onCall(
+  { region: REGION, memory: '512MiB', timeoutSeconds: 120 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Você precisa estar autenticado.');
+    }
+    if (!isAdminUid(request.auth.uid)) {
+      throw new HttpsError('permission-denied', 'Só admin pode excluir conteúdo.');
+    }
+
+    const data = request.data as { kind?: unknown; id?: unknown };
+    const { kind, id } = data;
+    // S180-B (correção pós-auditoria, rodada 1) — id com "/" formaria um
+    // path aninhado (ex.: db.doc(`groups/${id}/messages/{msgId}`)) e
+    // recursiveDelete apagaria um doc que as próprias rules dizem
+    // `allow delete: if false`; teto de tamanho é só sanidade extra.
+    if (
+      (kind !== 'group' && kind !== 'event' && kind !== 'listing') ||
+      typeof id !== 'string' ||
+      id.length === 0 ||
+      id.length > 200 ||
+      id.includes('/')
+    ) {
+      throw new HttpsError('invalid-argument', 'kind/id inválidos.');
+    }
+
+    console.log(`[adminDeleteContent] ${kind} ${id} por ${request.auth.uid}`);
+
+    if (kind === 'group' || kind === 'event') {
+      const ref = db.doc(`${kind === 'group' ? 'groups' : 'events'}/${id}`);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        throw new HttpsError(
+          'not-found',
+          kind === 'group' ? 'Grupo não encontrado.' : 'Evento não encontrado.',
+        );
+      }
+      await db.recursiveDelete(ref);
+      if (kind === 'group') {
+        try {
+          await bucket.deleteFiles({ prefix: `images/groupChats/${id}/` });
+        } catch (error) {
+          console.error('[adminDeleteContent] falha ao apagar fotos do grupo:', id, error);
+        }
+      }
+      return { ok: true };
+    }
+
+    // kind === 'listing' — apaga as fotos por URL (nunca por prefixo: o
+    // path é images/listings/{uid}/{fileName}, sem listingId, apagar por
+    // prefixo levaria fotos de OUTROS anúncios do mesmo dono, mesmo
+    // raciocínio de deleteListingPhotosBestEffort no client).
+    const ref = db.doc(`listings/${id}`);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new HttpsError('not-found', 'Anúncio não encontrado.');
+    }
+    const listing = snap.data() as { photos?: string[]; ownerId?: unknown } | undefined;
+    const ownerId = typeof listing?.ownerId === 'string' ? listing.ownerId : null;
+    if (!ownerId) {
+      // S180-B (correção pós-auditoria, rodada 1) — sem ownerId não dá pra
+      // validar o path com segurança; melhor não apagar foto nenhuma do que
+      // arriscar apagar arquivo de outra pessoa.
+      console.warn('[adminDeleteContent] anúncio sem ownerId, fotos não apagadas:', id);
+    } else {
+      for (const url of listing?.photos ?? []) {
+        const path = listingPhotoPathForOwner(url, ownerId);
+        if (!path) {
+          console.warn('[adminDeleteContent] foto fora do path do dono, ignorada:', id);
+          continue;
+        }
+        try {
+          await bucket.file(path).delete();
+        } catch (error) {
+          console.error('[adminDeleteContent] falha ao apagar foto do anúncio:', id, error);
+        }
+      }
+    }
+    await ref.delete();
+    return { ok: true };
+  },
+);
+
+// S180-B (correção pós-auditoria, rodada 1) — o DONO controla `photos[]` do
+// próprio anúncio livremente (firestore.rules só valida `is list` e
+// `size() <= 3`, nunca o conteúdo das URLs em si); esta callable roda com
+// Admin SDK, que IGNORA storage.rules — sem esta guarda, um dono mal-
+// intencionado podia plantar em `photos[]` uma download URL de QUALQUER
+// outro path (ex.: `verifications/{outroUid}/...`) e um admin, ao
+// "Excluir" o anúncio, apagaria o arquivo de um terceiro sem querer. A
+// guarda replica manualmente o que `storage.rules` já garante pro delete
+// de foto de anúncio (só o dono, só dentro do PRÓPRIO prefixo
+// `images/listings/{uid}/`, um nome de arquivo só, sem subpasta).
+function listingPhotoPathForOwner(url: string, ownerId: string): string | null {
+  const path = storagePathFromDownloadUrl(url);
+  if (!path) return null;
+  const prefix = `images/listings/${ownerId}/`;
+  if (!path.startsWith(prefix)) return null;
+  const rest = path.slice(prefix.length);
+  if (!rest || rest.includes('/') || rest.includes('..')) return null;
+  return path;
+}
+
+// Formato de download URL do Storage (client/Admin SDK, getDownloadURL):
+// https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path-url-encoded}?alt=media&token=...
+// Devolve o PATH decodificado (ex.: images/listings/{uid}/171234.jpg) — null
+// se a URL não tiver o marcador "/o/" (formato inesperado).
+export function storagePathFromDownloadUrl(url: string): string | null {
+  const marker = '/o/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const start = idx + marker.length;
+  const end = url.indexOf('?', start);
+  const encoded = end === -1 ? url.slice(start) : url.slice(start, end);
+  if (!encoded) return null;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return null;
+  }
+}

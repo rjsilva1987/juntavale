@@ -262,6 +262,11 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [isMember, setIsMember] = useState<boolean | null>(null);
+  // S180-B — grupo encerrado pelo admin (status 'removed'): chat vira só
+  // leitura pra quem já é membro (banner + sem composer, mesmo mecanismo do
+  // banner "Você não é mais membro deste grupo" abaixo). Servidor reforça
+  // via groupAllowsPost (firestore.rules).
+  const [groupClosed, setGroupClosed] = useState(false);
   const [attachSheetVisible, setAttachSheetVisible] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [viewerImage, setViewerImage] = useState<string | null>(null);
@@ -287,7 +292,12 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
   // RootStackParamList/os call sites de navigation.navigate.
   useEffect(() => {
     getGroup(groupId)
-      .then((g) => setCreatorId(g?.creatorId ?? null))
+      .then((g) => {
+        setCreatorId(g?.creatorId ?? null);
+        // S180-B — mesmo getGroup, sem chamada extra: já resolve creatorId e
+        // status juntos.
+        setGroupClosed(g?.status === 'removed');
+      })
       .catch((err) => console.error('[GroupChatScreen] falha ao carregar grupo:', err));
   }, [groupId]);
 
@@ -575,6 +585,17 @@ export default function GroupChatScreen({ route, navigation }: GroupChatScreenPr
             >
               <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
               <Text style={styles.blockedBannerText}>Você não é mais membro deste grupo</Text>
+            </View>
+          ) : groupClosed ? (
+            // S180-B — grupo encerrado pelo admin: mesmo estilo do banner
+            // acima, sem composer.
+            <View
+              style={[styles.blockedBanner, { paddingBottom: theme.spacing.md + insets.bottom }]}
+            >
+              <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={styles.blockedBannerText}>
+                Este grupo foi encerrado. As mensagens ficam disponíveis só pra leitura.
+              </Text>
             </View>
           ) : isUnverified ? (
             <Pressable

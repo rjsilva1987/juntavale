@@ -64,8 +64,20 @@ sem checar existência derrubava o commit inteiro e um único try envolvia
 o laço todo — trocado por `runTransaction` por item com try/catch por
 item). EXIGE deploy de `functions:deleteAccount`; lado client (evento
 cancelado) entra no build 26. SEM teste em aparelho. Sem rules.
-**Status (S180-B, admin):** EM ANDAMENTO no mesmo lote — ver entrada
-S180-B abaixo quando fechar.
+**Status (S180-B, admin):** IMPLEMENTADA em 04/09/2026 (mesmo lote 3,
+AUTOMATICO + GIT AUTOMATICO, trilha completa), auditoria APROVADA na 2ª
+rodada (1ª BLOQUEOU com 3 falhas, todas corrigidas: `groupIsOpen` tinha
+entrado dentro de `groupAllowsPost`, que também guarda o `allow read` de
+messages/reactions — grupo encerrado ficaria sem leitura; a callable
+apagava QUALQUER path do bucket vindo de `photos[]`, que o dono controla
+— agora só `images/listings/{ownerId}/{arquivo}`; `id` aceitava `/` —
+agora rejeitado). EXIGE deploy de `firestore.rules` (stamp S180-B) +
+`functions:adminDeleteContent`; lado client entra no build 26. SEM teste
+em aparelho; sem push. Ressalvas não bloqueantes: falha ao apagar foto no
+Storage é best-effort (mesmo padrão de deleteAccount/expireGroups);
+`request.data` nulo vira erro `internal` em vez de `invalid-argument` (só
+admin chega ali); `groupClosed` vem de `getGroup` one-shot — membro com o
+chat aberto só vê o banner ao reabrir (o servidor já nega o create).
 
 Premissa CONTRADITA pela recon + logs (04/09/2026): o `deleteAccount` do
 repo já apagava TODO grupo do criador (recursiveDelete) desde 24/08 — não
@@ -126,6 +138,56 @@ juntos; contador recalculado (não increment cego) no bloco de
 transferência; transação por item nos blocos de participação (molde
 approveJoinRequest/leaveGroup); evento cancelado mantém doc e presenças;
 sem rules na Parte A.
+
+Parte B (`firestore.rules` + `functions/src/admin.ts` + `src/services/
+adminService.ts` [NOVO] + `src/components/SegmentedTabs.tsx` [NOVO] +
+`src/screens/AdminCommunityScreen.tsx` [NOVA, 6ª aba do admin, sem badge,
+segmento Grupos | Eventos] + `AdminListingsScreen.tsx` [segmento
+Pendentes | Todos] + `GroupChatScreen.tsx`/`GroupsScreen.tsx`): "Encerrar"
+grupo (`status: 'removed'`) e "Cancelar" evento (`status: 'cancelled'`,
+ganha `cancelledBy` — S180-A já gravava `cancelledAt` sem esse campo via
+Admin SDK) são update DIRETO do client, sob ramo próprio novo do `allow
+update` (rules, guardado por confirmação `Alert` destrutiva); "Excluir"
+(grupo/evento/anúncio) é a callable nova `adminDeleteContent`
+(`functions/src/admin.ts`, Admin SDK: doc + subcoleções via
+`recursiveDelete` + fotos — grupo por prefixo `images/groupChats/{id}/`,
+anúncio por URL via `storagePathFromDownloadUrl`, helper novo que
+decodifica o path a partir do formato de download URL do Storage,
+`/o/{path}?...`). `groupIsOpen(groupId)` (helper novo nas rules, logo
+abaixo de `groupAllowsPost`) nega post de mensagem/reação e pedido de
+entrada em grupo `removed`; evento `cancelled` ganha guarda simétrica no
+`allow update` do criador (nega aprovar `participantCount` depois de
+cancelado), em `participants` (ramo `role=='participant'`, aprovação) e em
+`joinRequests` (`allow create`). Classificados: aba admin existente ganha
+segmento Pendentes | Todos (visual de Pendentes intocado); "Remover" reusa
+o ramo admin JÁ EXISTENTE de `listings/{id}` (`status: 'removed'`, SEM
+apagar fotos — `storage.rules` não libera delete pro admin); "Excluir" via
+a mesma callable (fotos por URL; `listingChats`/`reports` ficam, mesmo
+tratamento do S176 pro dono); toque no card de "Todos" leva pra
+`AdminListingDetail` se `pending`, senão pra `ListingDetail` (rota
+pública). `GroupChatScreen` ganha banner "Este grupo foi encerrado..." sem
+composer quando `status==='removed'` (servidor reforça via
+`groupAllowsPost`); `GroupsScreen` marca "Encerrado" em vermelho em "Meus
+grupos" ("Descobrir" já vem filtrado por `listDiscoverableGroups`, que
+ganhou um segundo `.filter` pro campo novo).
+
+Decisão tomada sozinho (terreno, não produto): `functions/src/admin.ts`
+JÁ EXISTIA (verificação/suporte/denúncias/testador) — a spec rotulava
+"NOVO" por engano; `adminDeleteContent` entrou no arquivo existente em vez
+de sobrescrevê-lo.
+
+Teste (S180-B, depois do deploy de `firestore.rules` +
+`functions:adminDeleteContent`): aba "Comunidade" só aparece pro admin (6ª
+aba, sem badge); em Grupos, "Encerrar" tira o grupo do Explorar de outra
+conta e mostra "Encerrado" em "Meus grupos" da própria conta membro, chat
+vira banner sem composer nos dois lados, tentar mandar mensagem/pedido de
+entrada por fora do app (ex.: replay) nega no servidor; "Excluir" apaga
+grupo + fotos de vez; em Eventos, "Cancelar" reflete o banner "Evento
+cancelado" já existente (S180-A) e tira do Explorar; "Excluir" apaga o
+evento; em Classificados → "Todos", pill de status aparece, "Remover"
+tira do feed sem apagar foto, "Excluir" apaga anúncio + fotos e a
+conversa antiga mostra "Anúncio encerrado"; toque no card pendente abre
+`AdminListingDetail`, nos demais abre `ListingDetail`.
 
 ### S181 — Permissão de push negada: estado no Perfil + re-registro no foreground
 **Status:** IMPLEMENTADA em 04/09/2026 (lote 3 de 04/09, modo AUTOMATICO +
@@ -1161,3 +1223,12 @@ Feed "rádio corredor" · joguinho de moedas · modelo de negócio. Todas
 levantadas em 17/08, nenhuma com decisão. ("Classificados / OLX de
 funcionários", também levantada em 17/08, virou sprint numerada — ver
 "Fila aberta" § S168.)
+
+Transferência MANUAL de dono de grupo (criador escolhe o sucessor antes
+de sair/excluir a conta) — levantada na S180 (04/09/2026), fora de
+escopo; hoje só o `deleteAccount` transfere, automaticamente, pro membro
+mais antigo. Relacionada: exclusão de conta pedida por e-mail
+(`site/excluir-conta.html`) deveria SEMPRE passar pela function
+`deleteAccount` (ex.: admin dispara por uid), nunca por exclusão manual
+no Console — foi assim que os grupos órfãos da S180 nasceram (versão
+antiga da function), e uma exclusão só no Auth não limpa nada.

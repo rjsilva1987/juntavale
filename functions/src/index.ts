@@ -18,6 +18,7 @@ export {
   onReportMessageCreated,
   onReportCreated,
   onTesterSignupCreated,
+  adminDeleteContent,
 } from './admin';
 export { deleteAccount } from './account';
 export {
