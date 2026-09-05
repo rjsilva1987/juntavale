@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="index,follow">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<title>Como usar o JuntaVale — Ajuda</title>
+<meta name="description" content="Guia rápido do JuntaVale: onde fica cada função do app, qual gesto usar e o que acontece em seguida.">
+<style>
+  :root{
+    --amber:#FBBF24;
+    --amber-deep:#B45309;
+    --blue:#245AD6;
+    --blue-deep:#1E42B0;
+    --ink:#1C1917;
+    --ink-soft:#57534E;
+    --line:#E7E2DA;
+    --paper:#FBFAF7;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.65;
+    font-size:17px;
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:0 22px;}
+
+  header{padding:44px 0 26px;border-bottom:1px solid var(--line);}
+  .brand{
+    display:inline-flex;align-items:center;gap:9px;
+    font-weight:800;font-size:20px;letter-spacing:.3px;
+    text-decoration:none;color:var(--ink);
+  }
+  .brand .mark{width:28px;height:28px;border-radius:8px;display:block;}
+  h1{font-size:31px;line-height:1.2;margin:26px 0 8px;letter-spacing:-.4px;font-weight:800;}
+  .sub{color:var(--ink-soft);font-size:16px;margin:0;}
+  .updated{color:var(--ink-soft);font-size:14px;margin:14px 0 0;}
+
+  main{padding:22px 0 10px;}
+  h2{
+    font-size:14px;text-transform:uppercase;letter-spacing:1.3px;
+    color:var(--amber-deep);font-weight:700;margin:40px 0 14px;
+  }
+  h2 .n{color:var(--blue);margin-right:8px;}
+  h3{
+    font-size:18px;font-weight:700;margin:28px 0 10px;
+    color:var(--ink);letter-spacing:-.2px;
+  }
+  p{margin:0 0 16px;}
+  a{color:var(--amber-deep);}
+  strong{font-weight:700;}
+
+  .lead{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:18px 20px;margin:24px 0 4px;
+    font-size:15.5px;color:var(--ink-soft);
+  }
+
+  nav.toc{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:16px 20px;margin:20px 0 8px;
+    font-size:15.5px;
+  }
+  nav.toc strong{display:block;margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--amber-deep);}
+  nav.toc ol{margin:0;padding-left:22px;}
+  nav.toc li{margin-bottom:6px;}
+  nav.toc ul{margin:4px 0 2px;padding-left:18px;list-style:disc;}
+  nav.toc ul li{margin-bottom:3px;}
+  nav.toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line);}
+  nav.toc a:hover{color:var(--blue);border-color:var(--blue);}
+
+  .item{margin:0 0 14px;}
+  .item strong{color:var(--ink);}
+  .item{color:var(--ink-soft);}
+
+  .callout{
+    border:1px solid #E7DEC9;background:#FEFCF6;
+    border-radius:14px;padding:16px 18px;margin:20px 0;
+    font-size:15.5px;color:var(--ink-soft);
+  }
+  .callout strong{color:var(--amber-deep);}
+
+  .top{font-size:14px;margin:18px 0 0;}
+  .top a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid var(--line);}
+
+  footer{
+    margin-top:48px;padding:26px 0 40px;border-top:1px solid var(--line);
+    font-size:13.5px;color:var(--ink-soft);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  }
+  footer a{color:var(--ink-soft);text-decoration:none;border-bottom:1px solid var(--line);}
+
+  .anchor{scroll-margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <a class="brand" href="/">
+      <img src="logo.png" class="mark" alt="JuntaVale">
+      JuntaVale
+    </a>
+    <h1>Como usar o JuntaVale</h1>
+    <p class="sub">Um guia rápido de tudo o que dá pra fazer no app, aba por aba: onde fica cada função, qual gesto usar e o que acontece em seguida.</p>
+    <p class="updated">Última atualização: 5 de setembro de 2026 · versão 1.0.15 do app</p>
+  </header>
+
+  <main>
+
+    <div class="lead">
+      O JuntaVale tem cinco abas na parte de baixo da tela: <strong>Descobrir</strong>, <strong>Explorar</strong>, <strong>Curtidas</strong>, <strong>Conversas</strong> e <strong>Perfil</strong>. Este guia segue essa ordem e termina com uma seção sobre conta e segurança. Ficou com uma dúvida que não está aqui? Fale com a gente pelo app, em Perfil → Suporte, ou escreva para <a href="mailto:contato.juntavale@gmail.com">contato.juntavale@gmail.com</a>.
+    </div>
+
+    <nav class="toc" id="indice">
+      <strong>Índice</strong>
+      <ol>
+        <li><a href="#descobrir">Descobrir</a></li>
+        <li><a href="#explorar">Explorar</a>
+          <ul>
+            <li><a href="#momentos">Momentos</a></li>
+            <li><a href="#grupos">Grupos</a></li>
+            <li><a href="#eventos">Eventos</a></li>
+            <li><a href="#classificados">Classificados</a></li>
+          </ul>
+        </li>
+        <li><a href="#curtidas">Curtidas</a></li>
+        <li><a href="#conversas">Conversas</a></li>
+        <li><a href="#perfil">Perfil</a></li>
+        <li><a href="#conta">Conta e segurança</a></li>
+      </ol>
+    </nav>
+
+    <h2 class="anchor" id="descobrir"><span class="n">1</span>Descobrir</h2>
+    <p>É a aba em que o app abre. Ela mostra um perfil por vez, em forma de card, e é onde você curte ou passa.</p>
+
+    <p class="item"><strong>Ver as fotos de um perfil.</strong> Toque na metade direita da foto pra ver a próxima e na metade esquerda pra voltar. O contador no canto mostra em qual foto você está.</p>
+
+    <p class="item"><strong>Curtir ou passar.</strong> Arraste o card pra direita pra curtir ou pra esquerda pra passar. Se preferir, use os botões embaixo do card: o coração curte e o X passa. Quem você passou não fica sabendo.</p>
+
+    <p class="item"><strong>Abrir o perfil completo.</strong> Toque na seta pra cima ao lado do nome. Abre um painel com a bio, o "Sobre mim", os interesses, "Meus lugares", "No meu radar", a enquete e as perguntas da pessoa. Pra fechar, arraste o painel pra baixo ou toque na seta pra baixo.</p>
+
+    <p class="item"><strong>Super Like.</strong> Toque na estrela embaixo do card. Você pode escrever um bilhete de até 150 caracteres ("Enviar bilhete") ou mandar sem texto ("Enviar sem bilhete"). São 3 Super Likes por mês, e o primeiro de cada dia não desconta da cota; o contador aparece na própria estrela. Só perfis verificados podem usar.</p>
+
+    <p class="item"><strong>Responder a uma pergunta.</strong> No painel do perfil, na seção "Perguntas", toque em "Responder" embaixo da pergunta que a pessoa escolheu. Sua resposta vai junto com uma curtida e aparece pra pessoa na aba Curtidas. São 3 respostas por mês, só pra perfis verificados.</p>
+
+    <p class="item"><strong>Votar na enquete.</strong> Se a pessoa criou uma enquete, ela aparece no painel do perfil. Toque numa opção pra votar. Você vê só a opção que escolheu; quem vê o total de votos é o dono da enquete.</p>
+
+    <p class="item"><strong>Desfazer.</strong> Toque na seta de voltar embaixo do card pra desfazer a última curtida ou o último "passar". Vale só pra última ação e não devolve Super Like nem resposta já usados.</p>
+
+    <p class="item"><strong>Deu match.</strong> Quando duas pessoas se curtem, aparece a tela "É um Match!". Toque em "Enviar mensagem" pra abrir a conversa (dá pra usar a sugestão pronta tocando em "Usar como mensagem") ou em "Continuar" pra seguir descobrindo.</p>
+
+    <p class="item"><strong>Filtros.</strong> Toque no ícone de filtros no canto superior direito. Você escolhe faixa etária, estado, gênero, o que a pessoa busca, o vale (BB, Caixa ou BRB) e se quer ver só perfis verificados. Toque em "Aplicar" pra salvar; "Limpar filtros" volta ao padrão. Os filtros ficam guardados de um uso pro outro.</p>
+
+    <p class="item"><strong>Acabaram os perfis.</strong> Quando não houver mais ninguém pra mostrar, aparece "Sem perfis por perto". Toque em "Atualizar" pra buscar de novo. Se quiser ver mais gente, vale ampliar os filtros.</p>
+
+    <p class="item"><strong>Selos no card.</strong> O selo redondo com um check ao lado do nome indica perfil verificado, e "Verificação pendente" aparece em quem ainda não verificou. O card também mostra o que a pessoa busca e, em alguns perfis, o selo de fundador.</p>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+    <h2 class="anchor" id="explorar"><span class="n">2</span>Explorar</h2>
+    <p>A aba Explorar reúne os Momentos e quatro atalhos no topo: Grupos, Eventos, Momentos (seus pedidos de conversa) e Classificados. Um ponto vermelho na aba ou num atalho avisa que tem novidade pra você.</p>
+
+    <h3 class="anchor" id="momentos">Momentos</h3>
+
+    <p class="item"><strong>O que é um momento.</strong> É uma publicação que fica no ar por 24 horas: um texto de até 280 caracteres ou uma foto. Você tem um momento ativo por vez; publicar outro substitui o anterior.</p>
+
+    <p class="item"><strong>Criar um momento.</strong> Toque em "Criar momento". Na aba "Texto", escreva e toque em "Publicar". Na aba "Foto", toque em "Escolher foto" e tire uma foto na hora ou pegue uma da galeria.</p>
+
+    <p class="item"><strong>Ver momentos.</strong> Toque num momento pra abrir. Toque na metade direita da tela pra ir ao próximo e na metade esquerda pra voltar; segure o dedo na tela pra pausar. O X no canto fecha.</p>
+
+    <p class="item"><strong>Curtir e comentar.</strong> Dentro do momento de outra pessoa, toque no coração pra curtir. Pra comentar, use uma das sugestões prontas, um dos três emojis rápidos ou escreva no campo "Enviar mensagem...". O primeiro comentário vira um pedido de conversa: a pessoa recebe e, só depois que ela responder, a conversa continua. Enquanto isso você vê "Aguardando o autor responder.".</p>
+
+    <p class="item"><strong>Pedidos de conversa.</strong> O atalho "Momentos", no topo do Explorar, lista os pedidos que você recebeu e enviou, com o status Pendente, Respondido ou Recusado. Toque num pedido pra abrir. Se o momento é seu, responda escrevendo uma mensagem ou toque no X pra recusar.</p>
+
+    <p class="item"><strong>Quem curtiu o seu momento.</strong> No seu próprio momento, toque em "curtidas" pra ver quem curtiu.</p>
+
+    <p class="item"><strong>Apagar ou denunciar.</strong> No seu momento, toque na lixeira e confirme em "Apagar". No momento de outra pessoa, a bandeira abre a denúncia.</p>
+
+    <h3 class="anchor" id="grupos">Grupos</h3>
+
+    <p class="item"><strong>Ver os grupos.</strong> Toque em "Grupos". A tela mostra "Meus grupos" (os que você participa) e "Descobrir" (grupos abertos). Toque num grupo pra ver os detalhes.</p>
+
+    <p class="item"><strong>Criar um grupo.</strong> Toque no + no canto superior. Dê um nome, uma descrição (opcional) e escolha o prazo: 1, 3, 7, 15 ou 30 dias, ou "Sem prazo". Com prazo, o grupo some sozinho na data.</p>
+
+    <p class="item"><strong>Entrar num grupo.</strong> Na tela do grupo, toque em "Pedir pra entrar". Aparece "Pedido enviado" até quem criou aprovar; "Cancelar pedido" desfaz. Se o grupo é seu, os pedidos aparecem em "Pedidos pendentes", com um botão pra aprovar e outro pra recusar.</p>
+
+    <p class="item"><strong>Conversar no grupo.</strong> Como membro, toque em "Abrir chat". Dá pra mandar texto e foto (ícone de câmera: "Tirar foto" ou "Escolher da galeria"). Segure o dedo numa mensagem pra reagir com um emoji, "Responder", "Copiar mensagem", "Editar" (só as suas, de texto, até 1 hora depois) ou "Apagar pra todos" (só as suas, até 1 hora depois). Mensagem longa aparece cortada com "ler mais".</p>
+
+    <p class="item"><strong>Enquete do grupo.</strong> Quem criou o grupo pode tocar em "Criar enquete" na tela do grupo. Os membros votam tocando numa opção e veem o resultado.</p>
+
+    <p class="item"><strong>Gente ativa agora.</strong> Membros veem na tela do grupo quantas pessoas estão ativas naquele momento.</p>
+
+    <p class="item"><strong>Sair do grupo.</strong> Na tela do grupo, toque em "Sair do grupo" e confirme. Pra voltar, é preciso pedir entrada de novo.</p>
+
+    <p class="item"><strong>Denunciar um grupo.</strong> A bandeira no topo da tela do grupo abre a denúncia (ela não aparece pra quem criou).</p>
+
+    <p class="item"><strong>Grupo encerrado.</strong> Se a moderação encerrar um grupo, ele aparece como "Encerrado" em "Meus grupos" e o chat fica só pra leitura.</p>
+
+    <h3 class="anchor" id="eventos">Eventos</h3>
+
+    <p class="item"><strong>Ver os eventos.</strong> Toque em "Eventos". A tela mostra "Meus eventos" (os que você criou ou já participa) e "Descobrir". Toque num evento pra ver os detalhes.</p>
+
+    <p class="item"><strong>Criar um evento.</strong> Toque no + no canto superior. Informe o título, uma descrição (opcional), a data e a hora (sempre no futuro) e o local. O local só aparece pra quem for aprovado.</p>
+
+    <p class="item"><strong>Participar de um evento.</strong> Na tela do evento, toque em "Pedir pra participar". Fica "Pedido enviado" até quem criou aprovar; "Cancelar pedido" desfaz. Quem criou o evento aprova ou recusa os pedidos na própria tela do evento.</p>
+
+    <p class="item"><strong>Sair de um evento.</strong> Toque em "Sair do evento" e confirme. Pra voltar, é preciso pedir participação de novo.</p>
+
+    <p class="item"><strong>Denunciar um evento.</strong> A bandeira no topo da tela do evento abre a denúncia (não aparece pra quem criou).</p>
+
+    <p class="item"><strong>Evento cancelado.</strong> Se um evento for cancelado, ele some do Explorar e aparece como "Evento cancelado" pra quem já estava confirmado.</p>
+
+    <h3 class="anchor" id="classificados">Classificados</h3>
+
+    <p class="item"><strong>Quem pode usar.</strong> Só perfis verificados. Sem verificação, a tela mostra "Os classificados são exclusivos para membros verificados" e o botão "Verificar agora".</p>
+
+    <p class="item"><strong>Procurar anúncios.</strong> Toque em "Classificados". Busque por título ou descrição, filtre por categoria nos botões do topo e escolha um estado no seletor "Todos os estados". O estado escolhido vale só até você sair da tela.</p>
+
+    <p class="item"><strong>Anunciar.</strong> Toque no + no canto inferior. Preencha título, descrição, categoria e preço (Fixo, A combinar ou Doação), adicione até 3 fotos e confira a lista de itens proibidos. Toque em "Enviar para aprovação": o anúncio fica "Em análise" até a equipe aprovar.</p>
+
+    <p class="item"><strong>Meus anúncios.</strong> Toque no ícone de anúncios no topo da tela de Classificados. Cada anúncio mostra o status (Em análise, Aprovado, Recusado, Expirado ou Vendido) e quantas conversas recebeu; toque em "conversas" pra abrir.</p>
+
+    <p class="item"><strong>Editar um anúncio.</strong> Toque em "Editar" em Meus anúncios ou em "Editar anúncio" no detalhe. Salvar manda o anúncio de volta pra análise.</p>
+
+    <p class="item"><strong>Marcar como vendido ou excluir.</strong> Em Meus anúncios, segure o dedo no card ou toque em ⋯: "Marcar como vendido" (só anúncio aprovado; não dá pra voltar atrás) ou "Excluir anúncio" (qualquer status; as fotos somem e as conversas continuam legíveis com o aviso "Anúncio encerrado"). No detalhe do seu anúncio, os mesmos botões ficam abaixo de "Editar anúncio".</p>
+
+    <p class="item"><strong>Anúncio expirado.</strong> Um anúncio aprovado expira 30 dias depois. Em "Expirado", toque em "Renovar" pra voltar a "Aprovado" por mais 30 dias, sem nova análise.</p>
+
+    <p class="item"><strong>Tenho interesse.</strong> No anúncio de outra pessoa, toque em "Tenho interesse" pra abrir uma conversa com quem anunciou. O botão só aparece em anúncio aprovado e dentro do prazo.</p>
+
+    <p class="item"><strong>Denunciar um anúncio.</strong> A bandeira no topo do anúncio abre a denúncia, com motivos próprios de anúncio. Denunciar o mesmo anúncio de novo mostra "Denúncia já enviada".</p>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+    <h2 class="anchor" id="curtidas"><span class="n">3</span>Curtidas</h2>
+
+    <p class="item"><strong>Duas listas.</strong> "Curtiram você" mostra quem curtiu você; "Suas curtidas" mostra quem você curtiu e ainda não virou match. O número entre parênteses é a contagem de cada lista.</p>
+
+    <p class="item"><strong>O que o card conta.</strong> O card mostra se a pessoa curtiu uma foto sua ou se "Respondeu à sua pergunta", com o texto da resposta. Super Like aparece com borda amarela e estrela, e o bilhete, quando houver, vem entre aspas.</p>
+
+    <p class="item"><strong>Abrir e curtir de volta.</strong> Toque no card pra ver o perfil. Lá, o coração curte de volta (se for recíproco, vira match na hora) e o X passa. Em "Suas curtidas", o X desfaz a sua curtida, com confirmação.</p>
+
+    <p class="item"><strong>Denunciar ou bloquear pelo card.</strong> Toque em ⋯ no card e escolha "Denunciar" ou "Bloquear".</p>
+
+    <p class="item"><strong>Precisa de verificação.</strong> Sem perfil verificado, os cards aparecem borrados com "Verifique-se para ver". Toque num deles e depois em "Verificar agora" pra fazer a verificação.</p>
+
+    <p class="item"><strong>Perfil pausado.</strong> Com o perfil pausado, a aba mostra "Seu perfil está pausado" e as curtidas ficam escondidas até você reativar.</p>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+    <h2 class="anchor" id="conversas"><span class="n">4</span>Conversas</h2>
+
+    <p class="item"><strong>A lista.</strong> "Novos matches" mostra, no topo, quem deu match mas ainda não trocou mensagem: toque na foto pra começar. "Mensagens" lista as conversas com a última mensagem; um ponto azul marca mensagem não lida, e o número na aba soma tudo que você ainda não leu.</p>
+
+    <p class="item"><strong>Conversas dos Classificados.</strong> Se você é verificado, o card "Classificados" no topo abre as conversas dos anúncios; um ponto vermelho avisa que há mensagem nova.</p>
+
+    <p class="item"><strong>Fixar conversa.</strong> Segure o dedo sobre uma conversa e toque em "Fixar conversa"; ela sobe pro topo com um alfinete. Dá pra fixar até 3. Pra tirar, segure de novo e toque em "Desafixar conversa".</p>
+
+    <p class="item"><strong>O topo da conversa.</strong> Toque no nome ou na foto pra ver o perfil. Embaixo do nome aparece se a pessoa está online, quando foi vista pela última vez ou "digitando...". O ⋯ abre "Ver perfil", "Denunciar", "Bloquear" e "Desfazer match".</p>
+
+    <p class="item"><strong>Enviar mensagem, foto ou localização.</strong> Escreva no campo de mensagem (até 2.000 caracteres). O ícone de câmera abre "Tirar foto", "Escolher da galeria" e "Enviar localização".</p>
+
+    <p class="item"><strong>Segurar o dedo numa mensagem.</strong> Abre as opções: reagir com um dos 6 emojis, "Responder", "Copiar mensagem", "Editar" (só as suas, de texto, até 1 hora depois), "Apagar pra mim", "Apagar pros dois" (só as suas, até 1 hora depois) e "Denunciar mensagem" (só as da outra pessoa).</p>
+
+    <p class="item"><strong>Responder arrastando.</strong> Arraste a mensagem pra direita pra responder direto. Toque na citação de uma resposta pra pular até a mensagem original.</p>
+
+    <p class="item"><strong>Status da mensagem.</strong> Um tique cinza: enviada. Dois tiques cinza: entregue. Dois tiques verdes: lida.</p>
+
+    <p class="item"><strong>Fotos e localização.</strong> Toque numa foto pra abrir em tela cheia (toque de novo pra fechar). Toque numa localização pra abrir no app de mapas.</p>
+
+    <p class="item"><strong>Mensagens antigas e novas.</strong> Toque em "Carregar mensagens anteriores", no topo, pra ver mais histórico. Se chegar mensagem enquanto você está lá em cima, aparece "Nova mensagem"; toque pra descer. Mensagem longa aparece cortada com "ler mais".</p>
+
+    <p class="item"><strong>Desfazer match.</strong> No ⋯ da conversa, toque em "Desfazer match" e confirme. É definitivo: vocês deixam de conversar.</p>
+
+    <p class="item"><strong>Precisa de verificação pra responder.</strong> Sem perfil verificado, a conversa abre, mas o campo de mensagem dá lugar ao aviso "Verifique seu perfil para responder"; toque nele pra verificar.</p>
+
+    <p class="item"><strong>Dentro de uma conversa de anúncio.</strong> Dá pra mandar texto e foto e, segurando o dedo numa mensagem, "Responder", "Copiar mensagem" e "Apagar pra todos" (só as suas, até 1 hora depois). Toque no título no topo pra abrir o anúncio; a bandeira denuncia a pessoa. Quando o anúncio é vendido, excluído ou expira, aparece o aviso "Anúncio encerrado" e a conversa continua.</p>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+    <h2 class="anchor" id="perfil"><span class="n">5</span>Perfil</h2>
+
+    <p class="item"><strong>Editar o perfil.</strong> Toque no lápis no canto superior direito de "Meu Perfil" pra entrar no modo de edição (o X sai dele). No fim, toque em "Salvar alterações".</p>
+
+    <p class="item"><strong>Fotos.</strong> Você pode ter até 4 fotos. Toque no + pra escolher uma da galeria. Numa foto que não é a principal, toque na estrela pra torná-la principal; o X remove a foto, com confirmação.</p>
+
+    <p class="item"><strong>Apelido e nome completo.</strong> "Como quer ser chamado" e "Nome completo" não podem ser alterados pelo app depois do cadastro. Precisa corrigir? Abra um chamado em Perfil → Suporte.</p>
+
+    <p class="item"><strong>Os outros campos.</strong> Bio (até 500 caracteres), gênero, estado onde você mora, "O que você busca?", interesses (até 5), "Meus lugares" (até 5) e "No meu radar" (até 3).</p>
+
+    <p class="item"><strong>Sobre mim.</strong> Campos opcionais como altura, signo, pronomes, formação, idiomas e pets. Toque em "Editar visibilidade" pra escolher o que aparece pras outras pessoas: campo desligado some do seu perfil público, mas continua salvo só pra você.</p>
+
+    <p class="item"><strong>Enquete.</strong> Toque em "Criar enquete": uma pergunta (até 100 caracteres) e de 2 a 5 opções. Quem visita seu perfil vota, e só você vê o total de votos. "Editar" altera a enquete.</p>
+
+    <p class="item"><strong>Prompt da semana.</strong> Toda semana aparece uma pergunta nova no card "Prompt da semana". Toque em "Responder" pra escrever; a resposta fica no seu perfil. Quando a semana vira, a resposta antiga fica marcada como "Resposta de uma semana anterior" e pode ser apagada em "Remover resposta".</p>
+
+    <p class="item"><strong>Perguntas.</strong> Em "Perguntas", toque em "Adicionar" pra escolher até 4 perguntas e responder cada uma com até 150 caracteres. Toque numa pergunta já respondida pra editar ou remover. Elas aparecem no seu perfil e podem receber respostas de quem vê você no Descobrir.</p>
+
+    <p class="item"><strong>Conquistas.</strong> O card "Conquistas" mostra três selos: "Primeiro match", "Perfil completo" e "10 dias de JuntaVale". Eles desbloqueiam sozinhos.</p>
+
+    <p class="item"><strong>Contadores.</strong> Os cards "Curtidas", "Matches" e "Conversas" levam, respectivamente, pra aba Curtidas, pra grade com todos os seus matches e pra aba Conversas.</p>
+
+    <p class="item"><strong>Ajuda.</strong> Toque em "Ajuda" pra abrir este guia no navegador.</p>
+
+    <p class="item"><strong>Suporte.</strong> Toque em "Suporte", escolha a categoria (Dúvida, Problema técnico, Denúncia, Sugestão ou Conta e cadastro), escreva a mensagem (até 1.000 caracteres) e envie. Em "Meus chamados" você acompanha a resposta da equipe: cada chamado fica "Aberto" ou "Resolvido", e dentro dele dá pra continuar a conversa e mandar foto. Um ponto vermelho em "Meus chamados" avisa que há resposta nova.</p>
+
+    <p class="item"><strong>Minhas denúncias.</strong> Lista as denúncias que você fez, como "Aberto" ou "Resolvido". Toque numa delas pra abrir a conversa com a moderação.</p>
+
+    <p class="item"><strong>Lembretes e sugestões.</strong> Com esse botão ligado (o padrão), você recebe avisos quando ficar um tempo sem entrar, como curtidas esperando e conversas paradas, e o aviso do Prompt da semana. Desligue pra parar esses lembretes; avisos de mensagens e matches continuam.</p>
+
+    <p class="item"><strong>Sair da conta.</strong> Toque em "Sair da conta". Você sai na hora e volta pra tela de entrada.</p>
+
+    <p class="item"><strong>Verificar perfil, Notificações, Usuários bloqueados, Pausar meu perfil e Excluir minha conta</strong> estão explicados na seção seguinte.</p>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+    <h2 class="anchor" id="conta"><span class="n">6</span>Conta e segurança</h2>
+
+    <p class="item"><strong>Verificar o perfil.</strong> Em Perfil, toque em "Verificar perfil". Informe sua matrícula e toque em "Enviar selfie e matrícula": a câmera da frente abre pra uma selfie. O pedido fica "Em análise" até a equipe conferir. Aprovado, seu perfil ganha o selo de verificado. Recusado, você vê o motivo e pode tocar em "Reenviar selfie e matrícula". A verificação libera ver quem curtiu você, responder nas conversas, usar Super Like e responder perguntas, e usar os Classificados.</p>
+
+    <p class="item"><strong>Pausar o perfil.</strong> Em Perfil, ligue "Pausar meu perfil". Você some do Descobrir e das curtidas de todo mundo e deixa de ver perfis novos; suas conversas continuam. Desligue pra voltar.</p>
+
+    <p class="item"><strong>Bloquear alguém.</strong> Dá pra bloquear pelo perfil da pessoa (botão "Bloquear"), pelo ⋯ dentro da conversa ou pelo ⋯ no card da aba Curtidas. A pessoa some pra você e, se havia match, ele é desfeito. Pra desbloquear, vá em Perfil → "Usuários bloqueados" e toque em "Desbloquear".</p>
+
+    <p class="item"><strong>Denunciar.</strong> A bandeira ou a opção "Denunciar" aparece no perfil da pessoa, no ⋯ da conversa, numa mensagem (segurando o dedo), num momento, num grupo, num evento, num anúncio e dentro da conversa de um anúncio. Escolha o motivo, escreva detalhes se quiser e toque em "Enviar denúncia". Acompanhe em Perfil → "Minhas denúncias", onde a moderação pode responder.</p>
+
+    <p class="item"><strong>Excluir a conta.</strong> Em Perfil, toque em "Excluir minha conta", digite EXCLUIR, informe sua senha e confirme. Perfil, fotos, matches, conversas, curtidas, momentos, os grupos e eventos que você criou e seus anúncios são apagados de forma permanente. Os detalhes estão na <a href="/excluir-conta">página de exclusão de conta</a>.</p>
+
+    <p class="item"><strong>Notificações.</strong> Em Perfil, o item "Notificações" mostra o estado atual: "Ativar notificações" pede a permissão ao aparelho; "Notificações ativadas" e "Notificações desativadas" abrem as configurações do aparelho pra você ajustar. O app avisa sobre novos matches, mensagens, Super Likes, resultado da verificação, respostas do suporte e da moderação, pedidos e aprovações em grupos e eventos, pedidos de conversa em momentos, votos na sua enquete, mensagens novas nas conversas de anúncio e o aviso de que um anúncio seu expirou. Os lembretes por inatividade e o aviso do Prompt da semana podem ser desligados em "Lembretes e sugestões".</p>
+
+    <p class="item"><strong>Esqueci minha senha.</strong> Na tela de entrada, toque em "Esqueci minha senha" e informe seu e-mail: você recebe um link pra criar uma senha nova.</p>
+
+    <div class="callout">
+      <strong>Ainda com dúvida?</strong> Abra um chamado em Perfil → Suporte, escreva para <a href="mailto:contato.juntavale@gmail.com">contato.juntavale@gmail.com</a> ou veja a <a href="/privacidade">Política de Privacidade</a> e os <a href="/termos">Termos de Uso</a>.
+    </div>
+
+    <p class="top"><a href="#indice">↑ Voltar ao índice</a></p>
+
+  </main>
+
+  <footer>
+    <span>© JuntaVale</span>
+    <a href="/privacidade">Privacidade</a>
+    <a href="/excluir-conta">Excluir sua conta</a>
+    <a href="/termos">Termos</a>
+    <a href="/contato">Contato</a>
+    <a href="/sobre">Sobre</a>
+  </footer>
+
+</div>
+</body>
+</html>

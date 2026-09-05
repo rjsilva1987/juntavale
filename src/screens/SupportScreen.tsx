@@ -67,7 +67,7 @@ export default function SupportScreen({ navigation }: SupportScreenProps) {
           >
             <Ionicons name="chevron-back" size={26} color={theme.colors.text} />
           </AnimatedPressable>
-          <Text style={styles.headerTitle}>Ajuda</Text>
+          <Text style={styles.headerTitle}>Suporte</Text>
           <View style={styles.backBtn} />
         </View>
 

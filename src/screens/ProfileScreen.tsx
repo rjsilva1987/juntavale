@@ -146,6 +146,10 @@ const MAX_BIO_LENGTH = 500;
 // completo (legalName) segue com o teto herdado de MAX_NAME_LENGTH acima.
 export const MAX_NICKNAME_LENGTH = 30;
 
+// S182 — guia público "Como usar o JuntaVale" (site/ajuda.html no
+// Hosting; cleanUrls do firebase.json serve /ajuda sem extensão).
+const HELP_URL = 'https://juntavale.com.br/ajuda';
+
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user, profile, logout, refreshProfile } = useAuth();
@@ -714,6 +718,12 @@ export default function ProfileScreen() {
     } finally {
       setPollSaving(false);
     }
+  };
+
+  const handleOpenHelp = () => {
+    Linking.openURL(HELP_URL).catch(() => {
+      Alert.alert('Não foi possível abrir a ajuda', `Acesse ${HELP_URL} no navegador.`);
+    });
   };
 
   if (!profile) {
@@ -1399,14 +1409,25 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* Ajuda / Fale Conosco (S36) */}
+        {/* S182 — "Ajuda" abre o guia público "Como usar o JuntaVale"
+            (site/ajuda.html) no navegador. O item logo abaixo, que abre o
+            formulário de suporte, chamava-se "Ajuda" desde a S36 e passa a
+            se chamar "Suporte" pra não haver dois "Ajuda" no Perfil. */}
+        {!isAdmin && (
+          <AnimatedPressable style={styles.blockedUsersBtn} onPress={handleOpenHelp}>
+            <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Ajuda</Text>
+          </AnimatedPressable>
+        )}
+
+        {/* Suporte / Fale Conosco (S36; label "Ajuda" → "Suporte" na S182) */}
         {!isAdmin && (
           <AnimatedPressable
             style={styles.blockedUsersBtn}
             onPress={() => navigation.navigate('Support')}
           >
-            <Ionicons name="help-circle-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.blockedUsersText}>Ajuda</Text>
+            <Ionicons name="headset-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={styles.blockedUsersText}>Suporte</Text>
           </AnimatedPressable>
         )}
 

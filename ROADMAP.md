@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 04/09/2026
+**Última atualização:** 05/09/2026
 
 ---
 
@@ -55,6 +55,55 @@ ou por lista; campo próprio (`pinnedGroupIds`/`pinnedListingChatIds`) ou
 um só; se o card "Classificados" da aba Conversas conta como conversa.
 
 ---
+
+### S182 — Página pública "Como usar o JuntaVale" (ajuda.html) + item "Ajuda" no Perfil
+**Status:** IMPLEMENTADA em 05/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 2ª rodada (1ª
+BLOQUEOU por dois erros de veracidade no texto: o selo de verificado
+descrito como "escudo" quando o `VerifiedBadge` é um círculo com check, e
+"Apagar pros dois" citado no chat de anúncio quando o rótulo real de
+`ListingChatScreen` é "Apagar pra todos"; corrigidos junto com 3 ressalvas
+de redação — push de Classificados descrito com precisão, ordem do painel
+de perfil, dica de filtros separada da ação "Atualizar"). Lado do app é
+client puro — NÃO exige deploy de rules/functions; o site exige
+`firebase deploy --only hosting` (PENDENTE). O item "Ajuda"/"Suporte" NÃO
+entra no build 26 (bump já commitado em 35367fb antes desta sprint) —
+fica pro build 27. SEM teste em aparelho.
+
+(1) `site/ajuda.html` (novo, ~28 KB, sem JS, sem recurso externo): mesmo
+molde de `privacidade.html` (head, variáveis CSS, `.brand` com logo,
+footer), índice com âncoras no topo e 6 seções na ordem real da tab bar —
+Descobrir (11 itens), Explorar (Momentos 7, Grupos 9, Eventos 6,
+Classificados 9), Curtidas (6), Conversas (13), Perfil (15) e Conta e
+segurança (7: verificação, pausar, bloquear, denunciar, excluir conta,
+notificações, esqueci minha senha). Cada item em 1-3 frases "onde + gesto
++ o que acontece", só com o que a recon achou renderizado no código do
+build 26; nada de admin, nada de dado pessoal, nada de screenshot.
+(2) `ProfileScreen.tsx`: constante `HELP_URL = 'https://juntavale.com.br/ajuda'`
+(cleanUrls do `firebase.json` serve `/ajuda`; `/ajuda.html` redireciona
+301), handler `handleOpenHelp` (`Linking.openURL` com `.catch` → Alert com
+a URL) e item "Ajuda" (`help-circle-outline`) logo ACIMA do item de
+suporte, dentro da mesma guarda `!isAdmin`. (3) O item de suporte, que se
+chamava "Ajuda" desde a S36, passa a "Suporte" (ícone `headset-outline`)
+e o header de `SupportScreen.tsx` também vira "Suporte" — sem isso o
+Perfil teria dois "Ajuda". Nenhum outro arquivo do site ou do app tocado.
+
+Omitido de propósito (recon não achou no código, mesmo onde o ROADMAP
+S167 afirma): arrastar-pra-responder e "Denunciar mensagem" no chat de
+GRUPO; arrastar pra fechar momento; editar/cancelar evento pelo criador;
+editar grupo/remover membro; compartilhar anúncio; link clicável no chat.
+
+Teste (build 27 + hosting deployado): Perfil → "Ajuda" abre
+juntavale.com.br/ajuda no navegador; "Suporte" abre o formulário com
+header "Suporte"; admin não vê nenhum dos dois; conferir a página no
+celular (índice, âncoras, logo, footer) e no desktop.
+
+Decisões tomadas no automático: trilha completa; renomear o item/tela de
+suporte pra "Suporte" em vez de criar um segundo "Ajuda"; URL sem `.html`
+(convenção dos links internos do site + cleanUrls); seções na ordem real
+da tab bar (Descobrir, Explorar, Curtidas, Conversas, Perfil) e não na
+ordem do pedido; incluir "Sair da conta" e "Esqueci minha senha" por
+existirem no código; correção da rodada 1 aplicada direto (Portão 2).
 
 ### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
 **Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de

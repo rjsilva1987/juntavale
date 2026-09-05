@@ -4,8 +4,9 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 05/09/2026
-**Commit atual:** cea536b (S180-B) + bump do build 26 (app.json) feito
-em 05/09/2026 e aguardando commit do Raphael (GIT MANUAL) —
+**Commit atual:** S182 (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
+`site/ajuda.html` + item "Ajuda" no Perfil, suporte renomeado "Suporte"),
+sobre 35367fb (chore: bump build 26, 05/09/2026) —
 lote 3 de 04/09/2026 (AUTOMATICO + GIT AUTOMATICO) FECHADO: S179 4c2f136
 → S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B cea536b.
 Lote 2 (S175 672b102 → S172-A
@@ -17,15 +18,14 @@ S177 (190867c) avulsas fechadas.
 storage stamp S168-B2, indexes, hosting, functions onListingSubmitted/
 onVerificationSubmitted/onSupportMessageCreated/expireListings/
 deleteAccount/onReportCreated/onListingChatMessageCreated) foi deployado
-em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Deploys
-pendentes DESTA rodada (lote 3): S179 nenhum (client puro); S178
-`firebase deploy --only firestore:rules` (stamp S178, auditoria externa
-das rules antes); S181 nenhum (client puro); S180-A
-`functions:deleteAccount`; S180-B `firestore:rules` (stamp S180-B, que
-engloba o S178) + `functions:adminDeleteContent`. Comando único, depois
-da auditoria externa das rules:
-`firebase deploy --only firestore:rules,functions:deleteAccount,functions:adminDeleteContent`.
-Sem índice novo, sem storage, sem hosting.
+em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Lote 3
+deployado em 05/09/2026 com sucesso: `firestore:rules` (stamp S180-B, que
+engloba o S178 — "released rules"), `functions:deleteAccount`
+("Successful update operation") e `functions:adminDeleteContent`
+("Successful create operation"). Deploys pendentes: HOSTING (S182,
+`site/ajuda.html` novo — `firebase deploy --only hosting`; depois conferir
+https://juntavale.com.br/ajuda). Sem rules, sem functions, sem índice
+novo, sem storage.
 
 **Build 26 (bump feito, build NÃO gerado):** acumula o lado client de S177 Parte A (badge),
 S179 (chat de classificado sem Alert falso na 1ª mensagem), S178 (fixar
@@ -33,13 +33,22 @@ até 3 conversas no topo), S181 (item "Notificações" no Perfil +
 re-registro do token no foreground), S180-A (evento cancelado some do
 Explorar e mostra "Evento cancelado") e S180-B (aba "Comunidade" do
 admin, "Todos" em Classificados com Remover/Excluir, grupo encerrado em
-modo leitura). Bump em `app.json` feito em 05/09/2026: versionCode 25→26,
-iOS buildNumber 5→6, version 1.0.15 sem mudança (auditado, sem commit
-ainda). Falta `eas build` Android + iOS depois do commit.
+modo leitura). Bump em `app.json` commitado em 35367fb (05/09/2026):
+versionCode 25→26, iOS buildNumber 5→6, version 1.0.15 sem mudança.
+Falta `eas build` Android + iOS. A S182 (commitada DEPOIS do bump) NÃO
+entra no build 26.
+
+**Build 27 (sem bump ainda):** acumula o lado client da S182 — item
+"Ajuda" no Perfil (abre juntavale.com.br/ajuda) e item/tela de suporte
+renomeados "Suporte".
 
 ## Sprints em andamento
-Nenhuma. Lote 3 de 04/09/2026 fechado; fica só deploy (acima) e teste em
-aparelho. S180-B (depois do deploy de rules + function, conta admin):
+Nenhuma. S182 fechada em 05/09/2026; fica o deploy de hosting (acima) e
+teste: página no celular e no desktop (índice, âncoras, logo, footer) e,
+no build 27, Perfil → "Ajuda" abre a página no navegador, "Suporte" abre
+o formulário com header "Suporte", admin não vê nenhum dos dois. Lote 3
+de 04/09/2026 fechado e deployado em 05/09/2026; fica só
+teste em aparelho. S180-B (depois do deploy de rules + function, conta admin):
 aba "Comunidade" (6ª, sem badge) só pro admin; Grupos → "⋯" → "Encerrar
 grupo" → some do Explorar de outra conta, "Encerrado" em Meus grupos do
 membro, chat com banner e sem composer, mensagens antigas continuam
@@ -74,8 +83,7 @@ em 'denied'. S178 (Expo Go, depois do deploy das rules): toque longo num card de
 fixar 3 e tentar a 4ª → Alert "Você pode fixar até 3 conversas";
 "Desafixar" volta pra ordem por última mensagem; desfazer match fixado →
 o id some de `users/{uid}.pinnedMatchIds`; bloquear o outro lado de uma
-fixada → o id continua e a conversa volta fixada ao desbloquear; antes do
-deploy das rules, fixar dá "erro: permission-denied" (esperado). S179
+fixada → o id continua e a conversa volta fixada ao desbloquear. S179
 (Expo Go serve, 2 contas verificadas): "Tenho interesse" → tela
 vazia sem Alert → 1ª mensagem (texto; e foto como 1ª mensagem em outro
 anúncio) → nenhum Alert, mensagem aparece e a conversa segue; o outro
