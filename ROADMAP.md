@@ -129,6 +129,36 @@ Decisões tomadas no automático: trilha completa em vez de P (as
 checagens 2 e 3 e a fidelidade à deleteAccount definiam o conteúdo da
 edição; a recon resolveu tudo antes da spec, sem decisão de produto).
 
+### S182-B — Link "Ajuda" no rodapé de todas as páginas do site
+**Status:** IMPLEMENTADA em 05/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada, sem
+falhas. Só `site/` (9 arquivos HTML, 11 linhas) — nada no app; NÃO exige
+deploy de rules/functions; o site exige `firebase deploy --only hosting`
+(PENDENTE, junto com S182 e S182-A). SEM teste em aparelho.
+
+(1) `<a href="/ajuda">Ajuda</a>` no rodapé de index, privacidade,
+excluir-conta, termos, contato, sobre, 404, conta-acao e da própria
+ajuda — antes de "Privacidade" onde ela existe (primeiro filho do `<nav>`
+em index/contato/sobre), primeira posição depois do `©` em privacidade e
+conta-acao (que não têm link Privacidade; conta-acao mantém o formato
+inline com " · "). (2) Rodapé da `ajuda.html`: `© JuntaVale · Feito no
+Brasil`, igual ao index. CRLF e ausência de BOM preservados nos 9
+arquivos.
+
+Divergências de premissa achadas na recon: só o index tinha "Feito no
+Brasil" (as outras 7 páginas dizem "© JuntaVale" e ficaram assim); o
+topo do index não tem menu — os únicos botões são os CTAs do beta
+(WhatsApp + formulário), então "Como usar" NÃO entrou; "conta/acao" é
+`conta-acao.html`; `404.html` não estava na lista mas tem o mesmo rodapé
+e entrou.
+
+Decisões tomadas no automático: trilha completa em vez de P (9 rodapés
+com 4 variantes de HTML/CSS pediam recon); "Feito no Brasil" só na
+ajuda.html, como pedido, sem uniformizar as outras 7; não pôr "Como
+usar" no hero do index (mudaria o layout do bloco de inscrição); incluir
+404.html por "todas as páginas"; "Ajuda" em primeira posição onde não há
+Privacidade.
+
 ### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
 **Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de
 04/09, modo AUTOMATICO + GIT AUTOMATICO, trilha completa), auditoria
