@@ -4,11 +4,13 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 05/09/2026
-**Commit atual:** S182-B (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
-link "Ajuda" no rodapé das 9 páginas de `site/`, só site), sobre S182-A
-2513d01 (texto do item "Excluir a conta" em `site/ajuda.html` fiel à
-deleteAccount), S182 344b673 (`site/ajuda.html` + item "Ajuda" no Perfil,
-suporte renomeado "Suporte") e 35367fb (chore: bump build 26, 05/09/2026) —
+**Commit atual:** S182-C (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
+landing `site/index.html` com bloco de download no lugar do teste
+fechado, só site), sobre S182-B d247081 (link "Ajuda" no rodapé das 9
+páginas de `site/`), S182-A 2513d01 (item "Excluir a conta" da ajuda
+fiel à deleteAccount), S182 344b673 (`site/ajuda.html` + item "Ajuda" no
+Perfil, suporte renomeado "Suporte") e 35367fb (chore: bump build 26,
+05/09/2026) —
 lote 3 de 04/09/2026 (AUTOMATICO + GIT AUTOMATICO) FECHADO: S179 4c2f136
 → S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B cea536b.
 Lote 2 (S175 672b102 → S172-A
@@ -25,10 +27,11 @@ deployado em 05/09/2026 com sucesso: `firestore:rules` (stamp S180-B, que
 engloba o S178 — "released rules"), `functions:deleteAccount`
 ("Successful update operation") e `functions:adminDeleteContent`
 ("Successful create operation"). Deploys pendentes: HOSTING (S182 +
-S182-A + S182-B, `site/ajuda.html` novo com o item "Excluir a conta" já
-ajustado e link "Ajuda" no rodapé das 9 páginas — `firebase deploy --only
-hosting`; depois conferir https://juntavale.com.br/ajuda e o rodapé da
-home). Sem rules, sem functions, sem índice
+S182-A + S182-B + S182-C, `site/ajuda.html` novo com o item "Excluir a
+conta" já ajustado, link "Ajuda" no rodapé das 9 páginas e a landing com
+o bloco de download — `firebase deploy --only hosting`; depois conferir
+https://juntavale.com.br (botão "Baixar para Android" abre a Play,
+"iPhone: em breve" sem link, WhatsApp igual) e /ajuda). Sem rules, sem functions, sem índice
 novo, sem storage.
 
 **Build 26 (bump feito, build NÃO gerado):** acumula o lado client de S177 Parte A (badge),
@@ -47,10 +50,11 @@ entra no build 26.
 renomeados "Suporte".
 
 ## Sprints em andamento
-Nenhuma. S182, S182-A e S182-B fechadas em 05/09/2026; fica o deploy de
-hosting (acima) e teste: página no celular e no desktop (índice, âncoras,
-logo, footer com "Ajuda" em todas as páginas e "· Feito no Brasil" na
-ajuda, item "Excluir a conta" com o texto novo em Conta e segurança) e,
+Nenhuma. S182, S182-A, S182-B e S182-C fechadas em 05/09/2026; fica o
+deploy de hosting (acima) e teste: home com o bloco de download (celular
+e desktop, fileira empilha abaixo de 620px), página de ajuda (índice,
+âncoras, logo, footer com "Ajuda" em todas as páginas e "· Feito no
+Brasil" na ajuda, item "Excluir a conta" com o texto novo) e,
 no build 27, Perfil → "Ajuda" abre a página no navegador, "Suporte" abre
 o formulário com header "Suporte", admin não vê nenhum dos dois. Lote 3
 de 04/09/2026 fechado e deployado em 05/09/2026; fica só
@@ -178,6 +182,10 @@ a conversa; app em primeiro plano não mostra banner (S122).
 - S148 — `momentoRequests` órfãos de momentos expirados ANTES do deploy
   desta sprint não são varridos pela lógica nova de `expireMomentos` (ver
   ROADMAP § "Dívidas técnicas").
+- S182-C — `testerSignups` (bloco nas rules) e `onTesterSignupCreated`
+  (`functions/src/admin.ts`) ficaram órfãos: a landing não grava mais
+  cadastro de testador. Remover numa sprint própria (deploy de rules +
+  functions).
 
 ## Pendências vivas
 - **S149-B** — Ressalva da auditoria pra confirmar com o Raphael: a

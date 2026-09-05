@@ -70,18 +70,18 @@
     padding:3px 8px;border-radius:6px;
   }
 
-  .beta{
+  .store{
     background:var(--card);border:1px solid var(--line);
     border-radius:16px;padding:18px 20px;margin:0 0 16px;max-width:520px;
   }
-  .beta-tag{
+  .store-tag{
     display:inline-flex;align-items:center;gap:7px;
     background:#FFF3D6;color:var(--amber-deep);
     font-size:13px;font-weight:700;letter-spacing:.3px;
     padding:6px 13px;border-radius:999px;margin-bottom:10px;
   }
-  .beta-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);}
-  .beta p{margin:0;font-size:15px;color:var(--ink-soft);}
+  .store-tag .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);}
+  .store p{margin:0;font-size:15px;color:var(--ink-soft);}
 
   .signup{
     display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;
@@ -89,23 +89,8 @@
   }
   @media(max-width:620px){.signup{flex-direction:column;align-items:stretch;}}
   .signup .cta{flex-shrink:0;border:0;cursor:pointer;}
-  .tester-form{display:flex;gap:8px;flex:1;min-width:240px;}
-  .tester-form input{
-    flex:1;min-width:0;border:1.5px solid var(--line);border-radius:999px;
-    padding:13px 16px;font-size:15px;color:var(--ink);background:var(--card);
-    outline:none;transition:border-color .15s;
-  }
-  .tester-form input:focus{border-color:var(--blue);}
-  .tester-form button{
-    border:0;cursor:pointer;background:var(--amber);color:var(--ink);
-    border-radius:999px;padding:13px 20px;font-size:14.5px;font-weight:800;
-    letter-spacing:.2px;white-space:nowrap;transition:opacity .15s;
-  }
-  .tester-form button:hover{opacity:.92;}
-  .tester-form button:disabled{opacity:.5;cursor:not-allowed;}
-  .tester-msg{font-size:14px;margin:6px 0 0;min-height:18px;max-width:520px;}
-  .tester-msg.ok{color:var(--ok);}
-  .tester-msg.err{color:var(--err);}
+  .cta.android{background:var(--amber);color:var(--ink);}
+  .cta.ios{background:var(--card);color:var(--ink-soft);border:1px solid var(--line);cursor:default;}
 
   .features{
     display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
@@ -149,19 +134,16 @@
     <span class="eyebrow"><span class="dot"></span>Perfis verificados de verdade</span>
     <h1>Papo bom, gente real e aquele <span class="hl">frio na barriga</span>.</h1>
     <p class="lede">O JuntaVale é um app de relacionamentos onde cada pessoa é confirmada por selfie. Menos perfil fake, mais conversa que vai a algum lugar.</p>
-    <div class="beta">
-      <span class="beta-tag"><span class="dot"></span>Em teste fechado no Android</span>
-      <p>O JuntaVale está em fase de testes na Google Play, disponível por enquanto só para Android. Quer participar? Manda pra gente o e-mail da conta Google que você usa na Play Store. A versão para iPhone vem depois.</p>
+    <div class="store">
+      <span class="store-tag"><span class="dot"></span>Disponível na Google Play</span>
+      <p>O JuntaVale já está na Google Play. A versão para iPhone está em análise na App Store e chega em breve.</p>
     </div>
 
     <div class="signup">
+      <a class="cta android" href="https://play.google.com/store/apps/details?id=com.juntavale.app" target="_blank" rel="noopener noreferrer">Baixar para Android</a>
+      <span class="cta ios" aria-disabled="true">iPhone: em breve</span>
       <a class="cta wa" href="https://wa.me/380965261393?text=Oi!%20Quero%20ser%20testador%20do%20JuntaVale" target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
-      <form id="testerForm" class="tester-form" novalidate>
-        <input id="testerEmail" type="email" required maxlength="200" placeholder="seu e-mail" autocomplete="email">
-        <button id="testerSubmit" type="submit">Quero testar</button>
-      </form>
     </div>
-    <p id="testerMsg" class="tester-msg" role="status" aria-live="polite"></p>
   </section>
 
   <section class="features">
@@ -196,67 +178,5 @@
 
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-  import {
-    getFirestore,
-    collection,
-    addDoc,
-    serverTimestamp,
-  } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDppWsUZxORO9Co7dP91DflBTmegyV82NY",
-    authDomain: "bbmatch-9ede5.firebaseapp.com",
-    projectId: "bbmatch-9ede5",
-    storageBucket: "bbmatch-9ede5.firebasestorage.app",
-    messagingSenderId: "127211238955",
-    appId: "1:127211238955:web:31d9ba9e4abdc52f74dc6e",
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  const form = document.getElementById("testerForm");
-  const emailInput = document.getElementById("testerEmail");
-  const submitBtn = document.getElementById("testerSubmit");
-  const msg = document.getElementById("testerMsg");
-
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = emailInput.value.trim().toLowerCase();
-
-    msg.textContent = "";
-    msg.classList.remove("ok", "err");
-
-    if (email.length === 0 || email.length > 200 || !EMAIL_RE.test(email)) {
-      msg.textContent = "Digite um e-mail válido.";
-      msg.classList.add("err");
-      return;
-    }
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Enviando…";
-
-    try {
-      await addDoc(collection(db, "testerSignups"), {
-        email,
-        createdAt: serverTimestamp(),
-        source: "site",
-      });
-      msg.textContent = "Recebemos! Vamos te mandar o convite por e-mail.";
-      msg.classList.add("ok");
-      form.reset();
-    } catch (err) {
-      msg.textContent = "Não deu pra enviar agora. Tenta de novo em instantes.";
-      msg.classList.add("err");
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Quero testar";
-    }
-  });
-</script>
 </body>
 </html>

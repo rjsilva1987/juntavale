@@ -142,8 +142,9 @@ ajuda — antes de "Privacidade" onde ela existe (primeiro filho do `<nav>`
 em index/contato/sobre), primeira posição depois do `©` em privacidade e
 conta-acao (que não têm link Privacidade; conta-acao mantém o formato
 inline com " · "). (2) Rodapé da `ajuda.html`: `© JuntaVale · Feito no
-Brasil`, igual ao index. CRLF e ausência de BOM preservados nos 9
-arquivos.
+Brasil`, igual ao index. Fim de linha LF (`.gitattributes` eol=lf) e
+ausência de BOM preservados nos 9 arquivos (a nota original dizia CRLF
+por engano; corrigida na S182-C).
 
 Divergências de premissa achadas na recon: só o index tinha "Feito no
 Brasil" (as outras 7 páginas dizem "© JuntaVale" e ficaram assim); o
@@ -158,6 +159,42 @@ ajuda.html, como pedido, sem uniformizar as outras 7; não pôr "Como
 usar" no hero do index (mudaria o layout do bloco de inscrição); incluir
 404.html por "todas as páginas"; "Ajuda" em primeira posição onde não há
 Privacidade.
+
+### S182-C — Landing: bloco de download no lugar do teste fechado
+**Status:** IMPLEMENTADA em 05/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada, sem
+falhas. Só `site/index.html` (11 inserções / 91 deleções) — nada no app;
+NÃO exige deploy de rules/functions; o site exige `firebase deploy
+--only hosting` (PENDENTE, junto com S182/S182-A/S182-B). SEM teste em
+aparelho.
+
+(1) Card `.beta` ("Em teste fechado no Android" + texto de inscrição)
+virou card `.store` (mesmo CSS, classes renomeadas): tag "Disponível na
+Google Play" e o texto "O JuntaVale já está na Google Play. A versão para
+iPhone está em análise na App Store e chega em breve.". (2) Fileira
+`.signup`: `<a class="cta android">` "Baixar para Android" (fundo
+`--amber`, texto `--ink` — regra de ouro; href
+play.google.com/store/apps/details?id=com.juntavale.app, `_blank` +
+`noopener noreferrer`), `<span class="cta ios" aria-disabled>` "iPhone:
+em breve" (neutro: `--card`, borda `--line`, sem link) e o "Falar no
+WhatsApp" byte a byte como estava, agora por último. (3) Removidos o
+`<form id="testerForm">`, o `<p id="testerMsg">`, o `<script
+type="module">` inteiro (SDK Firebase via gstatic + `addDoc` em
+`testerSignups`) e o CSS `.tester-form*`/`.tester-msg*`. `id` do pacote
+conferido em `app.json` (`com.juntavale.app`, Android e iOS).
+
+Fica órfão no backend (NÃO tocado, exige sprint própria com deploy de
+rules + functions): `firestore.rules` bloco `testerSignups` e
+`functions/src/admin.ts` `onTesterSignupCreated` (e-mail via Gmail);
+`--ok`/`--err` no `:root` do index também ficaram sem uso. O texto
+pré-preenchido do WhatsApp ainda diz "Quero ser testador do JuntaVale" —
+mantido de propósito ("como está"); trocar é decisão do Raphael.
+
+Decisões tomadas no automático: trilha completa; ordem da fileira
+Android → iPhone → WhatsApp (botão principal primeiro); script removido
+inteiro (100% do formulário, sem analytics); classes `.beta*`
+renomeadas pra `.store*` em vez de manter o nome; `.cta .soon`, `:root`
+e o href do WhatsApp intocados por "nenhuma outra mudança".
 
 ### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
 **Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de
