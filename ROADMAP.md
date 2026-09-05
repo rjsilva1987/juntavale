@@ -196,6 +196,43 @@ inteiro (100% do formulário, sem analytics); classes `.beta*`
 renomeadas pra `.store*` em vez de manter o nome; `.cta .soon`, `:root`
 e o href do WhatsApp intocados por "nenhuma outra mudança".
 
+### S182-E — Selos de loja na landing (selo oficial do Google Play + placeholder da App Store)
+**Status:** IMPLEMENTADA em 05/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada, sem
+falhas. Só `site/` (`index.html` + 1 PNG novo) — nada no app; NÃO exige
+deploy de rules/functions; o site exige `firebase deploy --only hosting`
+(PENDENTE, junto com S182/S182-A/S182-B/S182-C). SEM teste em aparelho.
+Não existe S182-D — a numeração pulou de C para E.
+
+(1) `site/badge-google-play.png` (novo, 17728 bytes): selo oficial pt-BR
+baixado de `play.google.com/intl/pt-BR/badges/`, byte a byte como veio —
+646x250 RGBA, chunks IHDR/pHYs/IDAT/IEND, sem recorte, redimensionamento
+ou recoloração. (2) O botão textual "Baixar para Android" virou
+`<a class="store-badge">` com esse selo como `<img>` (`height:56px`,
+`width:auto`, alt "Disponível no Google Play", src relativo como o
+`logo.png`), mesmo href da Play, `_blank` + `noopener noreferrer`. (3) O
+"iPhone: em breve" virou `<span class="store-soon" aria-disabled>` com
+duas linhas ("Em breve na" 10px / "App Store" 17px) num retângulo
+`--ink` de 145x43 e raio 4,5px, sem logo da Apple e sem link, precedido
+de comentário HTML dizendo que ali entra o selo oficial da Apple quando o
+app for aprovado. (4) `.cta.android`/`.cta.ios` (S182-C) removidas.
+
+Alinhamento (medido antes da spec, não estimado): o PNG oficial tem 29px
+de padding transparente em cima e embaixo e nenhum nas laterais, então
+com `height:56px` o retângulo escuro visível fica com 43px centrados
+(6,5px de folga). Por isso `.store-soon` tem 56px de altura e centra um
+retângulo de 43px — os dois retângulos alinham. O `line-height:1.15`
+explícito é obrigatório: o `body` usa 1.6 e duas linhas estourariam os
+43px. `.signup` e o `@media(max-width:620px)` ficaram intocados, então o
+empilhamento no mobile é o mesmo de antes.
+
+Decisões tomadas no automático: trilha completa (asset externo novo +
+alinhamento a medir); PNG em vez de SVG (é o formato que a página de
+badges do Google entrega em pt-BR); `--ink` no botão iOS em vez do
+#040707 do selo, por ser o token escuro do próprio site; medir o padding
+e o raio do PNG antes de escrever a spec, em vez de chutar 56px e deixar
+os dois retângulos desalinhados.
+
 ### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
 **Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de
 04/09, modo AUTOMATICO + GIT AUTOMATICO, trilha completa), auditoria

@@ -89,8 +89,16 @@
   }
   @media(max-width:620px){.signup{flex-direction:column;align-items:stretch;}}
   .signup .cta{flex-shrink:0;border:0;cursor:pointer;}
-  .cta.android{background:var(--amber);color:var(--ink);}
-  .cta.ios{background:var(--card);color:var(--ink-soft);border:1px solid var(--line);cursor:default;}
+  .store-badge{display:flex;}
+  .store-badge img{display:block;height:56px;width:auto;}
+  .store-soon{display:flex;align-items:center;height:56px;cursor:default;}
+  .store-soon-box{
+    display:flex;flex-direction:column;justify-content:center;
+    width:145px;height:43px;padding:0 12px;
+    background:var(--ink);color:#fff;border-radius:4.5px;
+  }
+  .store-soon-box small{font-size:10px;line-height:1.15;letter-spacing:.2px;}
+  .store-soon-box strong{font-size:17px;line-height:1.15;font-weight:700;letter-spacing:.2px;}
 
   .features{
     display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
@@ -140,8 +148,9 @@
     </div>
 
     <div class="signup">
-      <a class="cta android" href="https://play.google.com/store/apps/details?id=com.juntavale.app" target="_blank" rel="noopener noreferrer">Baixar para Android</a>
-      <span class="cta ios" aria-disabled="true">iPhone: em breve</span>
+      <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.juntavale.app" target="_blank" rel="noopener noreferrer"><img src="badge-google-play.png" alt="Disponível no Google Play" width="145" height="56"></a>
+      <!-- Quando o app for aprovado na App Store, trocar este bloco pelo selo oficial da Apple ("Baixar na App Store"), no mesmo esquema do selo do Google acima. -->
+      <span class="store-soon" aria-disabled="true"><span class="store-soon-box"><small>Em breve na</small><strong>App Store</strong></span></span>
       <a class="cta wa" href="https://wa.me/380965261393?text=Oi!%20Quero%20ser%20testador%20do%20JuntaVale" target="_blank" rel="noopener noreferrer">Falar no WhatsApp</a>
     </div>
   </section>
