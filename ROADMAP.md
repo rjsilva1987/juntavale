@@ -105,6 +105,30 @@ da tab bar (Descobrir, Explorar, Curtidas, Conversas, Perfil) e não na
 ordem do pedido; incluir "Sair da conta" e "Esqueci minha senha" por
 existirem no código; correção da rodada 1 aplicada direto (Portão 2).
 
+### S182-A — Ajuste de texto em ajuda.html: item "Excluir a conta" fiel à deleteAccount
+**Status:** IMPLEMENTADA em 05/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada, sem
+falhas. Só `site/ajuda.html` (1 linha) — nada no app; NÃO exige deploy de
+rules/functions; o site exige `firebase deploy --only hosting` (PENDENTE,
+junto com o da S182). SEM teste em aparelho.
+
+(1) Linha 336, item "Excluir a conta": "momentos, os grupos e eventos que
+você criou e seus anúncios são apagados de forma permanente" virou
+"momentos e anúncios são apagados de forma permanente. Um grupo que você
+criou passa para o membro mais antigo (se não houver outro membro, é
+apagado); um evento futuro que você criou é cancelado." — fiel a
+`functions/src/account.ts` (grupos 176-212, eventos 308-330). (2)
+Checagem das rotas do rodapé: `/termos`, `/contato` e `/sobre` resolvem
+(`site/termos.html`, `contato.html`, `sobre.html` existem + `cleanUrls:
+true` no `firebase.json`, sem rewrites) — nenhum link removido do rodapé
+nem do callout. (3) Checagem do tique de "lida": `ChatScreen.tsx:513-514`
+usa `theme.colors.success` = `#3DAA6B` (verde) — "Dois tiques verdes:
+lida" já estava certo, linha 276 intocada.
+
+Decisões tomadas no automático: trilha completa em vez de P (as
+checagens 2 e 3 e a fidelidade à deleteAccount definiam o conteúdo da
+edição; a recon resolveu tudo antes da spec, sem decisão de produto).
+
 ### S180 — Conteúdo órfão quando o dono apaga a conta + admin encerra/exclui
 **Status (S180-A, function):** IMPLEMENTADA em 04/09/2026 (lote 3 de
 04/09, modo AUTOMATICO + GIT AUTOMATICO, trilha completa), auditoria

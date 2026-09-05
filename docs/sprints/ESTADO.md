@@ -4,9 +4,11 @@ Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
 **Atualizado:** 05/09/2026
-**Commit atual:** S182 (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
-`site/ajuda.html` + item "Ajuda" no Perfil, suporte renomeado "Suporte"),
-sobre 35367fb (chore: bump build 26, 05/09/2026) —
+**Commit atual:** S182-A (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
+texto do item "Excluir a conta" em `site/ajuda.html` fiel à deleteAccount,
+só site), sobre S182 344b673 (avulsa, 05/09/2026: `site/ajuda.html` +
+item "Ajuda" no Perfil, suporte renomeado "Suporte") e 35367fb (chore:
+bump build 26, 05/09/2026) —
 lote 3 de 04/09/2026 (AUTOMATICO + GIT AUTOMATICO) FECHADO: S179 4c2f136
 → S178 ab64539 → S181 fef8e23 → S180-A 573d140 → S180-B cea536b.
 Lote 2 (S175 672b102 → S172-A
@@ -22,8 +24,9 @@ em 04/09/2026 — rules ativas conferidas idênticas ao repo (S179). Lote 3
 deployado em 05/09/2026 com sucesso: `firestore:rules` (stamp S180-B, que
 engloba o S178 — "released rules"), `functions:deleteAccount`
 ("Successful update operation") e `functions:adminDeleteContent`
-("Successful create operation"). Deploys pendentes: HOSTING (S182,
-`site/ajuda.html` novo — `firebase deploy --only hosting`; depois conferir
+("Successful create operation"). Deploys pendentes: HOSTING (S182 +
+S182-A, `site/ajuda.html` novo com o item "Excluir a conta" já ajustado —
+`firebase deploy --only hosting`; depois conferir
 https://juntavale.com.br/ajuda). Sem rules, sem functions, sem índice
 novo, sem storage.
 
@@ -43,8 +46,9 @@ entra no build 26.
 renomeados "Suporte".
 
 ## Sprints em andamento
-Nenhuma. S182 fechada em 05/09/2026; fica o deploy de hosting (acima) e
-teste: página no celular e no desktop (índice, âncoras, logo, footer) e,
+Nenhuma. S182 e S182-A fechadas em 05/09/2026; fica o deploy de hosting
+(acima) e teste: página no celular e no desktop (índice, âncoras, logo,
+footer, item "Excluir a conta" com o texto novo em Conta e segurança) e,
 no build 27, Perfil → "Ajuda" abre a página no navegador, "Suporte" abre
 o formulário com header "Suporte", admin não vê nenhum dos dois. Lote 3
 de 04/09/2026 fechado e deployado em 05/09/2026; fica só
