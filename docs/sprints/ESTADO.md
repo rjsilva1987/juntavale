@@ -49,10 +49,12 @@ versionCode 25→26, iOS buildNumber 5→6, version 1.0.15 sem mudança.
 Falta `eas build` Android + iOS. A S182 (commitada DEPOIS do bump) NÃO
 entra no build 26.
 
-**Build 27 (sem bump ainda):** acumula o lado client da S182 — item
-"Ajuda" no Perfil (abre juntavale.com.br/ajuda) e item/tela de suporte
-renomeados "Suporte" — e da S183 (teto de idade do filtro do Descobrir
-em 90).
+**Build 27 (bump feito, build NÃO gerado):** acumula o lado client da
+S182 — item "Ajuda" no Perfil (abre juntavale.com.br/ajuda) e item/tela
+de suporte renomeados "Suporte" — e da S183 (teto de idade do filtro do
+Descobrir em 90). Bump em `app.json` commitado em 47bd3e5 (09/09/2026):
+versionCode 26→27, iOS buildNumber 6→7, version 1.0.15→1.0.16. Falta
+`eas build` Android + iOS.
 
 ## Sprints em andamento
 Nenhuma. S183 fechada em 09/09/2026 (client puro, sem deploy); teste em
