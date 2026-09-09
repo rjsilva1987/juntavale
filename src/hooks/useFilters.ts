@@ -5,9 +5,16 @@ import { VALES } from '@/constants/vale';
 import { useAuth } from '@/contexts/AuthContext';
 import { DiscoverFilters, updateUserProfile } from '@/services/firestoreService';
 
+// S183 — fonte única do intervalo de idade aceito pelo filtro de
+// Descobrir; o `maximumValue` dos dois sliders do FilterModal vem daqui.
+// A duplicação anterior (default 60 aqui vs. slider travado em 60) foi a
+// causa do bug da S183 (perfil de 61 anos sumia do Descobrir).
+export const FILTER_AGE_MIN = 18;
+export const FILTER_AGE_MAX = 90;
+
 export const DEFAULT_FILTERS: DiscoverFilters = {
-  ageMin: 18,
-  ageMax: 60,
+  ageMin: FILTER_AGE_MIN,
+  ageMax: FILTER_AGE_MAX,
   uf: 'all',
   gender: [],
   lookingFor: [],

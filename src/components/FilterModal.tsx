@@ -9,6 +9,7 @@ import { LookingFor, LOOKING_FOR_OPTIONS } from '@/constants/lookingFor';
 import { theme } from '@/constants/theme';
 import { UF } from '@/constants/ufs';
 import { VALE_OPTIONS } from '@/constants/vale';
+import { FILTER_AGE_MAX, FILTER_AGE_MIN } from '@/hooks/useFilters';
 import { DiscoverFilters, Gender } from '@/services/firestoreService';
 
 interface FilterModalProps {
@@ -68,8 +69,8 @@ export function FilterModal({
           </Text>
           <Text style={styles.subLabel}>Idade mínima</Text>
           <Slider
-            minimumValue={18}
-            maximumValue={60}
+            minimumValue={FILTER_AGE_MIN}
+            maximumValue={FILTER_AGE_MAX}
             step={1}
             value={draft.ageMin}
             onValueChange={setAgeMin}
@@ -79,8 +80,8 @@ export function FilterModal({
           />
           <Text style={styles.subLabel}>Idade máxima</Text>
           <Slider
-            minimumValue={18}
-            maximumValue={60}
+            minimumValue={FILTER_AGE_MIN}
+            maximumValue={FILTER_AGE_MAX}
             step={1}
             value={draft.ageMax}
             onValueChange={setAgeMax}

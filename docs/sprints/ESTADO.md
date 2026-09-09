@@ -3,8 +3,10 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 05/09/2026
-**Commit atual:** S182-E (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
+**Atualizado:** 09/09/2026
+**Commit atual:** S183 (avulsa, 09/09/2026, AUTOMATICO + GIT AUTOMATICO:
+teto de idade do filtro do Descobrir 60 → 90, client puro, NÃO exige
+deploy), sobre S182-E bce5895 (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
 selo oficial do Google Play + placeholder da App Store na landing, só
 site; não existe S182-D), sobre S182-C 718de66 (landing com bloco de
 download no lugar do teste fechado), S182-B d247081 (link "Ajuda" no
@@ -49,10 +51,14 @@ entra no build 26.
 
 **Build 27 (sem bump ainda):** acumula o lado client da S182 — item
 "Ajuda" no Perfil (abre juntavale.com.br/ajuda) e item/tela de suporte
-renomeados "Suporte".
+renomeados "Suporte" — e da S183 (teto de idade do filtro do Descobrir
+em 90).
 
 ## Sprints em andamento
-Nenhuma. S182, S182-A, S182-B, S182-C e S182-E fechadas em 05/09/2026;
+Nenhuma. S183 fechada em 09/09/2026 (client puro, sem deploy); teste em
+aparelho pendente: no modal de filtros do Descobrir o slider de idade
+máxima vai até 90, e uma conta que nunca salvou filtros vê perfis de 61+
+no swipe (caso `eclPxDTz3agFGdl4EGKyjPHyA1y2`, 61 anos). S182, S182-A, S182-B, S182-C e S182-E fechadas em 05/09/2026;
 fica o deploy de hosting (acima) e teste: home no celular e no desktop
 (o selo do Google carrega e abre a Play, o botão da App Store alinha com
 o selo e não clica, a fileira empilha abaixo de 620px), página de ajuda
@@ -191,6 +197,12 @@ a conversa; app em primeiro plano não mostra banner (S122).
   functions).
 
 ## Pendências vivas
+- **S183** — decisão de alcance tomada no automático: NÃO houve migração
+  dos filtros já persistidos. Quem já salvou `ageMax` ≤ 60 em
+  `profile.filters` continua com o valor salvo até arrastar o slider
+  (agora até 90) ou usar "Limpar filtros". Confirmar com o Raphael se
+  isso basta ou se cabe uma migração. Limite residual: o cadastro aceita
+  até 100 anos (`MAX_AGE`), então 91-100 segue invisível por padrão.
 - **S149-B** — Ressalva da auditoria pra confirmar com o Raphael: a
   prévia de última mensagem em GroupsScreen aparece também na seção
   "Descobrir" (grupos que o usuário não integra) — ver ROADMAP.md §

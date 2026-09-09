@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 05/09/2026
+**Última atualização:** 09/09/2026
 
 ---
 
@@ -53,6 +53,45 @@ Conversas). Cobriria a aba Grupos (GroupsScreen) e a lista de chats de
 classificado (ListingChatsScreen). Decisões em aberto: limite compartilhado
 ou por lista; campo próprio (`pinnedGroupIds`/`pinnedListingChatIds`) ou
 um só; se o card "Classificados" da aba Conversas conta como conversa.
+
+---
+
+### S183 — Teto de idade do filtro do Descobrir: 60 → 90
+**Status:** IMPLEMENTADA em 09/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA. Client puro — NÃO exige
+deploy de rules/functions/indexes. SEM teste em aparelho.
+
+Perfis com mais de 60 anos sumiam do Descobrir por padrão (caso real
+reportado pelo Raphael: usuário `eclPxDTz3agFGdl4EGKyjPHyA1y2`, 61 anos).
+A recon mostrou que o teto 60 estava DUPLICADO em dois pontos que
+precisavam andar juntos: `DEFAULT_FILTERS.ageMax` em `useFilters.ts` e o
+`maximumValue` dos dois sliders de idade do `FilterModal.tsx`. Mudar só a
+constante teria sido cosmético — o slider nunca deixaria o usuário passar
+de 60, e quem abrisse o modal e apertasse "Aplicar" gravaria 60 de volta.
+
+Correção: duas constantes exportadas novas em `src/hooks/useFilters.ts`,
+`FILTER_AGE_MIN = 18` e `FILTER_AGE_MAX = 90`, como fonte única do
+intervalo — consumidas pelo `DEFAULT_FILTERS` e pelos dois sliders do
+`FilterModal.tsx`. O corte de idade em `getDiscoverProfiles`
+(`firestoreService.ts`) já era genérico (`filters.ageMin`/`ageMax`) e não
+foi tocado; a descoberta é 100% client-side, sem query composta, por isso
+não há índice nem regra envolvida.
+
+Decisões tomadas no automático: (a) teto 90 conforme o pedido, e não 100;
+(b) sem migração dos filtros já persistidos.
+
+⚠️ Alcance da correção: quem NUNCA salvou filtros passa a ver até 90 na
+hora. Quem já salvou `ageMax` ≤ 60 em `profile.filters` continua com o
+valor salvo — o merge de `useFilters.ts` deixa o salvo vencer o default —
+até arrastar o slider (que agora vai até 90) ou usar "Limpar filtros".
+Confirmar com o Raphael se isso basta ou se cabe uma migração.
+
+⚠️ Limite residual: o cadastro aceita até `MAX_AGE = 100`
+(`src/utils/birthDate.ts`), então 91-100 anos segue invisível por padrão.
+
+Nota de processo: a sprint foi implementada num clone 14 commits atrás do
+remoto e chegou a receber o número S169, já ocupado por "Classificados,
+lado admin". Renumerada para S183 e revalidada sobre `bce5895`.
 
 ---
 
