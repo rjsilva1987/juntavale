@@ -3,8 +3,12 @@
 Curto, derivado do git log e do ROADMAP.md. Quem fecha sprint atualiza
 substituindo linhas, nunca acumulando (ver CLAUDE.md, "Estado do projeto").
 
-**Atualizado:** 09/09/2026
-**Commit atual:** S183 (avulsa, 09/09/2026, AUTOMATICO + GIT AUTOMATICO:
+**Atualizado:** 14/09/2026
+**Commit atual:** S185 (avulsa, 14/09/2026, AUTOMATICO + GIT AUTOMATICO:
+app abre na aba "Explorar" — reorder de duas abas em
+`src/navigation/index.tsx`, client puro, NÃO exige deploy), sobre a37962b
+(docs do build 27) e 47bd3e5 (chore: bump build 27, 09/09/2026), sobre S183
+82e8921 (avulsa, 09/09/2026, AUTOMATICO + GIT AUTOMATICO:
 teto de idade do filtro do Descobrir 60 → 90, client puro, NÃO exige
 deploy), sobre S182-E bce5895 (avulsa, 05/09/2026, AUTOMATICO + GIT AUTOMATICO:
 selo oficial do Google Play + placeholder da App Store na landing, só
@@ -52,12 +56,19 @@ entra no build 26.
 **Build 27 (bump feito, build NÃO gerado):** acumula o lado client da
 S182 — item "Ajuda" no Perfil (abre juntavale.com.br/ajuda) e item/tela
 de suporte renomeados "Suporte" — e da S183 (teto de idade do filtro do
-Descobrir em 90). Bump em `app.json` commitado em 47bd3e5 (09/09/2026):
+Descobrir em 90) e da S185 (app abre na aba "Explorar", que virou a 1ª
+aba). Bump em `app.json` commitado em 47bd3e5 (09/09/2026):
 versionCode 26→27, iOS buildNumber 6→7, version 1.0.15→1.0.16. Falta
 `eas build` Android + iOS.
 
 ## Sprints em andamento
-Nenhuma. S183 fechada em 09/09/2026 (client puro, sem deploy); teste em
+Nenhuma. S185 fechada em 14/09/2026 (client puro, sem deploy); teste em
+aparelho pendente: o app abre direto na aba "Explorar" (1ª da barra, ícone
+de bússola) no Android e no iOS; "Descobrir" é a 2ª e o swipe carrega no
+primeiro toque nela; o badge vermelho do Explorar continua aparecendo; o
+botão voltar do Android a partir de Curtidas/Conversas/Perfil cai em
+"Explorar"; conta admin continua abrindo em "Verificações". S183 fechada
+em 09/09/2026 (client puro, sem deploy); teste em
 aparelho pendente: no modal de filtros do Descobrir o slider de idade
 máxima vai até 90, e uma conta que nunca salvou filtros vê perfis de 61+
 no swipe (caso `eclPxDTz3agFGdl4EGKyjPHyA1y2`, 61 anos). S182, S182-A, S182-B, S182-C e S182-E fechadas em 05/09/2026;
@@ -199,6 +210,11 @@ a conversa; app em primeiro plano não mostra banner (S122).
   functions).
 
 ## Pendências vivas
+- **S185** — consequência de produto a confirmar: com o `backBehavior`
+  default (`firstRoute`) do bottom-tabs v6, o botão voltar do Android
+  passou a levar para "Explorar" em vez de "Descobrir". Faz parte do mesmo
+  mecanismo que troca a aba de abertura; confirmar em aparelho se é o
+  desejado.
 - **S183** — decisão de alcance tomada no automático: NÃO houve migração
   dos filtros já persistidos. Quem já salvou `ageMax` ≤ 60 em
   `profile.filters` continua com o valor salvo até arrastar o slider

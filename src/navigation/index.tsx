@@ -358,13 +358,9 @@ function MainTabs() {
         </>
       ) : (
         <>
-          <Tab.Screen name="Descobrir">
-            {() => (
-              <ErrorBoundary>
-                <SwipeScreen />
-              </ErrorBoundary>
-            )}
-          </Tab.Screen>
+          {/* S185 — Explorar passa a ser a 1ª aba (e a rota inicial do tab
+              navigator, já que o v6 usa o primeiro filho); Descobrir vira a
+              2ª. */}
           <Tab.Screen
             name="Explorar"
             options={{
@@ -375,6 +371,13 @@ function MainTabs() {
             {() => (
               <ErrorBoundary>
                 <MomentosScreen />
+              </ErrorBoundary>
+            )}
+          </Tab.Screen>
+          <Tab.Screen name="Descobrir">
+            {() => (
+              <ErrorBoundary>
+                <SwipeScreen />
               </ErrorBoundary>
             )}
           </Tab.Screen>

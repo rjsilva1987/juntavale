@@ -4,7 +4,7 @@ Arquivo de referência para quem (pessoa ou agente) precisa saber o que é uma
 sprint pelo número. Atualizado à mão quando uma sprint fecha ou uma decisão
 de produto muda.
 
-**Última atualização:** 09/09/2026
+**Última atualização:** 14/09/2026
 
 ---
 
@@ -45,6 +45,11 @@ possivelmente a categoria na App Store — e colide com a defesa do nicho
 enviada à Apple no 4.3(b), que descreve o app pela comunidade credenciada.
 Nada de recon ou implementação antes dessa decisão.
 
+Atualização (S185, 14/09/2026): o app NÃO abre mais no Descobrir — abre na
+aba "Explorar" (momentos), que virou a primeira aba. Isso NÃO responde a
+pergunta da S136, que é se a tela inicial vira um FEED de rede social; a
+S185 só trocou a ordem de duas abas que já existiam.
+
 ### S178-B — Fixar conversas: grupos e classificados
 **Status:** ABERTA · sem decisões · sem recon
 
@@ -53,6 +58,58 @@ Conversas). Cobriria a aba Grupos (GroupsScreen) e a lista de chats de
 classificado (ListingChatsScreen). Decisões em aberto: limite compartilhado
 ou por lista; campo próprio (`pinnedGroupIds`/`pinnedListingChatIds`) ou
 um só; se o card "Classificados" da aba Conversas conta como conversa.
+
+---
+
+### S185 — App abre na aba "Explorar" por padrão (Explorar 1ª, Descobrir 2ª)
+**Status:** IMPLEMENTADA em 14/09/2026 (avulsa, modo AUTOMATICO + GIT
+AUTOMATICO, trilha completa), auditoria APROVADA na 1ª rodada. Client puro
+— NÃO exige deploy de rules/functions/indexes/hosting. SEM teste em
+aparelho. Entra no build 27 (bump já commitado em 47bd3e5, build ainda não
+gerado).
+
+Pedido do Raphael: o app deve abrir na aba "Explorar" (momentos) em vez de
+"Descobrir" (swipe), no Android e no iOS — "Explorar" como primeira aba da
+barra inferior e rota inicial do tab navigator, "Descobrir" como segunda,
+sem mudar o conteúdo de nenhuma das duas.
+
+Mudança: um único hunk em `src/navigation/index.tsx` — o bloco
+`<Tab.Screen name="Explorar">` inteiro (com o `options` do badge e o
+children `MomentosScreen` dentro do `ErrorBoundary`) movido para antes do
+bloco `<Tab.Screen name="Descobrir">`, no ramo NÃO-admin do
+`Tab.Navigator`. Ordem final do ramo não-admin: Explorar → Descobrir →
+Curtidas → Conversas → Perfil. Reorder puro — o conteúdo dos dois blocos
+ficou byte-a-byte igual. Nenhuma função, tipo, componente ou constante
+nova; só um comentário `// S185` marcando a ordem.
+
+Por que NÃO foi usado `initialRouteName`: existe um ÚNICO `<Tab.Navigator>`
+cujos filhos são um ternário `isAdmin ? <abas do admin> : <abas do
+usuário>`, e o ramo admin não tem a rota "Explorar" — um
+`initialRouteName="Explorar"` fixo no Navigator geraria warning/fallback
+nas contas admin. No React Navigation v6 (`@react-navigation/bottom-tabs`
+6.6.1) o `TabRouter` usa `index = 0` quando não há `initialRouteName`, ou
+seja, a ordem física dos filhos já É a rota inicial; a auditoria confirmou
+isso lendo o `TabRouter` instalado.
+
+Ramo admin intocado: a primeira aba do admin continua "Verificacoes".
+`TAB_META`, `screenOptions`, badges, tipos, `src/linking.ts`,
+`useNotifications.ts` e as telas não foram tocados.
+
+⚠️ Efeito de `lazy` (esperado e aceito): o `Tab.Navigator` usa o default
+`lazy: true` e nada foi sobrescrito, então só a rota inicial monta no boot.
+O `loadProfiles()` do `SwipeScreen` passa a rodar no primeiro toque na aba
+Descobrir em vez de na abertura do app, e os dois listeners do
+`MomentosScreen` (`listenMyMomento`/`listenActiveMomentos`) passam a subir
+já no boot.
+
+⚠️ Botão voltar do Android: o `backBehavior` default do bottom-tabs v6 é
+`firstRoute`, então voltar a partir de Curtidas/Conversas/Perfil agora cai
+em "Explorar" em vez de "Descobrir". É o mesmo mecanismo que torna Explorar
+a aba de abertura, não um efeito separado — mas confirmar em aparelho se é
+o comportamento desejado.
+
+Relação com a S136: a S185 NÃO resolve a decisão que destrava a S136 (ver
+§ "Fila aberta").
 
 ---
 
